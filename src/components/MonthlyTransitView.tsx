@@ -232,6 +232,23 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     return `vedic_transit_override_${personId}_${selectedYear}_${selectedMonth}`;
   }, [personId, selectedYear, selectedMonth]);
 
+  // Collapsible section toggles for Monthly View (3 Sections)
+  const [expandTimelineControls, setExpandTimelineControls] = useState<boolean>(true);
+  const [expandTransitChart, setExpandTransitChart] = useState<boolean>(true);
+  const [expandRuleEngine, setExpandRuleEngine] = useState<boolean>(true);
+
+  const handleExpandAll = () => {
+    setExpandTimelineControls(true);
+    setExpandTransitChart(true);
+    setExpandRuleEngine(true);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandTimelineControls(false);
+    setExpandTransitChart(false);
+    setExpandRuleEngine(false);
+  };
+
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>(() => {
     try {
       const stored = localStorage.getItem(`vedic_transit_override_${personId}_${selectedYear}_${selectedMonth}`);
@@ -748,11 +765,74 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
 
   return (
     <div className="space-y-5" onClick={() => setActiveRaycast(null)}>
+      {/* Quick Section View Controls for Monthly View (Breathing Space & Focus Mode) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 border border-slate-800/80 px-4 py-2.5 rounded-xl text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-amber-400" />
+            <span>Monthly View Sections:</span>
+          </span>
+          <button
+            onClick={() => setExpandTimelineControls(!expandTimelineControls)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandTimelineControls
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>1. Timeline Controls</span>
+            {expandTimelineControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setExpandTransitChart(!expandTransitChart)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandTransitChart
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>2. 4x4 Transit Chart</span>
+            {expandTransitChart ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setExpandRuleEngine(!expandRuleEngine)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandRuleEngine
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>3. Rule Engine &amp; Scores</span>
+            {expandRuleEngine ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExpandAll}
+            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+            title="Expand all 3 sections"
+          >
+            Expand All
+          </button>
+          <button
+            onClick={handleCollapseAll}
+            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+            title="Collapse all 3 sections"
+          >
+            Collapse All
+          </button>
+        </div>
+      </div>
+
       {/* ========================================================================= */}
-      {/* TIMELINE CONTROLLER & BI-DIRECTIONAL DATE SCRUBBER (MILESTONE 2) */}
+      {/* SECTION 1: TIMELINE CONTROLLER & BI-DIRECTIONAL DATE SCRUBBER */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
+        <div
+          onClick={() => setExpandTimelineControls(!expandTimelineControls)}
+          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800/80 select-none"
+        >
           {/* Header Title & Era Indicator */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shadow-inner">
@@ -761,7 +841,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  Monthly View
+                  1. Monthly View &amp; Timeline Controls
                 </h2>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
@@ -774,6 +854,11 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
                 >
                   {isCurrentMonth ? '● Current Active Month' : isPast ? '⏪ Historical Backtest' : '⏩ Future Projection'}
                 </span>
+                {!expandTimelineControls && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    {MONTH_NAMES[selectedMonth]} {selectedDay}, {selectedYear}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-1.5">
                 <span>Native: <strong className="text-amber-300">{activeProfile.person_name}</strong> ({activeProfile.person_id})</span>
@@ -787,8 +872,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             </div>
           </div>
 
-          {/* Menu Controls: Multi-LLM Selector, PD Micro-Focus Slider & Jump to Today */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Menu Controls: Multi-LLM Selector, PD Micro-Focus Slider, Jump to Today & Chevron */}
+          <div className="flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
             {/* Multi-LLM Provider Selector (SRS Component 4) */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 shadow-inner">
               <Bot className="w-3.5 h-3.5 text-amber-400" />
@@ -813,7 +898,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             {/* Quick Open Audio Voice Inspector Button */}
             <button
               onClick={handleOpenTopEventInspector}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 transition shadow-sm font-bold text-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 transition shadow-sm font-bold text-xs cursor-pointer"
               title="Open Multi-LLM Audio Voice Inspector for Top Active House"
             >
               <Volume2 className="w-3.5 h-3.5" />
@@ -825,10 +910,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
               <div className="flex flex-col text-right">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center justify-end gap-1">
                   <Zap className={`w-3 h-3 ${isMicroPdFocus ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
-                  PD Micro Focus
+                  PD Focus
                 </span>
                 <span className={`text-[10px] font-semibold ${isMicroPdFocus ? 'text-amber-300 font-bold' : 'text-slate-500'}`}>
-                  {isMicroPdFocus ? 'Active Focus On' : 'Standard View'}
+                  {isMicroPdFocus ? 'Active' : 'Standard'}
                 </span>
               </div>
               <button
@@ -852,20 +937,27 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             {!isCurrentMonth && (
               <button
                 onClick={handleResetToCurrent}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 transition shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 transition shadow-sm cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Jump to Current Month
+                <span>Today</span>
               </button>
             )}
-            <div className="text-right text-[11px] font-mono text-slate-400 hidden sm:block">
-              Ephemeris: <span className="text-amber-400 font-bold">{activeDateIsoStr}</span>
-            </div>
+
+            <button
+              onClick={() => setExpandTimelineControls(!expandTimelineControls)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              title={expandTimelineControls ? "Minimize Section 1" : "Expand Section 1"}
+            >
+              {expandTimelineControls ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
-        {/* Date Scrubber & Year/Month Selectors */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        {expandTimelineControls && (
+          <div className="p-4 sm:p-5 space-y-4">
+            {/* Date Scrubber & Year/Month Selectors */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
           {/* Month / Year Navigator Buttons */}
           <div className="lg:col-span-7 flex flex-wrap items-center gap-2">
             {/* -1 Year */}
@@ -1124,6 +1216,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             </div>
           </div>
         )}
+          </div>
+        )}
       </div>
 
       {/* Active Graha Drishti Raycasting Status Bar */}
@@ -1281,9 +1375,62 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         </div>
       )}
 
-      {/* COMPACT 4x4 SOUTH INDIAN D1 GRID (Single-Glance Viewport Friendly) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl">
-        <div className="grid grid-cols-4 grid-rows-4 gap-1.5 sm:gap-2 aspect-square max-w-[620px] mx-auto bg-slate-950 p-1.5 sm:p-2.5 rounded-2xl border border-slate-800 shadow-inner">
+      {/* SECTION 2: COMPACT 4x4 SOUTH INDIAN D1 GRID (Single-Glance Viewport Friendly) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
+        <div
+          onClick={() => setExpandTransitChart(!expandTransitChart)}
+          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold shadow-inner">
+              <Compass className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  2. South Indian 4x4 Transit Chart (D1 Gochara &amp; Drishti)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  {MONTH_NAMES[selectedMonth]} {selectedDay}, {selectedYear}
+                </span>
+                {isCustomIngested && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    Custom Ingested
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Dual-layer layout: Natal positions (grey) + Real-time Gochara transits (amber). Drag planets or click for Graha Drishti aspects.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+            {expandTransitChart && (
+              <div className="hidden sm:flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  Natal
+                </span>
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-300">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  Transit
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => setExpandTransitChart(!expandTransitChart)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              title={expandTransitChart ? "Minimize Section 2" : "Expand Section 2"}
+            >
+              {expandTransitChart ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {expandTransitChart && (
+          <div className="p-3 sm:p-4">
+            <div className="grid grid-cols-4 grid-rows-4 gap-1.5 sm:gap-2 aspect-square max-w-[620px] mx-auto bg-slate-950 p-1.5 sm:p-2.5 rounded-2xl border border-slate-800 shadow-inner">
           {[0, 1, 2, 3].map(rowIdx =>
             [0, 1, 2, 3].map(colIdx => {
               // Center 2x2 hollow container
@@ -1694,13 +1841,18 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             })
           )}
         </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* PERSISTED ASTROLOGICAL RULE ENGINE CONFIGURATOR (MILESTONE 3) */}
+      {/* SECTION 3: PERSISTED ASTROLOGICAL RULE ENGINE CONFIGURATOR (MILESTONE 3) */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
+        <div
+          onClick={() => setExpandRuleEngine(!expandRuleEngine)}
+          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shadow-inner">
               <Sliders className="w-5 h-5" />
@@ -1708,10 +1860,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white tracking-tight">
-                  Astrological Rule Engine & Event Emission Weights
+                  3. Astrological Rule Engine &amp; Event Emission Weights
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
                   Milestone 3 Live
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                  {houseActivations.filter(h => h.isEventActive).length} Active Houses
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -1720,34 +1875,27 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleResetRules}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
               title="Reset weights and toggles to standard defaults"
             >
               Reset to Defaults
             </button>
             <button
-              onClick={() => setShowRuleConfig(!showRuleConfig)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 transition shadow-sm"
+              onClick={() => setExpandRuleEngine(!expandRuleEngine)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              title={expandRuleEngine ? "Minimize Section 3" : "Expand Section 3"}
             >
-              {showRuleConfig ? (
-                <>
-                  <ChevronUp className="w-3.5 h-3.5" />
-                  <span>Hide Rules</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                  <span>Configure Rules</span>
-                </>
-              )}
+              {expandRuleEngine ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        {/* Live Activated Houses Summary Pill Strip */}
+        {expandRuleEngine && (
+          <div className="p-4 sm:p-5 space-y-4">
+            {/* Live Activated Houses Summary Pill Strip */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
@@ -1854,6 +2002,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
                 </div>
               </div>
             ))}
+          </div>
+        )}
           </div>
         )}
       </div>

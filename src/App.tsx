@@ -9,7 +9,9 @@ import {
   Table,
   User,
   Database,
-  Download
+  ChevronDown,
+  ChevronUp,
+  Layers
 } from 'lucide-react';
 import {
   samplePersonMaster,
@@ -27,7 +29,6 @@ import {
 import storedPersonsData from './data/stored_persons.json';
 import RestApiStudio, { getStarLordShort } from './components/RestApiStudio';
 import { MonthlyTransitView } from './components/MonthlyTransitView';
-import { BUNDLED_ZIP_BASE64 } from './data/bundledZipData';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
 // 0,0: Meenam (Pisces)   | 0,1: Mesham (Aries)   | 0,2: Rishabam (Taurus) | 0,3: Mithunam (Gemini)
@@ -65,6 +66,26 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'api'>('charts');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
+
+  // Collapsible section toggles for South Indian Chart Visualizer (4 Sections)
+  const [expandChartControls, setExpandChartControls] = useState<boolean>(true);
+  const [expandChartGrid, setExpandChartGrid] = useState<boolean>(true);
+  const [expandPlacementsTable, setExpandPlacementsTable] = useState<boolean>(true);
+  const [expandOverviewHighlights, setExpandOverviewHighlights] = useState<boolean>(true);
+
+  const handleExpandAllChartSections = () => {
+    setExpandChartControls(true);
+    setExpandChartGrid(true);
+    setExpandPlacementsTable(true);
+    setExpandOverviewHighlights(true);
+  };
+
+  const handleCollapseAllChartSections = () => {
+    setExpandChartControls(false);
+    setExpandChartGrid(false);
+    setExpandPlacementsTable(false);
+    setExpandOverviewHighlights(false);
+  };
 
   // Active Native Profile (Directly loaded from authoritative store, no stale caching)
   const [activePersonId, setActivePersonId] = useState<string>('001ME');
@@ -166,29 +187,6 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // 100% In-Memory Windows 11 Compatible ZIP download (Bypasses Google proxy & cookie check)
-  const handleDownloadClientZip = () => {
-    try {
-      const binaryString = window.atob(BUNDLED_ZIP_BASE64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'tamil-horoscope-app.zip';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Failed to trigger in-memory zip download:', err);
-    }
-  };
-
   // Natal placements for selected chart and active person
   const currentChartPlacements = useMemo(() => {
     const placements = activeRecord.placements || sampleNatalPlacements;
@@ -256,42 +254,31 @@ export default function App() {
             </div>
           </div>
 
-          {/* Integrated 3 Navigation Menu Items & Direct Code Download */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <nav className="flex items-center gap-1.5 flex-wrap">
-              {[
-                { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
-                { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
-                { id: 'api', label: 'SAP Query Studio', icon: Server },
-              ].map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
-                      isActive
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60'
-                    }`}
-                  >
-                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-
-            <button
-              onClick={handleDownloadClientZip}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition shadow-sm cursor-pointer"
-              title="Download clean Windows 11 compatible source ZIP directly to local disk"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Download ZIP</span>
-            </button>
-          </div>
+          {/* Integrated 3 Navigation Menu Items */}
+          <nav className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
+              { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
+              { id: 'api', label: 'SAP Query Studio', icon: Server },
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
@@ -320,63 +307,183 @@ export default function App() {
         {/* TAB 1: D1 & D9 CHARTS VISUALIZER WITH INTEGRATED HOROSCOPE OVERVIEW */}
         {activeTab === 'charts' && (
           <div key={activePersonId} className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-amber-400" />
-                  South Indian Chart Visualizer &amp; Relative House Numbers
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Interactive 4x4 perimeter grid. House 1 is dynamically positioned at Lagna ({selectedChart === 'D1' ? activeProfile.birth_lagna : 'Navamsha Lagna'}), numbering 1 to 12 clockwise.
-                </p>
-              </div>
-
-              {/* Chart selector toggle */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+            {/* Quick Section View Controls for South Indian Chart Visualizer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 border border-slate-800/80 px-4 py-2.5 rounded-xl text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Chart Visualizer Sections:</span>
+                </span>
                 <button
-                  onClick={() => setSelectedChart('D1')}
-                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${
-                    selectedChart === 'D1'
-                      ? 'bg-amber-500 text-slate-950 shadow'
-                      : 'text-slate-400 hover:text-slate-200'
+                  onClick={() => setExpandChartControls(!expandChartControls)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    expandChartControls
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
                   }`}
                 >
-                  D1 இராசி (Rashi Chart)
+                  <span>1. Chart Selector</span>
+                  {expandChartControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
                 <button
-                  onClick={() => setSelectedChart('D9')}
-                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${
-                    selectedChart === 'D9'
-                      ? 'bg-amber-500 text-slate-950 shadow'
-                      : 'text-slate-400 hover:text-slate-200'
+                  onClick={() => setExpandChartGrid(!expandChartGrid)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    expandChartGrid
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
                   }`}
                 >
-                  D9 நவாம்சம் (Navamsha Chart)
+                  <span>2. 4x4 Grid</span>
+                  {expandChartGrid ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setExpandPlacementsTable(!expandPlacementsTable)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    expandPlacementsTable
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  }`}
+                >
+                  <span>3. Placements Table</span>
+                  {expandPlacementsTable ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setExpandOverviewHighlights(!expandOverviewHighlights)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    expandOverviewHighlights
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  }`}
+                >
+                  <span>4. Horoscope Overview</span>
+                  {expandOverviewHighlights ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExpandAllChartSections}
+                  className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+                  title="Expand all 4 sections"
+                >
+                  Expand All
+                </button>
+                <button
+                  onClick={handleCollapseAllChartSections}
+                  className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+                  title="Collapse all 4 sections"
+                >
+                  Collapse All
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* The South Indian 4x4 Grid */}
-              <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    South Indian Layout ({selectedChart})
-                  </span>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1.5 text-cyan-400">
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-500/20 border border-cyan-400" />
-                      Lagna (House 1)
-                    </span>
-                    <span className="flex items-center gap-1.5 text-amber-400">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-400" />
-                      (வ / R) Retrograde
-                    </span>
+            {/* SECTION 1: Chart Viewport & D1 / D9 Switcher */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
+              <div
+                onClick={() => setExpandChartControls(!expandChartControls)}
+                className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 select-none"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                      1. Chart Selector &amp; Viewport Mode
+                    </h3>
+                    <div className="text-[11px] text-slate-400">
+                      Currently viewing: <strong className="text-amber-300">{selectedChart === 'D1' ? 'D1 இராசி (Rashi Chart)' : 'D9 நவாம்சம் (Navamsha Chart)'}</strong>
+                    </div>
                   </div>
                 </div>
 
-                {/* 4x4 Table / Grid */}
-                <div className="grid grid-cols-4 grid-rows-4 gap-2 aspect-square max-w-lg mx-auto bg-slate-950 p-2 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+                  {/* Chart selector toggle */}
+                  <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    <button
+                      onClick={() => setSelectedChart('D1')}
+                      className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        selectedChart === 'D1'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      D1 இராசி (Rashi)
+                    </button>
+                    <button
+                      onClick={() => setSelectedChart('D9')}
+                      className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                        selectedChart === 'D9'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      D9 நவாம்சம் (Navamsha)
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setExpandChartControls(!expandChartControls)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                    title={expandChartControls ? "Minimize Section 1" : "Expand Section 1"}
+                  >
+                    {expandChartControls ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {expandChartControls && (
+                <div className="px-4 pb-3.5 pt-2 border-t border-slate-800/80 bg-slate-950/40 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-3">
+                  <p>
+                    Interactive 4x4 perimeter grid. House 1 is dynamically positioned at Lagna (<strong className="text-cyan-400">{selectedChart === 'D1' ? activeProfile.birth_lagna : 'Navamsha Lagna'}</strong>), numbering 1 to 12 clockwise following traditional South Indian astrology convention.
+                  </p>
+                  <span className="text-[11px] text-slate-500">
+                    Click title or chevron to collapse/expand
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* SECTION 2: The South Indian 4x4 Grid */}
+              <div className={`${!expandPlacementsTable ? 'lg:col-span-12' : !expandChartGrid ? 'lg:col-span-12' : 'lg:col-span-7'} bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all`}>
+                <div
+                  onClick={() => setExpandChartGrid(!expandChartGrid)}
+                  className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+                >
+                  <div className="flex items-center gap-2">
+                    <Compass className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      2. South Indian 4x4 Layout ({selectedChart} - {selectedChart === 'D1' ? 'Rashi' : 'Navamsha'})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {expandChartGrid && (
+                      <div className="hidden sm:flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1.5 text-cyan-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500/20 border border-cyan-400" />
+                          Lagna (House 1)
+                        </span>
+                        <span className="flex items-center gap-1.5 text-amber-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-400" />
+                          (வ / R) Retrograde
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                      title={expandChartGrid ? "Minimize 4x4 Chart" : "Expand 4x4 Chart"}
+                    >
+                      {expandChartGrid ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {expandChartGrid && (
+                  <div className="p-4 sm:p-5">
+                    {/* 4x4 Table / Grid */}
+                    <div className="grid grid-cols-4 grid-rows-4 gap-2 aspect-square max-w-lg mx-auto bg-slate-950 p-2 rounded-xl border border-slate-800">
                   {[0, 1, 2, 3].map(rowIdx =>
                     [0, 1, 2, 3].map(colIdx => {
                       // Center 2x2 cells
@@ -475,18 +582,36 @@ export default function App() {
                   )}
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Placements Detailed Sidebar Table */}
-              <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Table className="w-4 h-4 text-amber-400" />
-                    {selectedChart} Placements Detail (natal_placement_detail)
-                  </h4>
-                  <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300">
-                    {currentChartPlacements.length} Bodies
-                  </span>
-                </div>
+          {/* SECTION 3: Placements Detailed Sidebar Table */}
+          <div className={`${!expandChartGrid ? 'lg:col-span-12' : !expandPlacementsTable ? 'lg:col-span-12' : 'lg:col-span-5'} bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all`}>
+            <div
+              onClick={() => setExpandPlacementsTable(!expandPlacementsTable)}
+              className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+            >
+              <div className="flex items-center gap-2">
+                <Table className="w-4 h-4 text-amber-400" />
+                <h4 className="text-sm font-bold text-white">
+                  3. {selectedChart} Placements Detail (natal_placement_detail)
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300">
+                  {currentChartPlacements.length} Bodies
+                </span>
+                <button
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                  title={expandPlacementsTable ? "Minimize Table" : "Expand Table"}
+                >
+                  {expandPlacementsTable ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {expandPlacementsTable && (
+              <div className="p-4 sm:p-5 space-y-4">
 
                 <div className="overflow-x-auto max-h-[460px] overflow-y-auto border border-slate-800 rounded-xl">
                   <table className="w-full text-left text-xs">
@@ -557,16 +682,36 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 4: Native's Horoscope Overview Highlights */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
+          <div
+            onClick={() => setExpandOverviewHighlights(!expandOverviewHighlights)}
+            className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <h4 className="text-sm font-bold text-white">4. Horoscope Overview &amp; Native Profile Highlights</h4>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-amber-300 font-mono font-semibold">
+                {activeProfile.person_name} ({activeProfile.person_id})
+              </span>
+              <button
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                title={expandOverviewHighlights ? "Minimize Overview" : "Expand Overview"}
+              >
+                {expandOverviewHighlights ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
 
-            {/* Native's Horoscope Overview Highlights (Integrated with Chart Visualizer) */}
-            <div className="space-y-4 pt-2 border-t border-slate-800">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h4 className="text-sm font-bold text-white">Horoscope Overview &amp; Native Profile Highlights</h4>
-              </div>
+          {expandOverviewHighlights && (
+            <div className="p-4 sm:p-5">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {/* Card 1: Person Master Highlights */}
                 <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
@@ -682,8 +827,10 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
+    )}
 
         {/* TAB 4: MONTHLY VIEW (D1 DUAL-LAYER TRANSIT & RAYCASTER) */}
         {activeTab === 'monthly' && (

@@ -1,0 +1,4 @@
+# Python dependencies for Tamil Horoscope PDF Extraction & PostgreSQL ingestion
+pdfplumber>=0.11.0
+pypdf>=4.0.0
+psycopg2-binary>=2.9.9

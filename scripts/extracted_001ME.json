@@ -1,0 +1,576 @@
+{
+  "person_master": {
+    "person_id": "001ME",
+    "person_name": "ME",
+    "age": 50,
+    "date_of_birth": "1976-01-26",
+    "place_of_birth": "Tamil Nadu, India",
+    "birth_lagna": "Dhanus (Sagittarius)",
+    "birth_rashi": "Vrischigam (Scorpio)",
+    "birth_star": "Anusham (Anuradha)",
+    "birth_star_pada": 2,
+    "starting_dasha_lord": "Saturn (Sani)",
+    "dasha_balance_years": 13,
+    "dasha_balance_months": 2,
+    "dasha_balance_days": 5,
+    "dasha_balance_text": "13-வருஷம் 2-மாதம் 5-நாள் 31-நாழி 47-விநாடி"
+  },
+  "natal_placement_detail": [
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Lagna",
+      "rashi_name": "Dhanus (Sagittarius)",
+      "house_number": 1,
+      "nakshatra_name": "Purva Ashadha",
+      "pada": 1,
+      "degree_sputa": "16° 33'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Venus (Sukra)",
+      "rashi_name": "Dhanus (Sagittarius)",
+      "house_number": 1,
+      "nakshatra_name": "Mula",
+      "pada": 2,
+      "degree_sputa": "06° 08'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Sun (Surya)",
+      "rashi_name": "Makaram (Capricorn)",
+      "house_number": 2,
+      "nakshatra_name": "Shravana",
+      "pada": 1,
+      "degree_sputa": "11° 37'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Mercury (Budha)",
+      "rashi_name": "Makaram (Capricorn)",
+      "house_number": 2,
+      "nakshatra_name": "Uttara Ashadha",
+      "pada": 3,
+      "degree_sputa": "05° 15'",
+      "is_retrograde": true
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Jupiter (Guru)",
+      "rashi_name": "Meenam (Pisces)",
+      "house_number": 4,
+      "nakshatra_name": "Revathi",
+      "pada": 3,
+      "degree_sputa": "24° 42'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Ketu",
+      "rashi_name": "Mesham (Aries)",
+      "house_number": 5,
+      "nakshatra_name": "Bharani",
+      "pada": 4,
+      "degree_sputa": "24° 25'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Mars (Sevvai)",
+      "rashi_name": "Rishabam (Taurus)",
+      "house_number": 6,
+      "nakshatra_name": "Rohini",
+      "pada": 4,
+      "degree_sputa": "21° 23'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Saturn (Sani)",
+      "rashi_name": "Katakam (Cancer)",
+      "house_number": 8,
+      "nakshatra_name": "Pushya",
+      "pada": 1,
+      "degree_sputa": "05° 57'",
+      "is_retrograde": true
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Mandi (Gulika)",
+      "rashi_name": "Kanni (Virgo)",
+      "house_number": 10,
+      "nakshatra_name": "Hasta",
+      "pada": 2,
+      "degree_sputa": "14° 42'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Rahu",
+      "rashi_name": "Thulaam (Libra)",
+      "house_number": 11,
+      "nakshatra_name": "Vishakha",
+      "pada": 2,
+      "degree_sputa": "24° 25'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D1",
+      "body_name": "Moon (Chandra)",
+      "rashi_name": "Vrischigam (Scorpio)",
+      "house_number": 12,
+      "nakshatra_name": "Anuradha",
+      "pada": 2,
+      "degree_sputa": "07° 24'",
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Lagna",
+      "rashi_name": "Simham (Leo)",
+      "house_number": 1,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Saturn (Sani)",
+      "rashi_name": "Simham (Leo)",
+      "house_number": 1,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": true
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Moon (Chandra)",
+      "rashi_name": "Kanni (Virgo)",
+      "house_number": 2,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Ketu",
+      "rashi_name": "Vrischigam (Scorpio)",
+      "house_number": 4,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Mercury (Budha)",
+      "rashi_name": "Kumbam (Aquarius)",
+      "house_number": 7,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": true
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Jupiter (Guru)",
+      "rashi_name": "Kumbam (Aquarius)",
+      "house_number": 7,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Sun (Surya)",
+      "rashi_name": "Mesham (Aries)",
+      "house_number": 9,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Venus (Sukra)",
+      "rashi_name": "Rishabam (Taurus)",
+      "house_number": 10,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Mandi (Gulika)",
+      "rashi_name": "Rishabam (Taurus)",
+      "house_number": 10,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Rahu",
+      "rashi_name": "Mithunam (Gemini)",
+      "house_number": 11,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    },
+    {
+      "person_id": "001ME",
+      "chart_type": "D9",
+      "body_name": "Mars (Sevvai)",
+      "rashi_name": "Katakam (Cancer)",
+      "house_number": 12,
+      "nakshatra_name": null,
+      "pada": null,
+      "degree_sputa": null,
+      "is_retrograde": false
+    }
+  ],
+  "vimshottari_dasha_detail": [
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "1976-01-26",
+      "end_date": "1976-03-14"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Sun (Surya)",
+      "start_date": "1976-03-14",
+      "end_date": "1976-04-04"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Moon (Chandra)",
+      "start_date": "1976-04-04",
+      "end_date": "1976-05-07"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Mars (Sevvai)",
+      "start_date": "1976-05-07",
+      "end_date": "1976-05-30"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Rahu",
+      "start_date": "1976-05-30",
+      "end_date": "1976-07-30"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Jupiter (Guru)",
+      "start_date": "1976-07-30",
+      "end_date": "1976-09-23"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Saturn (Sani)",
+      "start_date": "1976-09-23",
+      "end_date": "1976-11-27"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Mercury (Budha)",
+      "start_date": "1976-11-27",
+      "end_date": "1977-01-23"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "1977-01-23",
+      "end_date": "1977-08-03"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Sun (Surya)",
+      "start_date": "1977-08-03",
+      "end_date": "1977-09-30"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Moon (Chandra)",
+      "start_date": "1977-09-30",
+      "end_date": "1978-01-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Mars (Sevvai)",
+      "start_date": "1978-01-05",
+      "end_date": "1978-03-12"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Rahu",
+      "start_date": "1978-03-12",
+      "end_date": "1978-09-03"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Jupiter (Guru)",
+      "start_date": "1978-09-03",
+      "end_date": "1979-02-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Saturn (Sani)",
+      "start_date": "1979-02-05",
+      "end_date": "1979-08-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Mercury (Budha)",
+      "start_date": "1979-08-05",
+      "end_date": "1980-01-17"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Ketu",
+      "start_date": "1980-01-17",
+      "end_date": "1980-03-23"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Sun (Surya)",
+      "start_date": "1980-03-23",
+      "end_date": "1980-04-10"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Moon (Chandra)",
+      "start_date": "1980-04-10",
+      "end_date": "1980-05-09"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Mars (Sevvai)",
+      "start_date": "1980-05-09",
+      "end_date": "1980-05-29"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Rahu",
+      "start_date": "1980-05-29",
+      "end_date": "1980-07-20"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Jupiter (Guru)",
+      "start_date": "1980-07-20",
+      "end_date": "1980-09-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Saturn (Sani)",
+      "start_date": "1980-09-05",
+      "end_date": "1980-10-30"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Mercury (Budha)",
+      "start_date": "1980-10-30",
+      "end_date": "1980-12-18"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Ketu",
+      "start_date": "1980-12-18",
+      "end_date": "1981-01-08"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Saturn (Sani)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "1981-01-08",
+      "end_date": "1981-03-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Mercury (Budha)",
+      "antardasha_lord": "Mercury (Budha)",
+      "pratyantardasha_lord": "Mercury (Budha)",
+      "start_date": "1989-04-02",
+      "end_date": "1989-08-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Mercury (Budha)",
+      "antardasha_lord": "Mercury (Budha)",
+      "pratyantardasha_lord": "Ketu",
+      "start_date": "1989-08-05",
+      "end_date": "1989-09-25"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Mercury (Budha)",
+      "antardasha_lord": "Mercury (Budha)",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "1989-09-25",
+      "end_date": "1990-02-20"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Ketu",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Ketu",
+      "start_date": "2006-04-02",
+      "end_date": "2006-04-11"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Ketu",
+      "antardasha_lord": "Ketu",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "2006-04-11",
+      "end_date": "2006-05-05"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Venus (Sukra)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Venus (Sukra)",
+      "start_date": "2013-04-02",
+      "end_date": "2013-10-22"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Venus (Sukra)",
+      "antardasha_lord": "Venus (Sukra)",
+      "pratyantardasha_lord": "Sun (Surya)",
+      "start_date": "2013-10-22",
+      "end_date": "2013-12-22"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Sun (Surya)",
+      "antardasha_lord": "Sun (Surya)",
+      "pratyantardasha_lord": "Sun (Surya)",
+      "start_date": "2033-04-02",
+      "end_date": "2033-04-07"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Moon (Chandra)",
+      "antardasha_lord": "Moon (Chandra)",
+      "pratyantardasha_lord": "Moon (Chandra)",
+      "start_date": "2039-04-02",
+      "end_date": "2039-04-27"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Mars (Sevvai)",
+      "antardasha_lord": "Mars (Sevvai)",
+      "pratyantardasha_lord": "Mars (Sevvai)",
+      "start_date": "2049-04-02",
+      "end_date": "2049-04-11"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Rahu",
+      "antardasha_lord": "Rahu",
+      "pratyantardasha_lord": "Rahu",
+      "start_date": "2056-04-02",
+      "end_date": "2056-08-28"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Jupiter (Guru)",
+      "antardasha_lord": "Jupiter (Guru)",
+      "pratyantardasha_lord": "Jupiter (Guru)",
+      "start_date": "2074-04-02",
+      "end_date": "2074-07-14"
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord": "Jupiter (Guru)",
+      "antardasha_lord": "Rahu",
+      "pratyantardasha_lord": "Mars (Sevvai)",
+      "start_date": "2090-02-12",
+      "end_date": "2090-04-02"
+    }
+  ]
+}

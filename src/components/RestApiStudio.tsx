@@ -25,7 +25,10 @@ import {
   ShieldCheck,
   Wifi,
   WifiOff,
-  Activity
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  Layers
 } from 'lucide-react';
 import {
   HoroscopeApiResponse,
@@ -155,6 +158,23 @@ export default function RestApiStudio({
   const [pinging, setPinging] = useState(false);
   const [lastFetchMeta, setLastFetchMeta] = useState<{ source: 'live_server' | 'fallback_simulator'; statusCode: number; durationMs: number; error?: string; endpointUsed?: string } | null>(null);
   const [rawServerMarkdown, setRawServerMarkdown] = useState<string | null>(null);
+
+  // Collapsible section toggles for SAP Query Studio (3 Sections)
+  const [expandQueryParams, setExpandQueryParams] = useState<boolean>(true);
+  const [expandResponseStudio, setExpandResponseStudio] = useState<boolean>(true);
+  const [expandAuditLog, setExpandAuditLog] = useState<boolean>(true);
+
+  const handleExpandAll = () => {
+    setExpandQueryParams(true);
+    setExpandResponseStudio(true);
+    setExpandAuditLog(true);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandQueryParams(false);
+    setExpandResponseStudio(false);
+    setExpandAuditLog(false);
+  };
 
   // Resolved transit timeline: always guarantees 9 Grahas Gochara timeline for all views
   const activeTransitTimeline = useMemo(() => {
@@ -355,17 +375,115 @@ print(prompt_markdown[:400])
 
   return (
     <div className="space-y-6">
-      {/* Query Parameters Form */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-bold text-white">Execute REST API Query (`/api/horoscope/query`)</span>
+      {/* Quick Section View Controls for SAP Query Studio */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 border border-slate-800/80 px-4 py-2.5 rounded-xl text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-amber-400" />
+            <span>SAP Query Studio Sections:</span>
+          </span>
+          <button
+            onClick={() => setExpandQueryParams(!expandQueryParams)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandQueryParams
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>1. Query Parameters</span>
+            {expandQueryParams ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setExpandResponseStudio(!expandResponseStudio)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandResponseStudio
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>2. Response Studio</span>
+            {expandResponseStudio ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setExpandAuditLog(!expandAuditLog)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandAuditLog
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>3. Database Audit Log</span>
+            {expandAuditLog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExpandAll}
+            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+            title="Expand all 3 sections"
+          >
+            Expand All
+          </button>
+          <button
+            onClick={handleCollapseAll}
+            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
+            title="Collapse all 3 sections"
+          >
+            Collapse All
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 1: Query Parameters & REST Connection Form */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
+        <div
+          onClick={() => setExpandQueryParams(!expandQueryParams)}
+          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-white">1. Execute REST API Query (`/api/horoscope/query`)</span>
+                {!expandQueryParams && (
+                  <span className="text-xs font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                    ID: {apiPersonId} &bull; {apiStartDate} &rarr; {apiEndDate}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-slate-400">
+                Accepts ISO format (<code className="text-slate-300">1998-01-01</code>) or Natural Language (<code className="text-slate-300">January 1998</code>)
+              </div>
+            </div>
           </div>
-          <div className="text-xs text-slate-400">
-            Accepts ISO format (<code className="text-slate-300">1998-01-01</code>) or Natural Language (<code className="text-slate-300">January 1998</code>)
+
+          <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+            {backendStatus?.ok ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Wifi className="w-3 h-3" />
+                Live Server Online
+              </span>
+            ) : (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Run 'python run_api_server.py'">
+                <WifiOff className="w-3 h-3" />
+                Simulation Ready
+              </span>
+            )}
+            <button
+              onClick={() => setExpandQueryParams(!expandQueryParams)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              title={expandQueryParams ? "Minimize Section 1" : "Expand Section 1"}
+            >
+              {expandQueryParams ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
         </div>
+
+        {expandQueryParams && (
+          <div className="p-4 sm:p-5 space-y-4">
 
         {/* Live Backend Connection Bar */}
         <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -606,75 +724,73 @@ print(prompt_markdown[:400])
             </div>
           </div>
         )}
+          </div>
+        )}
       </div>
 
-      {/* Query Response Header & Metadata */}
+      {/* SECTION 2: Query Response Header & Metadata & Sub-Tab Data Visualizer */}
       {apiResponse && (
-        <div className="space-y-6">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-mono font-bold border border-emerald-500/20">
-                  HTTP 200 OK
-                </span>
-                <div>
-                  <span className="text-xs text-slate-400 mr-2">Unique Response Tag:</span>
-                  <span className="text-xs font-mono font-bold text-amber-300 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
+          <div
+            onClick={() => setExpandResponseStudio(!expandResponseStudio)}
+            className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Code2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold text-white">2. Query Response &amp; Interactive Analytics Studio</span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-mono font-bold border border-emerald-500/20">
+                    HTTP 200 OK
+                  </span>
+                  <span className="text-xs font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
                     {apiResponse.unique_response_id}
                   </span>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 mr-1.5">Running Number:</span>
-                  <span className="px-2.5 py-1 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono font-bold border border-indigo-500/30">
-                    #{apiResponse.running_number} (Cycle {apiResponse.running_number}/100)
+                  <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono font-bold border border-indigo-500/30">
+                    #{apiResponse.running_number}
                   </span>
                 </div>
-
-                {lastFetchMeta && (
-                  <div>
-                    {lastFetchMeta.source === 'live_server' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                        <Wifi className="w-3.5 h-3.5" />
-                        Live Python Server Call ({lastFetchMeta.durationMs}ms)
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30" title={lastFetchMeta.error}>
-                        <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                        Simulation Fallback ({lastFetchMeta.error || 'Server offline'})
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Persisted in Table: <strong>user_queries</strong></span>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Vimshottari Dasha intervals, Natal D1/D9 houses, 9-Graha Gochara transits, LLM Markdown, and full JSON payload.
                 </div>
-                <button
-                  onClick={() => copyToClipboard(jsonString, 'json_resp')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-                >
-                  <Copy className="w-3.5 h-3.5 text-amber-400" />
-                  {copied === 'json_resp' ? 'Copied JSON!' : 'Copy JSON'}
-                </button>
-                <button
-                  onClick={() =>
-                    downloadFile(
-                      `${apiResponse.unique_response_id}.json`,
-                      jsonString,
-                      'application/json'
-                    )
-                  }
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-                >
-                  <Download className="w-3.5 h-3.5 text-cyan-400" />
-                  Download
-                </button>
               </div>
             </div>
+
+            <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => copyToClipboard(jsonString, 'json_resp')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                {copied === 'json_resp' ? 'Copied!' : 'Copy'}
+              </button>
+              <button
+                onClick={() =>
+                  downloadFile(
+                    `${apiResponse.unique_response_id}.json`,
+                    jsonString,
+                    'application/json'
+                  )
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                Download
+              </button>
+              <button
+                onClick={() => setExpandResponseStudio(!expandResponseStudio)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                title={expandResponseStudio ? "Minimize Section 2" : "Expand Section 2"}
+              >
+                {expandResponseStudio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
+
+          {expandResponseStudio && (
+            <div className="p-4 sm:p-5 space-y-4">
 
           {/* Sub-tab Navigation */}
           <div className="flex flex-wrap gap-1 border-b border-slate-800 pb-1">
@@ -1895,8 +2011,100 @@ print(prompt_markdown[:400])
               </div>
             </div>
           )}
+            </div>
+          )}
         </div>
       )}
+
+      {/* SECTION 3: Database Transaction Audit Table (user_queries) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
+        <div
+          onClick={() => setExpandAuditLog(!expandAuditLog)}
+          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white">3. Database Transaction Audit Table (`user_queries`)</span>
+                <span className="text-xs font-mono bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded border border-purple-500/20">
+                  {queryHistory.length} Logged Queries
+                </span>
+              </div>
+              <div className="text-xs text-slate-400">
+                Stores generated JSON responses, time spans, and cycling 1..100 sequence numbers.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
+            <span className="text-xs font-mono text-slate-400 hidden sm:inline">
+              Sequence: user_query_seq (1..100)
+            </span>
+            <button
+              onClick={() => setExpandAuditLog(!expandAuditLog)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+              title={expandAuditLog ? "Minimize Section 3" : "Expand Section 3"}
+            >
+              {expandAuditLog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {expandAuditLog && (
+          <div className="p-4 sm:p-5">
+            <div className="overflow-x-auto border border-slate-800 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-800 text-slate-300 font-mono text-[11px] uppercase">
+                  <tr>
+                    <th className="py-2.5 px-3">Unique Query ID</th>
+                    <th className="py-2.5 px-3 text-center">Running #</th>
+                    <th className="py-2.5 px-3">Person ID</th>
+                    <th className="py-2.5 px-3">Start Date</th>
+                    <th className="py-2.5 px-3">End Date</th>
+                    <th className="py-2.5 px-3">Created Timestamp</th>
+                    <th className="py-2.5 px-3 text-center">Payload Saved</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-slate-300">
+                  {queryHistory.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-800/40">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
+                        {item.query_id}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono">
+                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                          #{item.running_number}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-slate-300">{item.person_id}</td>
+                      <td className="py-2.5 px-3 font-mono text-cyan-400">{item.start_date}</td>
+                      <td className="py-2.5 px-3 font-mono text-rose-400">{item.end_date}</td>
+                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                        {item.created_at ? new Date(item.created_at).toLocaleString() : 'Just now'}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          JSONB Stored
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {queryHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-6 text-center text-slate-500 italic">
+                        No transactions recorded yet in user_queries table.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -419,3 +419,13 @@ FROM user_queries;
 ## 📄 License
 Vedic astrology calculation, database ingestion, and REST API engine developed for Tamil Jadhagam processing. Open source under the MIT License.
 
+## GEMINI Setup
+to run the gemini , you have create the .env file with the below content and get the api key from gemini ai studio
+
+ touch .env
+arun@Aruns-MacBook-Pro astrostar % vi .env
+arun@Aruns-MacBook-Pro astrostar % cat .env
+GEMINI_API_KEY=""
+arun@Aruns-MacBook-Pro astrostar %
+
+

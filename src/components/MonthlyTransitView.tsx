@@ -895,6 +895,16 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
               </select>
             </div>
 
+            {/* Edit & Submit LLM Reasoning Prompt Button */}
+            <button
+              onClick={handleOpenTopEventInspector}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
+              title="Open Multi-LLM Reasoning Engine with Editable Astrological Prompt (Career, Job Search, Love & Romance)"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-current" />
+              <span>Edit &amp; Submit Prompt</span>
+            </button>
+
             {/* Quick Open Audio Voice Inspector Button */}
             <button
               onClick={handleOpenTopEventInspector}

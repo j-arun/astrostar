@@ -113,6 +113,49 @@ export interface VedicHouseContext {
   language?: 'en' | 'ta';
 }
 
+export interface EmploymentStatusInference {
+  status: 'currently_serving' | 'actively_seeking' | 'sabbatical_unemployed';
+  label: string;
+  indicatorColor: 'green' | 'yellow' | 'amber' | 'red';
+  confidence: number;
+  inferenceReasoning: string;
+}
+
+export interface JobSearchAnalysis {
+  momentum: string;
+  pastStruggleVsCurrentPhase: string;
+  timingAuspiciousness: string;
+}
+
+export interface NewJobAcquisition {
+  jobTypeAndMood: string;
+  workplaceAtmosphere: string;
+  comparisonWithCurrentRole: string;
+}
+
+export interface ExistingJobPhase {
+  currentPhaseNature: string;
+  retentionVsExitAdvice: string;
+}
+
+export interface CrushStatusInference {
+  existingCrushTrajectory: string;
+  newCrushProbability: 'High' | 'Moderate' | 'Low' | string;
+  newCrushDetails: string;
+}
+
+export interface RomanceAtmosphere {
+  emotionalWeather: string;
+  chemistryRating: number;
+}
+
+export interface ManifestationPath {
+  outcomeType: 'classical_traditional_marriage' | 'living_together_modern' | 'exploratory_flutter' | 'platonic_delayed';
+  outcomeLabel: string;
+  manifestationLikelihood: string;
+  astrologicalPathReasoning: string;
+}
+
 export interface SupplementaryDomainScenario {
   id: 'career_job' | 'love_romance' | 'health_vitality' | 'finance_wealth' | 'family_home';
   title: string;
@@ -121,6 +164,37 @@ export interface SupplementaryDomainScenario {
   timingWindow: string;
   astrologicalReasoning: string;
   practicalGuidance: string;
+
+  // Career Specific In-Depth Deep Dives & Native Employment State Trigger
+  employmentStatusInference?: EmploymentStatusInference;
+  jobSearchAnalysis?: JobSearchAnalysis;
+  newJobAcquisition?: NewJobAcquisition;
+  existingJobPhase?: ExistingJobPhase;
+
+  // Love, Romance & Crush Deep Dives & Real Love Manifestation Path
+  crushStatusInference?: CrushStatusInference;
+  romanceAtmosphere?: RomanceAtmosphere;
+  manifestationPath?: ManifestationPath;
+
+  // Domain Specific Deep Nuances (Finance, Health, Family)
+  financeDetails?: {
+    liquidityVsOutflow: string;
+    windfallAndSpeculation: string;
+    debtAndAssetFinancing: string;
+  };
+  healthDetails?: {
+    vulnerableZones: string[];
+    mentalTranquilityAndStress: string;
+    holisticRemedies: string;
+  };
+  familyDetails?: {
+    domesticAmbiance: string;
+    maternalWellbeing: string;
+    propertyAndRelocation: string;
+  };
+
+  // Rich multi-paragraph detailed synthesis
+  detailedParagraphs?: string[];
 }
 
 export interface NatalPromiseVsTransitDelivery {

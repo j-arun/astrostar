@@ -100,7 +100,26 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   // Interactive Prompt Studio State
   const [editablePrompt, setEditablePrompt] = useState<string>('');
   const [isPromptCustomized, setIsPromptCustomized] = useState<boolean>(false);
-  const [showPromptStudio, setShowPromptStudio] = useState<boolean>(false);
+  const [showPromptStudio, setShowPromptStudio] = useState<boolean>(true);
+
+  const handleApplyPreset = (domain: 'career' | 'love' | 'finance' | 'health') => {
+    if (!context) return;
+    const basePrompt = buildVedicPrompt({ ...context, language: selectedLanguage, customPromptOverride: undefined }, activeProvider);
+    let appendText = '';
+    if (domain === 'career') {
+      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - CAREER & EMPLOYMENT STATUS INQUIRY\n======================================================================\nCRITICAL CAREER REASONING REQUIREMENTS:\n1. NATIVE EMPLOYMENT STATUS TEST: Explicitly deduce based on 10th house Karma, 6th house service, active Dasha Triad lord, and current Gochara transits whether the native is currently actively serving in a job (employed), in transition / actively seeking placement, or on sabbatical. Provide the status deduction ('currently_serving' | 'actively_seeking' | 'sabbatical_unemployed') and astrological rationale.\n2. JOB SEARCH & TIMING: Analyze past struggle vs current momentum. Is this month the auspicious turning point for landing an offer?\n3. NEW JOB ACQUISITION: What kind and mood of job will the native get (corporate leadership, tech architecture, client consulting, remote autonomy)? Will it be significantly better than the role they are currently serving (if employed)?\n4. EXISTING JOB PHASE: If currently serving, what is the workplace atmosphere (management friction, workload, promotions vs burnout)?\n5. Deliver rich multi-paragraph analysis, NOT one-liners.`;
+    } else if (domain === 'love') {
+      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - LOVE, CRUSH & ROMANTIC MANIFESTATION INQUIRY\n======================================================================\nCRITICAL ROMANTIC REASONING REQUIREMENTS:\n1. EXISTING CRUSH TRAJECTORY: How will any existing romantic crush or affectionate bond evolve this month? Will it find reciprocation, hit friction, or clarify boundaries?\n2. NEW CRUSH FORMATION: Is there a strong astrological trigger for a new crush or romantic interest forming under current 5th/7th/Venus/Moon transits? Probability and context.\n3. ROMANCE CHEMISTRY & FLUTTERING: Describe the emotional weather, psychological fluttering, and chemistry rating.\n4. REAL LOVE MANIFESTATION HORIZON: Will real love manifestation work out? What form will it take: classical traditional marriage/formal commitment vs modern living-together / co-habitation vs passing romantic flutter? Detail the 5th, 7th, Venus, Jupiter, and D9 Navamsha indications.\n5. Deliver rich multi-paragraph analysis, NOT one-liners.`;
+    } else if (domain === 'finance') {
+      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - WEALTH, CASHFLOW & CAPITAL INFLOWS\n======================================================================\n1. Map liquid cash reserves (2nd house) vs long-term fixed assets/collateral (4th house).\n2. Speculative windfalls vs debt obligations and 11th house gains.\n3. Detailed multi-paragraph financial reasoning.`;
+    } else if (domain === 'health') {
+      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - HEALTH, SUKHA & VULNERABILITY ZONES\n======================================================================\n1. Map physical stamina, thoracic/cardiac/digestive vulnerability zones based on 6th/8th houses and Saturn/Mars aspects.\n2. Mental tranquility (Sukha) and stress management.\n3. Holistic lifestyle and Ayurvedic pacing guidance.`;
+    }
+
+    setEditablePrompt(basePrompt + appendText);
+    setIsPromptCustomized(true);
+    setShowPromptStudio(true);
+  };
 
   // Synchronize System Prompt when context or provider changes
   useEffect(() => {
@@ -874,22 +893,22 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
 
           {/* INTERACTIVE PROMPT STUDIO & PAYLOAD EDITOR */}
-          <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-            <div className="flex flex-wrap items-center justify-between px-3.5 py-2.5 bg-slate-900/80 border-b border-slate-800/80 gap-2">
+          <div className="bg-slate-950 border border-amber-500/30 rounded-xl overflow-hidden shadow-sm">
+            <div className="flex flex-wrap items-center justify-between px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800/80 gap-2">
               <button
                 onClick={() => setShowPromptStudio(!showPromptStudio)}
-                className="flex items-center gap-2 text-xs font-bold text-slate-200 hover:text-amber-300 transition"
+                className="flex items-center gap-2 text-xs font-bold text-slate-200 hover:text-amber-300 transition cursor-pointer"
                 title="Click to view and edit the raw astrological prompt sent to the LLM"
               >
                 <Code className="w-4 h-4 text-amber-400" />
-                <span>Prompt &amp; Astrological Payload Studio</span>
+                <span>Vedic Prompt &amp; Reasoning Studio</span>
                 {isPromptCustomized ? (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    Modified by User
+                    ✏️ Editable Custom Override Active
                   </span>
                 ) : (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                    System Generated
+                    System Generated (Editable)
                   </span>
                 )}
                 {showPromptStudio ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
@@ -899,56 +918,106 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 <button
                   onClick={handleResetPromptToDefault}
                   disabled={!isPromptCustomized}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition cursor-pointer"
                   title="Reset prompt back to system-generated astronomical ephemeris payload"
                 >
                   <RotateCcw className="w-3 h-3 text-slate-400" />
-                  <span>Reset Prompt</span>
+                  <span>Reset Base Prompt</span>
                 </button>
 
                 <button
                   onClick={() => handleCopy(editablePrompt, 'studio-prompt')}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
                 >
                   {copied === 'studio-prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                  <span>{copied === 'studio-prompt' ? 'Copied' : 'Copy'}</span>
+                  <span>{copied === 'studio-prompt' ? 'Copied' : 'Copy Prompt'}</span>
                 </button>
 
                 <button
                   onClick={handleRefireWithCustomPrompt}
                   disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow disabled:opacity-50"
-                  title="Trigger the LLM using this exact prompt payload"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow disabled:opacity-50 cursor-pointer"
+                  title="Submit this exact edited prompt payload to the LLM reasoning engine"
                 >
                   {isGenerating ? <RotateCcw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3 fill-current" />}
-                  <span>Refire LLM</span>
+                  <span>🚀 Send Prompt to LLM</span>
                 </button>
               </div>
             </div>
 
             {showPromptStudio && (
-              <div className="p-3 bg-slate-950/90 space-y-2 border-t border-slate-800">
+              <div className="p-3 bg-slate-950/90 space-y-2.5 border-t border-slate-800">
+                {/* Domain Focus Quick Injection Chips */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 mr-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    Inject Focused Questions:
+                  </span>
+                  <button
+                    onClick={() => handleApplyPreset('career')}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/50 transition cursor-pointer flex items-center gap-1"
+                    title="Append specific career questions: employment status inference test, job search momentum, kind of job, and new vs existing job phase"
+                  >
+                    <span>💼</span>
+                    <span>Career &amp; Employment Status Test</span>
+                  </button>
+                  <button
+                    onClick={() => handleApplyPreset('love')}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-rose-300 hover:text-rose-200 border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1"
+                    title="Append specific love questions: existing crush trajectory, new crush possibility, romance chemistry, and classical marriage vs living-together manifestation"
+                  >
+                    <span>❤️</span>
+                    <span>Love, Crush &amp; Romance Weather</span>
+                  </button>
+                  <button
+                    onClick={() => handleApplyPreset('finance')}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-sky-200 border border-slate-800 hover:border-sky-500/50 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <span>💰</span>
+                    <span>Finances &amp; Inflows</span>
+                  </button>
+                  <button
+                    onClick={() => handleApplyPreset('health')}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-emerald-300 hover:text-emerald-200 border border-slate-800 hover:border-emerald-500/50 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <span>🩺</span>
+                    <span>Health &amp; Sukha</span>
+                  </button>
+                </div>
+
                 <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                  <span>Review and edit prompt instructions, flattened natal positions, or Moon transit triggers:</span>
+                  <span>Edit instructions or custom questions directly below before sending to {activeProvider}:</span>
                   <span className="text-amber-400 font-semibold">
                     {editablePrompt.length} chars &bull; ~{Math.round(editablePrompt.length / 4)} tokens
                   </span>
                 </div>
+
                 <textarea
                   value={editablePrompt}
                   onChange={e => {
                     setEditablePrompt(e.target.value);
                     setIsPromptCustomized(true);
                   }}
-                  rows={12}
+                  rows={11}
                   className="w-full bg-slate-900 border border-slate-700/80 rounded-lg p-3 font-mono text-[11px] text-slate-200 focus:outline-none focus:border-amber-500 transition leading-relaxed resize-y selection:bg-amber-500/30"
                   placeholder="System prompt will populate here..."
                 />
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Tip: Make direct edits above (e.g. adjust house questions or focus) and click <strong>"Refire LLM"</strong> to test live.</span>
-                  {isPromptCustomized && (
-                    <span className="text-amber-300 font-bold">● User custom override active</span>
-                  )}
+
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span>💡 Edit any text, rule, or test inquiry above and click <strong>"🚀 Send Prompt to LLM"</strong>.</span>
+                    {isPromptCustomized && (
+                      <span className="text-amber-300 font-bold">● Custom prompt active</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleRefireWithCustomPrompt}
+                    disabled={isGenerating}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow disabled:opacity-50 cursor-pointer"
+                  >
+                    {isGenerating ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                    <span>Submit Prompt to Reasoning Engine</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -1172,7 +1241,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     const selectedSc = narrative.supplementaryScenarios?.find(s => s.id === activeDomainTab) || narrative.supplementaryScenarios?.[0];
                     if (!selectedSc) return null;
                     return (
-                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-base">{DOMAIN_ICONS[selectedSc.id] || '✨'}</span>
@@ -1198,6 +1267,254 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                             </span>
                           </div>
                         </div>
+
+                        {/* DOMAIN DEEP DIVE: CAREER & JOB SEARCH + EMPLOYMENT STATUS TEST TRIGGER */}
+                        {selectedSc.id === 'career_job' && (
+                          <div className="space-y-2.5">
+                            {/* Special Native Employment State Status Light */}
+                            {selectedSc.employmentStatusInference && (
+                              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="relative flex h-3 w-3">
+                                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                                        selectedSc.employmentStatusInference.indicatorColor === 'green'
+                                          ? 'bg-emerald-400'
+                                          : selectedSc.employmentStatusInference.indicatorColor === 'yellow'
+                                          ? 'bg-amber-400'
+                                          : 'bg-rose-400'
+                                      }`} />
+                                      <span className={`relative inline-flex rounded-full h-3 w-3 ${
+                                        selectedSc.employmentStatusInference.indicatorColor === 'green'
+                                          ? 'bg-emerald-500'
+                                          : selectedSc.employmentStatusInference.indicatorColor === 'yellow'
+                                          ? 'bg-amber-500'
+                                          : 'bg-rose-500'
+                                      }`} />
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-200">
+                                      Native Employment State Inference:
+                                    </span>
+                                    <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${
+                                      selectedSc.employmentStatusInference.indicatorColor === 'green'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : selectedSc.employmentStatusInference.indicatorColor === 'yellow'
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    }`}>
+                                      {selectedSc.employmentStatusInference.label}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    Deduction Confidence: {(selectedSc.employmentStatusInference.confidence * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-slate-300 leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+                                  <strong className="text-amber-300">Astrological Deduction (10th Karma &amp; 6th Service): </strong>
+                                  {selectedSc.employmentStatusInference.inferenceReasoning}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Job Search & Acquisition Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+                              {selectedSc.jobSearchAnalysis && (
+                                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                    <span className="font-bold text-amber-400 text-[11px]">Job Search &amp; Past Struggle Phase</span>
+                                    <span className="text-[10px] text-emerald-400 font-semibold">{selectedSc.jobSearchAnalysis.momentum}</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    <strong className="text-slate-400">Past Delays vs Now: </strong>
+                                    {selectedSc.jobSearchAnalysis.pastStruggleVsCurrentPhase}
+                                  </p>
+                                  <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                                    <strong className="text-emerald-400">Auspicious Offer Window: </strong>
+                                    {selectedSc.jobSearchAnalysis.timingAuspiciousness}
+                                  </p>
+                                </div>
+                              )}
+
+                              {selectedSc.newJobAcquisition && (
+                                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                    <span className="font-bold text-sky-400 text-[11px]">New Job Acquisition &amp; Role Mood</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    <strong className="text-slate-400">Role &amp; Mood: </strong>
+                                    {selectedSc.newJobAcquisition.jobTypeAndMood}
+                                  </p>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    <strong className="text-slate-400">Workplace Atmosphere: </strong>
+                                    {selectedSc.newJobAcquisition.workplaceAtmosphere}
+                                  </p>
+                                  <p className="text-[11px] text-sky-300/90 leading-relaxed">
+                                    <strong className="text-sky-400">Comparison with Current Role: </strong>
+                                    {selectedSc.newJobAcquisition.comparisonWithCurrentRole}
+                                  </p>
+                                </div>
+                              )}
+
+                              {selectedSc.existingJobPhase && (
+                                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5 md:col-span-2">
+                                  <span className="font-bold text-indigo-400 text-[11px] block border-b border-slate-800/80 pb-1.5">
+                                    Existing Job Phase (For Native Currently Serving)
+                                  </span>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                                    <p className="text-slate-300 leading-relaxed">
+                                      <strong className="text-slate-400">Workplace Climate &amp; Friction: </strong>
+                                      {selectedSc.existingJobPhase.currentPhaseNature}
+                                    </p>
+                                    <p className="text-indigo-300/90 leading-relaxed">
+                                      <strong className="text-indigo-400">Retention vs. Exit Advice: </strong>
+                                      {selectedSc.existingJobPhase.retentionVsExitAdvice}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* DOMAIN DEEP DIVE: LOVE, CRUSH & ROMANTIC MANIFESTATION */}
+                        {selectedSc.id === 'love_romance' && (
+                          <div className="space-y-2.5 text-xs">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                              {selectedSc.crushStatusInference && (
+                                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                    <span className="font-bold text-rose-400 text-[11px]">Crush Outlook &amp; Potential</span>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                      New Crush: {selectedSc.crushStatusInference.newCrushProbability}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    <strong className="text-slate-400">Existing Crush Trajectory: </strong>
+                                    {selectedSc.crushStatusInference.existingCrushTrajectory}
+                                  </p>
+                                  <p className="text-[11px] text-rose-300/90 leading-relaxed">
+                                    <strong className="text-rose-400">New Attraction Trigger: </strong>
+                                    {selectedSc.crushStatusInference.newCrushDetails}
+                                  </p>
+                                </div>
+                              )}
+
+                              {selectedSc.romanceAtmosphere && (
+                                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                    <span className="font-bold text-amber-400 text-[11px]">Romance Chemistry &amp; Fluttering</span>
+                                    <span className="text-[10px] font-mono font-bold text-amber-300">
+                                      Chemistry: {selectedSc.romanceAtmosphere.chemistryRating}%
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                                    <strong className="text-slate-400">Emotional Weather: </strong>
+                                    {selectedSc.romanceAtmosphere.emotionalWeather}
+                                  </p>
+                                  <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-800 mt-2">
+                                    <div
+                                      className="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full"
+                                      style={{ width: `${selectedSc.romanceAtmosphere.chemistryRating}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {selectedSc.manifestationPath && (
+                              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-1.5">
+                                  <span className="font-bold text-emerald-400 text-[11px]">Real Love Manifestation Horizon</span>
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    {selectedSc.manifestationPath.outcomeLabel}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-300 leading-relaxed">
+                                  <strong className="text-slate-400">Manifestation Outcome: </strong>
+                                  {selectedSc.manifestationPath.manifestationLikelihood}
+                                </p>
+                                <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                                  <strong className="text-emerald-400">Vedic Astrological Reasoning (5th, 7th &amp; D9): </strong>
+                                  {selectedSc.manifestationPath.astrologicalPathReasoning}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* DOMAIN DEEP DIVE: FINANCE & WEALTH */}
+                        {selectedSc.id === 'finance_wealth' && selectedSc.financeDetails && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-amber-400 block border-b border-slate-800/80 pb-1">Liquid Cashflow</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.financeDetails.liquidityVsOutflow}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-sky-400 block border-b border-slate-800/80 pb-1">Windfalls &amp; Gains</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.financeDetails.windfallAndSpeculation}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-emerald-400 block border-b border-slate-800/80 pb-1">Debt &amp; Asset Funding</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.financeDetails.debtAndAssetFinancing}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* DOMAIN DEEP DIVE: HEALTH & VITALITY */}
+                        {selectedSc.id === 'health_vitality' && selectedSc.healthDetails && (
+                          <div className="space-y-2 text-xs">
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800/80 pb-1.5">
+                                <span className="text-[11px] font-bold text-rose-400">Vulnerable Zones:</span>
+                                {selectedSc.healthDetails.vulnerableZones.map((vz, vIdx) => (
+                                  <span key={vIdx} className="px-2 py-0.5 rounded text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                    {vz}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                <strong className="text-slate-400">Mental Tranquility (Sukha): </strong>
+                                {selectedSc.healthDetails.mentalTranquilityAndStress}
+                              </p>
+                              <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                                <strong className="text-emerald-400">Holistic Remedies: </strong>
+                                {selectedSc.healthDetails.holisticRemedies}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* DOMAIN DEEP DIVE: FAMILY & HOME */}
+                        {selectedSc.id === 'family_home' && selectedSc.familyDetails && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-amber-400 block border-b border-slate-800/80 pb-1">Domestic Ambiance</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.familyDetails.domesticAmbiance}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-pink-400 block border-b border-slate-800/80 pb-1">Maternal Wellbeing</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.familyDetails.maternalWellbeing}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                              <span className="text-[11px] font-bold text-cyan-400 block border-b border-slate-800/80 pb-1">Property &amp; Relocation</span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">{selectedSc.familyDetails.propertyAndRelocation}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* DETAILED MULTI-PARAGRAPH VEDIC SYNTHESIS */}
+                        {selectedSc.detailedParagraphs && selectedSc.detailedParagraphs.length > 0 && (
+                          <div className="space-y-2 p-3 bg-slate-950 rounded-lg border border-slate-800/80">
+                            <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
+                              In-Depth Astrological Analysis &amp; Vedic Synthesis:
+                            </span>
+                            {selectedSc.detailedParagraphs.map((para, pIdx) => (
+                              <p key={pIdx} className="text-xs text-slate-300 leading-relaxed">
+                                {para}
+                              </p>
+                            ))}
+                          </div>
+                        )}
 
                         <div>
                           <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">

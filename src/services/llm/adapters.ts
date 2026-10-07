@@ -62,12 +62,32 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.flattenedNatalD9.map(p => `  • ${p.body_name.padEnd(9)}: ${p.rashi_name} | Sputa: ${p.degree_sputa || 'N/A'}`).join('\n')
     : '  • Standard D9 placements align with natal varga grid';
 
-  // 3. Gochara Transits in target sign (including user drag-and-drop overrides)
-  const transitTable = context.transitOccupants.length > 0
+  // 3. Complete All-Graha Gochara Transits (Full Zodiac Ephemeris including Jupiter)
+  const allTransits = context.allTransitPlacements || [];
+  const jupiterTransit = allTransits.find(t => t.graha_key === 'Jupiter');
+
+  const allTransitsTable = allTransits.length > 0
+    ? allTransits.map(t => {
+        const aspectNote = t.aspects_target_house ? ` ===> [${t.aspect_type}]` : '';
+        return `  • ${t.graha_key.padEnd(8)}: ${t.transit_rashi_name.padEnd(11)} (House ${t.house_from_lagna}) | Sputa: ${(t.degree_sputa || 'N/A').padEnd(11)} | Nakshatra: ${(t.nakshatra_name || 'N/A').padEnd(15)} (Pada ${t.pada || '?'}) ${t.is_retrograde ? '[R] (Retrograde)' : '[Direct]'}${t.is_custom ? ' [USER OVERRIDE]' : ''}${aspectNote}`;
+      }).join('\n')
+    : (context.transitOccupants.length > 0
+        ? context.transitOccupants.map(t => `  • ${t.graha_key} | Sputa: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`).join('\n')
+        : '  • Full planetary Gochara transits computed per ephemeris.');
+
+  const targetSignTransitResidents = context.transitOccupants.length > 0
     ? context.transitOccupants.map(t => 
-        `  • ${t.graha_key}${t.is_custom ? ' [USER DRAG-AND-DROP ADJUSTED OVERRIDE]' : ''} ${t.is_retrograde ? '[R]' : ''} (Sputa: ${t.degree_sputa || 'N/A'}, Nakshatra: ${t.nakshatra_name || 'N/A'})`
+        `  • ${t.graha_key}${t.is_custom ? ' [USER DRAG-AND-DROP ADJUSTED OVERRIDE]' : ''} ${t.is_retrograde ? '[R]' : '[Direct]'} | Sputa: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`
       ).join('\n')
-    : '  • No Direct Transit Ingress in this sign';
+    : '  • No Direct Transit Residents currently occupying this sign (Bhava operates via Lord governance and Aspect Drishti).';
+
+  const jupiterSpotlight = jupiterTransit
+    ? `  • Current Sign: ${jupiterTransit.transit_rashi_name} (${jupiterTransit.transit_rashi_tamil || 'வியாழன்'}) in House ${jupiterTransit.house_from_lagna} from Natal Lagna
+  • Exact Sputa Degree: ${jupiterTransit.degree_sputa}
+  • Nakshatra & Pada: ${jupiterTransit.nakshatra_name} (Pada ${jupiterTransit.pada}) [Nakshatra Lord: ${jupiterTransit.nakshatra_lord || 'N/A'}]
+  • Motion: ${jupiterTransit.is_retrograde ? 'Retrograde [R] (வக்ரம்)' : 'Direct (நேர்கதி)'}
+  • Drishti on Target House ${context.houseNumber}: ${jupiterTransit.aspects_target_house ? `ACTIVE GURU DRISHTI ===> [${jupiterTransit.aspect_type}]` : `No direct 5/7/9 Drishti to House ${context.houseNumber} (Occupies House ${jupiterTransit.house_from_lagna})`}`
+    : `  • Jupiter (Guru) is transiting per ephemeris with active benefic influence.`;
 
   // 4. Moon (Chandra) 2.25-day Sign Progression Timeline
   const moonSpansTable = (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0)
@@ -116,9 +136,17 @@ NATAL D9 (NAVAMSHA KUNDALI):
 ${natalD9Table}
 
 ======================================================================
-3. GOCHARA (TRANSIT) DATASET FOR TARGET SIGN (INCL. USER OVERRIDES)
+3. COMPLETE ALL-GRAHA GOCHARA (TRANSIT) EPHEMERIS FOR ${monthName.toUpperCase()} ${context.selectedYear}
+(Includes Jupiter (Guru), Saturn (Sani), Rahu, Ketu, Mars, Sun, Venus, Mercury, Moon with exact Sputa Degree, Nakshatra, Pada & Aspect Drishti)
 ======================================================================
-${transitTable}
+COMPLETE 9-GRAHA TRANSIT COORDINATES (Degree, Nakshatra, Pada):
+${allTransitsTable}
+
+★ JUPITER (GURU) GOCHARA TRANSIT POSITION & DRISHTI STATUS:
+${jupiterSpotlight}
+
+DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${context.rashiName} / House ${context.houseNumber}):
+${targetSignTransitResidents}
 
 ======================================================================
 4. CHANDRA (MOON) 2.25-DAY SIGN PROGRESSION ACROSS ${monthName.toUpperCase()} ${context.selectedYear}
@@ -157,6 +185,12 @@ Keep the JSON keys strictly in English as shown below, but ensure ALL string val
 CRITICAL IN-DEPTH REASONING & STRUCTURE REQUIREMENTS (NO ONE-LINERS OR BRIEF SUMMARIES):
 You MUST provide thorough, detailed, multi-paragraph astrological analysis for every aspect.
 Do NOT output generic one-line or two-line summaries. Deliver deep, nuanced insights.
+
+CRITICAL REASONING ACCURACY DIRECTIVE — USE TRANSIT GRAHA PADA & DEGREE:
+You MUST actively use the transit graha Pada, exact Sputa Degree, and Nakshatra lord relationships for reasoning accuracy in your calculations:
+- Explicitly reference the exact degrees (e.g. 18° 42' or within orb degrees) and exact Nakshatra Padas (e.g., Pada 1, 2, 3, or 4 / Navamsha sub-lord resonance) of transiting Grahas—especially Jupiter (Guru), Saturn (Sani), Mars, Venus, and Moon.
+- Evaluate exact Degree Orbs for aspect drishti (conjunctions and oppositions are most potent when degree difference is tight < 5° to 7°).
+- Account for the Navamsha sign disposition encoded by each Transit Graha Pada to determine real-time delivery capacity and dignity in transit.
 
 Specific required breakdowns:
 1. CAREER & JOB ('career_job'):

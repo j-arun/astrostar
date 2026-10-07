@@ -85,7 +85,7 @@ export const RASHI_LIST_META = [
   { index: 12, tamil: "மீனம்", eng: "Meenam (Pisces)", lord: "Jupiter (Guru)" },
 ];
 
-const NAKSHATRAS = [
+export const NAKSHATRAS = [
   "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
   "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
   "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
@@ -93,7 +93,7 @@ const NAKSHATRAS = [
   "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
 ];
 
-const NAKSHATRA_LORDS = [
+export const NAKSHATRA_LORDS = [
   "Ketu", "Venus (Sukra)", "Sun (Surya)", "Moon (Chandra)", "Mars (Sevvai)", "Rahu",
   "Jupiter (Guru)", "Saturn (Sani)", "Mercury (Budha)",
   "Ketu", "Venus (Sukra)", "Sun (Surya)", "Moon (Chandra)", "Mars (Sevvai)", "Rahu",
@@ -101,6 +101,22 @@ const NAKSHATRA_LORDS = [
   "Ketu", "Venus (Sukra)", "Sun (Surya)", "Moon (Chandra)", "Mars (Sevvai)", "Rahu",
   "Jupiter (Guru)", "Saturn (Sani)", "Mercury (Budha)"
 ];
+
+export function getNakshatraAndPadaFromLongitude(totalSiderealLongitude: number) {
+  const norm = normalize360(totalSiderealLongitude);
+  const nakSpan = 40.0 / 3.0; // 13° 20' = 13.3333°
+  const nakIdx = Math.floor(norm / nakSpan) % 27;
+  const nakName = NAKSHATRAS[nakIdx];
+  const nakLord = NAKSHATRA_LORDS[nakIdx];
+  const padaSpan = 10.0 / 3.0; // 3° 20' = 3.3333°
+  const pada = Math.floor((norm % nakSpan) / padaSpan) + 1;
+  return {
+    nakshatra_name: nakName,
+    nakshatra_lord: nakLord,
+    pada,
+    chara_summary: `${nakName} (Pada ${pada})`
+  };
+}
 
 const HOUSE_TITLES: Record<number, string> = {
   1: "1st - Tanu (Self)",

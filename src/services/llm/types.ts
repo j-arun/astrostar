@@ -61,8 +61,27 @@ export interface VedicHouseContext {
     graha_key: string;
     degree_sputa?: string;
     nakshatra_name?: string;
+    pada?: number;
     is_retrograde?: boolean;
     is_custom?: boolean;
+  }>;
+  allTransitPlacements?: Array<{
+    graha_key: string;
+    graha_name?: string;
+    graha_tamil?: string;
+    transit_rashi_index: number;
+    transit_rashi_name: string;
+    transit_rashi_tamil?: string;
+    house_from_lagna: number;
+    degree_sputa: string;
+    degree_in_sign_float?: number;
+    nakshatra_name: string;
+    nakshatra_lord?: string;
+    pada: number;
+    is_retrograde: boolean;
+    is_custom?: boolean;
+    aspects_target_house?: boolean;
+    aspect_type?: string;
   }>;
   activeDasha: {
     mahadasha: string;

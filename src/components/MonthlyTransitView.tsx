@@ -31,7 +31,7 @@ import {
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import { ingestedPersonsRegistry, ALL_DASHA_TIMELINE } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
-import { getGrahaTransitPosition, RASHI_LIST_META, calculateMonthlyMoonSpans, MonthlyMoonSpan } from '../data/transitEphemeris';
+import { getGrahaTransitPosition, RASHI_LIST_META, calculateMonthlyMoonSpans, MonthlyMoonSpan, getNakshatraAndPadaFromLongitude } from '../data/transitEphemeris';
 import { getVimshottariDashaForDate, DynamicDashaHierarchy } from '../data/dashaCalculator';
 import { AstroRule, DEFAULT_RULES, evaluateHouseActivations, HouseActivationResult, calculateDashaDeliveryFactor, DashaDeliveryReport } from '../data/ruleEngine';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
@@ -299,12 +299,17 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         const signDef = SOUTH_INDIAN_SIGNS.find(s => s.index === customSignIdx) || SOUTH_INDIAN_SIGNS[0];
         const houseFromLagna = ((customSignIdx - natalLagnaIdx + 12) % 12) + 1;
         const houseFromMoon = ((customSignIdx - natalRashiIdx + 12) % 12) + 1;
+        // Keep precise degree in sign (or fallback to original degree_in_sign_float)
+        const degInSign = tp.degree_in_sign_float || 15.0;
+        const totalLongitude = (customSignIdx - 1) * 30.0 + degInSign;
+        const customPadaChara = getNakshatraAndPadaFromLongitude(totalLongitude);
         return {
           ...tp,
           transit_rashi_index: customSignIdx,
           transit_rashi_name: signDef.eng,
           transit_rashi_tamil: signDef.tamil,
           rashi_lord: signDef.lord,
+          graha_pada_chara: customPadaChara,
           relative_to_natal_lagna: {
             house_number: houseFromLagna,
             house_title: `House ${houseFromLagna} (${signDef.eng.split(' ')[0]})`,
@@ -663,9 +668,59 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         graha_key: t.graha_key,
         degree_sputa: t.degree_sputa,
         nakshatra_name: t.graha_pada_chara?.nakshatra_name,
+        pada: t.graha_pada_chara?.pada,
         is_retrograde: t.is_retrograde,
         is_custom: !!(t as any).is_custom_user_adjusted
       })),
+      allTransitPlacements: transitPlacements.map(t => {
+        const rashiIdx = t.transit_rashi_index;
+        const hFromLagna = ((rashiIdx - natalLagnaIdx + 12) % 12) + 1;
+
+        let aspectsTarget = false;
+        let aspectType = '';
+
+        if (rashiIdx === signIndex) {
+          aspectsTarget = true;
+          aspectType = 'Direct Residence in Target House';
+        } else {
+          const dist = ((signIndex - rashiIdx + 12) % 12) + 1;
+          if (dist === 7) {
+            aspectsTarget = true;
+            aspectType = '7th Direct Aspect (Opposition Drishti)';
+          } else if (t.graha_key === 'Jupiter' && (dist === 5 || dist === 9)) {
+            aspectsTarget = true;
+            aspectType = `${dist}th Special Trinal Drishti (Guru Drishti)`;
+          } else if (t.graha_key === 'Saturn' && (dist === 3 || dist === 10)) {
+            aspectsTarget = true;
+            aspectType = `${dist}th Special Sani Drishti`;
+          } else if (t.graha_key === 'Mars' && (dist === 4 || dist === 8)) {
+            aspectsTarget = true;
+            aspectType = `${dist}th Special Sevvai Drishti`;
+          } else if ((t.graha_key === 'Rahu' || t.graha_key === 'Ketu') && (dist === 5 || dist === 9)) {
+            aspectsTarget = true;
+            aspectType = `${dist}th Nodal Trinal Aspect`;
+          }
+        }
+
+        return {
+          graha_key: t.graha_key,
+          graha_name: t.graha_name,
+          graha_tamil: t.graha_tamil,
+          transit_rashi_index: rashiIdx,
+          transit_rashi_name: t.transit_rashi_name,
+          transit_rashi_tamil: t.transit_rashi_tamil,
+          house_from_lagna: hFromLagna,
+          degree_sputa: t.degree_sputa,
+          degree_in_sign_float: t.degree_in_sign_float,
+          nakshatra_name: t.graha_pada_chara?.nakshatra_name || 'N/A',
+          nakshatra_lord: t.graha_pada_chara?.nakshatra_lord || '',
+          pada: t.graha_pada_chara?.pada || 1,
+          is_retrograde: t.is_retrograde,
+          is_custom: !!(t as any).is_custom_user_adjusted,
+          aspects_target_house: aspectsTarget,
+          aspect_type: aspectType
+        };
+      }),
       activeDasha: activeDashaHierarchy,
       selectedMonth,
       selectedYear,

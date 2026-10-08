@@ -1016,13 +1016,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
                 title="Select Multi-LLM Reasoning Engine Provider"
               >
                 <option value="local_qwen" className="bg-slate-900 text-white">
-                  🖥️ Local (Qwen 2.5 14B via Ollama)
+                  {LLM_PROVIDERS.local_qwen.badgeLabel}
                 </option>
                 <option value="gemini_pro" className="bg-slate-900 text-white">
-                  ♊ Google Gemini Pro (gemini-3.1-pro)
+                  {LLM_PROVIDERS.gemini_pro.badgeLabel}
                 </option>
                 <option value="claude" className="bg-slate-900 text-white">
-                  🧠 Anthropic Claude (claude-3-5-sonnet)
+                  {LLM_PROVIDERS.claude.badgeLabel}
                 </option>
               </select>
             </div>

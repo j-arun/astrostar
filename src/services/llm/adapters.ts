@@ -937,18 +937,18 @@ export class QwenLocalAdapter implements ILLMAdapter {
     const endpoint = 'http://localhost:11434/api/generate';
     const targetModel = context.selectedLocalModel || 'qwen2.5:7b-instruct';
 
-    // keep_alive: 0 ensures Ollama unloads the model from VRAM/RAM immediately upon finishing
+    // keep_alive: '5m' keeps the model warm in VRAM/RAM so subsequent prompts run fast without reloading 4.7 GB from disk
+    // Users can click "🧹 Purge VRAM" anytime in the UI to immediately free memory on demand
     const requestBody = {
       model: targetModel,
       prompt,
       stream: false,
       format: 'json',
-      keep_alive: 0,
+      keep_alive: '5m',
       options: {
         temperature: 0.3,
-        num_predict: 1536,
-        num_ctx: 6144,
-        num_keep: 0
+        num_predict: 1200,
+        num_ctx: 8192
       }
     };
 
@@ -960,7 +960,6 @@ export class QwenLocalAdapter implements ILLMAdapter {
     }, LOCAL_TIMEOUT_MS);
 
     try {
-      // 180-second hard timeout: if hardware is struggling, safely abort and purge VRAM
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -973,8 +972,8 @@ export class QwenLocalAdapter implements ILLMAdapter {
       if (res.ok) {
         const json = await res.json();
 
-        // Immediately trigger an explicit memory purge to release all VRAM/RAM for subsequent queries
-        purgeOllamaMemory(targetModel, endpoint).catch(() => {});
+        // Model is kept active in VRAM for fast subsequent inferences.
+        // It can be manually evicted anytime via the "Purge VRAM" button in the inspector header.
 
         let parsed: any = {};
         try {

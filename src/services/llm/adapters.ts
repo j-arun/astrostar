@@ -873,11 +873,20 @@ export class QwenLocalAdapter implements ILLMAdapter {
     };
 
     let connectionError: string | undefined;
-    const LOCAL_TIMEOUT_MS = 300000; // 5 minutes (300 seconds) ceiling to give local hardware ample reasoning headroom
+
+    // Timeout Configuration:
+    // By default, enableTimeout is FALSE ("Full throttle / run full time" - runs without aborting until completion)
+    const enableTimeout = context.enableTimeout ?? (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_enable_timeout') === 'true' : false);
+    const configuredTimeoutSec = context.timeoutSeconds ?? (typeof window !== 'undefined' ? parseInt(localStorage.getItem('astro_ollama_timeout_seconds') || '300', 10) : 300);
+
     const controller = new AbortController();
-    const timeoutTimer = setTimeout(() => {
-      controller.abort();
-    }, LOCAL_TIMEOUT_MS);
+    let timeoutTimer: any = null;
+
+    if (enableTimeout && configuredTimeoutSec > 0) {
+      timeoutTimer = setTimeout(() => {
+        controller.abort();
+      }, configuredTimeoutSec * 1000);
+    }
 
     try {
       const res = await fetch(endpoint, {
@@ -887,7 +896,9 @@ export class QwenLocalAdapter implements ILLMAdapter {
         signal: controller.signal
       });
 
-      clearTimeout(timeoutTimer);
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
 
       if (res.ok) {
         const json = await res.json();
@@ -924,6 +935,8 @@ export class QwenLocalAdapter implements ILLMAdapter {
           rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
           providerUsed: 'local_qwen',
           executionTimeMs: Date.now() - startMs,
+          timeoutEnforced: enableTimeout,
+          configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
           endpointUsed: endpoint,
           connectionStatus: 'connected_live',
           isPrivateLocal: true,
@@ -950,9 +963,12 @@ export class QwenLocalAdapter implements ILLMAdapter {
         }
       }
     } catch (err: any) {
-      clearTimeout(timeoutTimer);
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+      const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
       if (err.name === 'AbortError' || controller.signal.aborted) {
-        connectionError = 'Local LLM timed out (>300s / 5 minutes): Struggling to complete deep multi-domain reasoning on current hardware within 5 minutes. Aborted and reverted to Parashara analytical synthesis.';
+        connectionError = `Local LLM timed out after ${elapsedSec}s (enforced limit: ${configuredTimeoutSec}s). Aborted and reverted to Parashara analytical synthesis. Turn off timeout ('⚡ Full Throttle') in the header to run without any time limits.`;
       } else {
         connectionError = err.message || 'Failed to connect to http://localhost:11434 (Check if Ollama is running)';
       }
@@ -968,6 +984,9 @@ export class QwenLocalAdapter implements ILLMAdapter {
       isPrivateLocal: true,
       promptSent: prompt,
       rawRequestBody: requestBody,
+      executionTimeMs: Date.now() - startMs,
+      timeoutEnforced: enableTimeout,
+      configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
       rawResponseBody: {
         fallback_reason: connectionError,
         requested_model: targetModel,

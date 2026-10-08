@@ -81,12 +81,22 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
 
   // Wire Telemetry State
   const [showWireLog, setShowWireLog] = useState<boolean>(false);
-  const [wireLogTab, setWireLogTab] = useState<'prompt' | 'request' | 'response' | 'guide'>('prompt');
+  const [wireLogTab, setWireLogTab] = useState<'prompt' | 'request' | 'response' | 'telemetry' | 'guide'>('prompt');
   const [localOllamaModel, setLocalOllamaModel] = useState<string>(() => {
     return localStorage.getItem('astro_ollama_model') || 'qwen2.5:7b-instruct';
   });
   const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  
+  // Timeout Configuration State (Default is false: Full Throttle / No Timeout - runs full time)
+  const [enableTimeout, setEnableTimeout] = useState<boolean>(() => {
+    return localStorage.getItem('astro_ollama_enable_timeout') === 'true';
+  });
+  const [timeoutSeconds, setTimeoutSeconds] = useState<number>(() => {
+    const saved = localStorage.getItem('astro_ollama_timeout_seconds');
+    return saved ? parseInt(saved, 10) : 300;
+  });
+
   const [ollamaPingResult, setOllamaPingResult] = useState<{
     checking: boolean;
     isOnline?: boolean;
@@ -163,7 +173,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     } else {
       stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, activeProvider, localOllamaModel, selectedLanguage]);
+  }, [isOpen, context?.houseNumber, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -193,7 +203,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         userQuery: q || undefined,
         language: selectedLanguage,
         selectedLocalModel: localOllamaModel,
-        customPromptOverride: promptToSend
+        customPromptOverride: promptToSend,
+        enableTimeout,
+        timeoutSeconds
       });
       setNarrative(result);
     } catch (e) {
@@ -501,6 +513,50 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 )}
               </div>
             )}
+
+            {/* Ollama Timeout & Throttle Configuration */}
+            {activeProvider === 'local_qwen' && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
+                <span className="text-[10px] text-slate-400 font-mono">Timeout:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !enableTimeout;
+                    setEnableTimeout(next);
+                    localStorage.setItem('astro_ollama_enable_timeout', String(next));
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    enableTimeout
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                  }`}
+                  title={
+                    enableTimeout
+                      ? `Enforced timeout limit of ${timeoutSeconds}s is active. Click to switch to Full Throttle (run full time with no limits).`
+                      : 'Full throttle active: Runs full time with NO timeout limit until complete. Click to enforce timeout limit.'
+                  }
+                >
+                  {enableTimeout ? `⏱️ Enforced (${timeoutSeconds}s)` : '⚡ Full Throttle'}
+                </button>
+                {enableTimeout && (
+                  <select
+                    value={timeoutSeconds}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setTimeoutSeconds(val);
+                      localStorage.setItem('astro_ollama_timeout_seconds', String(val));
+                    }}
+                    className="bg-slate-950 text-amber-300 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none cursor-pointer"
+                    title="Select timeout limit in seconds"
+                  >
+                    <option value="180">180s (3m)</option>
+                    <option value="300">300s (5m)</option>
+                    <option value="420">420s (7m)</option>
+                    <option value="600">600s (10m)</option>
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Audio Playback Controls */}
@@ -608,6 +664,21 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             <span className="text-slate-400 text-[11px] font-mono hidden md:inline">
               Target: <span className="text-slate-300">{narrative?.endpointUsed || 'http://localhost:11434/api/generate'}</span>
             </span>
+
+            {narrative?.executionTimeMs !== undefined && (
+              <span
+                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 text-[11px] font-mono font-bold"
+                title={`Total roundtrip execution duration: ${(narrative.executionTimeMs / 1000).toFixed(2)}s`}
+              >
+                <Clock className="w-3 h-3 text-blue-400" />
+                Time Taken: <span className="text-white font-extrabold">{(narrative.executionTimeMs / 1000).toFixed(1)}s</span>
+                {narrative.providerUsed === 'local_qwen' && (
+                  <span className="text-[10px] text-blue-400/80 font-normal">
+                    ({narrative.timeoutEnforced ? `${narrative.configuredTimeoutSeconds}s cap` : '⚡ Full Throttle'})
+                  </span>
+                )}
+              </span>
+            )}
 
             {narrative?.memoryPurged && (
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-semibold" title="VRAM memory purged immediately upon completion to prevent delay on subsequent prompts">
@@ -735,7 +806,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   { id: 'prompt', label: '1. Prompt Sent' },
                   { id: 'request', label: '2. Wire Request JSON' },
                   { id: 'response', label: '3. Raw Response Wire' },
-                  { id: 'guide', label: '4. Local Setup Guide' }
+                  { id: 'telemetry', label: '4. ⏱️ Performance & Timing' },
+                  { id: 'guide', label: '5. Local Setup Guide' }
                 ].map(t => (
                   <button
                     key={t.id}
@@ -808,6 +880,66 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 <pre className="bg-slate-900 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-emerald-300 overflow-x-auto max-h-52">
                   {JSON.stringify(narrative?.rawResponseBody, null, 2)}
                 </pre>
+              </div>
+            )}
+
+            {/* TAB CONTENT: PERFORMANCE & TIMING TELEMETRY */}
+            {wireLogTab === 'telemetry' && (
+              <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-3 text-slate-300 text-xs font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Total Time Taken</span>
+                    <span className="text-white font-extrabold text-sm block mt-0.5">
+                      {narrative?.executionTimeMs !== undefined ? `${(narrative.executionTimeMs / 1000).toFixed(2)}s` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Throttle / Timeout</span>
+                    <span className="text-amber-400 font-bold block mt-0.5">
+                      {narrative?.timeoutEnforced ? `Enforced (${narrative.configuredTimeoutSeconds}s cap)` : '⚡ Full Throttle (No Limit)'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Provider Status</span>
+                    <span className={`font-bold block mt-0.5 ${narrative?.connectionStatus === 'connected_live' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {narrative?.connectionStatus === 'connected_live' ? 'Live Connected' : 'Parashara Heuristic Fallback'}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-500 uppercase block font-sans">Model Executed</span>
+                    <span className="text-cyan-300 font-bold block mt-0.5 truncate" title={narrative?.ollamaStats?.model || localOllamaModel}>
+                      {narrative?.ollamaStats?.model || localOllamaModel}
+                    </span>
+                  </div>
+                </div>
+
+                {narrative?.ollamaStats && (
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                    <span className="text-[11px] font-sans font-bold text-white block">Ollama Engine Internal Telemetry:</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-500 block">Prompt Tokens:</span>
+                        <span className="text-slate-200 font-bold">{narrative.ollamaStats.promptEvalCount || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Output Tokens:</span>
+                        <span className="text-slate-200 font-bold">{narrative.ollamaStats.evalCount || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Load Duration:</span>
+                        <span className="text-slate-200 font-bold">{narrative.ollamaStats.loadDurationMs ? `${(narrative.ollamaStats.loadDurationMs / 1000).toFixed(2)}s` : 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Generation Speed:</span>
+                        <span className="text-emerald-400 font-bold">
+                          {narrative.ollamaStats.evalCount && narrative.ollamaStats.totalDurationMs
+                            ? `${(narrative.ollamaStats.evalCount / (narrative.ollamaStats.totalDurationMs / 1000)).toFixed(1)} tokens/sec`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1292,7 +1424,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
 
           {/* TELEMETRY STRIP */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
               <span className="text-[10px] text-slate-500 uppercase block font-semibold">Active PD Lord</span>
               <span className="text-amber-300 font-bold font-mono text-[11px] truncate block">
@@ -1329,6 +1461,20 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 {narrative?.peakDateRange || 'Evaluating...'}
               </span>
             </div>
+            <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
+              <span className="text-[10px] text-slate-500 uppercase block font-semibold flex items-center justify-between">
+                <span>Time Taken</span>
+                <Clock className="w-2.5 h-2.5 text-amber-400" />
+              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-amber-300 font-mono font-bold text-[12px]">
+                  {narrative?.executionTimeMs !== undefined ? `${(narrative.executionTimeMs / 1000).toFixed(1)}s` : isGenerating ? `${elapsedSeconds}s...` : 'N/A'}
+                </span>
+                <span className="text-[9px] text-slate-400 font-mono truncate">
+                  {narrative?.providerUsed === 'local_qwen' ? (narrative.connectionStatus === 'connected_live' ? '• Live' : '• Fallback') : ''}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* 3-PART SYNTHESIZED NARRATIVE DISPLAY */}
@@ -1340,37 +1486,56 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   Running {LLM_PROVIDERS[activeProvider].name} {activeProvider === 'local_qwen' ? `(${localOllamaModel})` : ''}...
                 </p>
                 {activeProvider === 'local_qwen' && (
-                  <div className="space-y-1.5 mt-2">
-                    <p className="text-[11px] text-amber-300 font-mono">
-                      Executing local inference on your hardware:{' '}
-                      <span className="font-bold text-white text-xs">{elapsedSeconds}s</span> / 300s (5m) limit
-                    </p>
-                    <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500 transition-all duration-1000"
-                        style={{ width: `${Math.min(100, (elapsedSeconds / 300) * 100)}%` }}
-                      />
+                  enableTimeout ? (
+                    <div className="space-y-1.5 mt-2">
+                      <p className="text-[11px] text-amber-300 font-mono">
+                        Executing local inference on your hardware:{' '}
+                        <span className="font-bold text-white text-xs">{elapsedSeconds}s</span> / {timeoutSeconds}s limit
+                      </p>
+                      <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500 transition-all duration-1000"
+                          style={{ width: `${Math.min(100, (elapsedSeconds / timeoutSeconds) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Enforced timeout active ({timeoutSeconds}s limit): auto-aborts if hardware takes longer</span>
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3 text-amber-400" />
-                      <span>5-minute timeout window (300s): auto-aborts and reverts to analytical synthesis if struggling</span>
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="space-y-1.5 mt-2">
+                      <p className="text-[11px] text-emerald-300 font-mono">
+                        Executing local inference at <span className="font-bold text-white">Full Throttle (No Timeout)</span>:{' '}
+                        <span className="font-extrabold text-white text-sm bg-slate-900 px-2 py-0.5 rounded border border-emerald-500/40">{elapsedSeconds}s elapsed</span>
+                      </p>
+                      <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60 relative">
+                        <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full animate-pulse w-full" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1">
+                        <Zap className="w-3 h-3 text-emerald-400" />
+                        <span>Default full-time mode: Running without timeout cut-off until your laptop completes synthesis.</span>
+                      </p>
+                    </div>
+                  )
                 )}
               </div>
             </div>
           ) : narrative ? (
             <div className="space-y-3.5">
-              {/* TIMEOUT WARNING BANNER (IF CUT OFF >300S) */}
-              {narrative.connectionError && (narrative.connectionError.includes('timed out') || narrative.connectionError.includes('300') || narrative.connectionError.includes('180')) && (
+              {/* TIMEOUT WARNING BANNER (IF CUT OFF DUE TO TIMEOUT) */}
+              {narrative.connectionError && (narrative.connectionError.includes('timed out') || narrative.connectionError.includes('limit')) && (
                 <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <span className="font-bold text-rose-300 block">
-                      Local LLM Timed Out (&gt;5 Minutes / 300s Upper Limit):
+                      Local LLM Timed Out ({narrative.configuredTimeoutSeconds ? `${narrative.configuredTimeoutSeconds}s limit` : 'timeout'} exceeded):
                     </span>
                     <p className="leading-relaxed text-slate-300 text-[11px]">
-                      Local hardware was struggling to complete this deep multi-domain analysis within 5 minutes (300 seconds). The engine safely cut off the local model, purged VRAM to protect system stability, and automatically generated the astrological readout via the Parashara analytical engine.
+                      {narrative.connectionError}
+                    </p>
+                    <p className="text-[11px] text-amber-300 mt-1">
+                      💡 <strong>Tip:</strong> Click <button type="button" onClick={() => { setEnableTimeout(false); localStorage.setItem('astro_ollama_enable_timeout', 'false'); }} className="underline font-bold text-white hover:text-amber-200 cursor-pointer">⚡ Full Throttle</button> in the inspector header above to run without any timeout limits.
                     </p>
                   </div>
                 </div>

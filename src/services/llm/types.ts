@@ -95,6 +95,8 @@ export interface VedicHouseContext {
   userQuery?: string;
   selectedLocalModel?: string;
   customPromptOverride?: string;
+  enableTimeout?: boolean; // false = Full Throttle / No Timeout (default), true = enforce timeout limit
+  timeoutSeconds?: number; // Configured timeout in seconds when enableTimeout is true (e.g. 180, 300)
   flattenedNatalD1?: Array<{
     body_name: string;
     rashi_name: string;
@@ -306,6 +308,8 @@ export interface LLMThreePartNarrative {
   connectionStatus: 'connected_live' | 'connection_failed_fallback' | 'simulated';
   connectionError?: string;
   isPrivateLocal: boolean;
+  timeoutEnforced?: boolean;
+  configuredTimeoutSeconds?: number;
   promptSent: string;
   rawRequestBody?: any;
   rawResponseBody?: any;

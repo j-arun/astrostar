@@ -31,9 +31,16 @@ import {
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import { ingestedPersonsRegistry, ALL_DASHA_TIMELINE } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
-import { getGrahaTransitPosition, RASHI_LIST_META, calculateMonthlyMoonSpans, MonthlyMoonSpan, getNakshatraAndPadaFromLongitude } from '../data/transitEphemeris';
+import { getGrahaTransitPosition, RASHI_LIST_META, calculateMonthlyMoonSpans, MonthlyMoonSpan, getNakshatraAndPadaFromLongitude, NAKSHATRAS } from '../data/transitEphemeris';
 import { getVimshottariDashaForDate, DynamicDashaHierarchy } from '../data/dashaCalculator';
 import { AstroRule, DEFAULT_RULES, evaluateHouseActivations, HouseActivationResult, calculateDashaDeliveryFactor, DashaDeliveryReport } from '../data/ruleEngine';
+import {
+  calculateTaraBala,
+  calculateChandraBala,
+  computeSarvashtakavarga,
+  generateDashaLordDossier,
+  BHAVA_KARAKAS_METADATA
+} from '../data/parasharaCalculations';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext } from '../services/llm/types';
 
@@ -728,7 +735,77 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
       flattenedNatalD9: flattenedD9,
       monthlyMoonSpans,
       monthlyIngressEvents,
-      dashaDeliveryReport
+      dashaDeliveryReport,
+      // 1. Native Janma Nakshatra foundation
+      natalJanmaStar: {
+        nakshatra_name: activeProfile.birth_star || 'Anuradha',
+        pada: activeProfile.birth_star_pada || 2,
+        rashi_name: activeProfile.birth_rashi || 'Vrischigam',
+        rashi_index: natalRashiIdx
+      },
+      // 2. Tara Bala for all 9 transiting planets
+      taraBalaTransitPlanets: transitPlacements.map(tp => {
+        const star = tp.graha_pada_chara?.nakshatra_name || 'Ashwini';
+        const pada = tp.graha_pada_chara?.pada || 1;
+        const tb = calculateTaraBala(activeProfile.birth_star || 'Anuradha', star);
+        return {
+          graha_key: tp.graha_key,
+          transit_star: star,
+          pada,
+          taraNumber: tb.taraNumber,
+          taraName: tb.taraName,
+          taraTamil: tb.taraTamil,
+          quality: tb.quality,
+          isAuspicious: tb.isAuspicious,
+          description: tb.description
+        };
+      }),
+      // 3. Chandra Bala Daily Timeline with Chandrashtama alerts & Moon Tara Bala
+      chandraBalaDailyTimeline: (monthlyMoonSpans || []).map(ms => {
+        const cb = calculateChandraBala(natalRashiIdx, ms.signIndex);
+        // Approximate star for the Moon span (middle of span)
+        const approxStarIdx = ((ms.signIndex - 1) * 2 + 1) % 27;
+        const approxStar = NAKSHATRAS[approxStarIdx] || 'Rohini';
+        const tb = calculateTaraBala(activeProfile.birth_star || 'Anuradha', approxStar);
+        let alertFlag: string | undefined = undefined;
+        if (cb.isChandrashtama) {
+          alertFlag = 'CRITICAL CHANDRASHTAMA WARNING: 8th House from Janma Rashi';
+        } else if (ms.houseNumber === houseNum) {
+          alertFlag = 'DIRECT INGRESS OVER TARGET HOUSE';
+        }
+        return {
+          dayRange: `Day ${ms.startDay}–${ms.endDay}`,
+          moonSignIndex: ms.signIndex,
+          moonSignName: ms.signName,
+          moonStarName: approxStar,
+          houseFromNatalMoon: cb.houseFromMoon,
+          isChandrashtama: cb.isChandrashtama,
+          isFavorable: cb.isFavorable,
+          taraBala: {
+            taraNumber: tb.taraNumber,
+            taraName: tb.taraName,
+            isAuspicious: tb.isAuspicious
+          },
+          alertFlag
+        };
+      }),
+      // 4. Sarvashtakavarga (SAV) points report
+      ashtakavargaPayload: (() => {
+        const sav = computeSarvashtakavarga(natalLagnaIdx, houseNum, flattenedD1);
+        return {
+          targetHousePoints: sav.targetHousePoints,
+          targetHouseStrength: sav.targetHouseStrength,
+          savPointsDistribution: sav.allHousesOverview
+        };
+      })(),
+      // 5. Rich Dasha Lords Dossier (MD, AD, PD)
+      dashaLordsDossier: [
+        generateDashaLordDossier('Mahadasha (MD)', activeDashaHierarchy.mahadasha, natalLagnaIdx, houseNum, flattenedD1),
+        generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, houseNum, flattenedD1),
+        generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, houseNum, flattenedD1)
+      ],
+      // 6. House Sthira & Naisargika Karaka Info with Outlet Impacts
+      bhavaKarakaInfo: BHAVA_KARAKAS_METADATA[houseNum] || BHAVA_KARAKAS_METADATA[1]
     };
 
     setInspectorHouseContext(ctx);

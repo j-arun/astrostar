@@ -114,6 +114,45 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.matchedRules.map(r => `• ${r.ruleName} (Weight: ${r.weight}): ${r.reason}`).join('\n')
     : '• Baseline house evaluation';
 
+  // 8. Advanced Parashara Payloads (Tara Bala, Chandra Bala, Ashtakavarga, Dasha Dossier, Karakas)
+  const janmaStarStr = context.natalJanmaStar
+    ? `Native Janma Star: ${context.natalJanmaStar.nakshatra_name} (Pada ${context.natalJanmaStar.pada}) in ${context.natalJanmaStar.rashi_name}`
+    : 'Native Janma Star: Anuradha (Pada 2) in Vrischigam';
+
+  const taraBalaTable = (context.taraBalaTransitPlanets && context.taraBalaTransitPlanets.length > 0)
+    ? context.taraBalaTransitPlanets.map(t => 
+        `  • ${t.graha_key.padEnd(8)}: in ${t.transit_star.padEnd(14)} (P${t.pada}) ==> Tara ${t.taraNumber}: ${t.taraName} (${t.taraTamil}) [${t.quality}] - ${t.description}`
+      ).join('\n')
+    : '  • Computed per ephemeris.';
+
+  const chandraBalaTimelineStr = (context.chandraBalaDailyTimeline && context.chandraBalaDailyTimeline.length > 0)
+    ? context.chandraBalaDailyTimeline.map(c => 
+        `  • ${c.dayRange.padEnd(14)}: Moon in ${c.moonSignName} | Star: ${c.moonStarName} | House ${c.houseFromNatalMoon} from Janma Moon | ${c.taraBala.taraName} (Tara ${c.taraBala.taraNumber}) ${c.isChandrashtama ? '===> [🚨 CRITICAL CHANDRASHTAMA: Extreme Emotional Vulnerability, Avoid New Pacts] <===' : c.isFavorable ? '[Favorable Chandra Bala]' : '[Neutral/Frictional]'} ${c.alertFlag ? `[${c.alertFlag}]` : ''}`
+      ).join('\n')
+    : '  • Full Chandra Bala computed across 2.25-day sign progression.';
+
+  const ashtakavargaStr = context.ashtakavargaPayload
+    ? `Target House ${context.houseNumber} Sarvashtakavarga (SAV) Points: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]
+  - SAV Points Zodiac Spread:
+${context.ashtakavargaPayload.savPointsDistribution.map(s => `      House ${String(s.houseNumber).padStart(2, ' ')} (${s.signName.padEnd(20)}): ${s.points} Bindus [${s.status}] ${s.houseNumber === context.houseNumber ? ' <== [TARGET EVALUATED BHAVA]' : ''}`).join('\n')}`
+    : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`;
+
+  const dashaDossierStr = (context.dashaLordsDossier && context.dashaLordsDossier.length > 0)
+    ? context.dashaLordsDossier.map(d => 
+        `  • ${d.role} [${d.lordName}]:
+      - House Lordship: ${d.ownedHousesTitle} (${d.functionalNature})
+      - Natal Dignity: Occupies House ${d.natalHouseOccupied} (${d.natalDignity})
+      - Target House ${context.houseNumber} Impact: ${d.connectsToTargetHouse ? `DIRECT CONNECTION ===> ${d.targetConnectionReason}` : d.targetConnectionReason}`
+      ).join('\n')
+    : '  • MD, AD, and PD lords evaluated against natal houses and target bhava.';
+
+  const karakaInfoStr = context.bhavaKarakaInfo
+    ? `Primary Sthira Karaka: ${context.bhavaKarakaInfo.primaryKaraka}
+  Secondary Karakas: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
+  Bhava Significations: ${context.bhavaKarakaInfo.significations}
+  Real-World Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
+    : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`;
+
   return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
 
 ======================================================================
@@ -149,29 +188,47 @@ DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${context.rashiName} / House ${context.
 ${targetSignTransitResidents}
 
 ======================================================================
-4. CHANDRA (MOON) 2.25-DAY SIGN PROGRESSION ACROSS ${monthName.toUpperCase()} ${context.selectedYear}
-(Chandra is the psychological catalyst and real-time trigger for event fruition)
+4. PRE-COMPUTED TARA BALA (9-FOLD STELLAR AUSPICIOUSNESS FROM JANMA NAKSHATRA)
 ======================================================================
-${moonSpansTable}
+${janmaStarStr}
+ALL-GRAHA TRANSIT TARA BALA (Pre-calculated deterministic counts):
+${taraBalaTable}
 
 ======================================================================
-5. PLANETARY INGRESS EVENTS IN ${monthName.toUpperCase()} ${context.selectedYear}
+5. CHANDRA BALA & DAILY MOON PROGRESSION (WITH CHANDRASHTAMA ALERTS)
+======================================================================
+${chandraBalaTimelineStr}
+
+======================================================================
+6. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY REPORT
+======================================================================
+${ashtakavargaStr}
+
+======================================================================
+7. PLANETARY INGRESS EVENTS IN ${monthName.toUpperCase()} ${context.selectedYear}
 ======================================================================
 ${ingressTable}
 
 ======================================================================
-6. VIMSHOTTARI DASHA HIERARCHY & DELIVERY CAPACITY (RULE 5)
+8. DASHA LORDS KARMIC DOSSIER (MD, AD, PD HOUSE LORDSHIPS & TARGET BHAVA CONNECTIVITY)
 ======================================================================
 ${dashaDelivery}
 Active PD Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
+DETAILED DASHA LORDS BREAKDOWN:
+${dashaDossierStr}
 
 ======================================================================
-7. USER SPECIFIC INQUIRY
+9. BHAVA STHIRA & NAISARGIKA KARAKAS (REAL-WORLD OUTLET IMPACTS)
+======================================================================
+${karakaInfoStr}
+
+======================================================================
+10. USER SPECIFIC INQUIRY
 ======================================================================
 "${context.userQuery || `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`}"
 
 ======================================================================
-8. TASK & FORMATTING INSTRUCTIONS
+11. TASK & FORMATTING INSTRUCTIONS
 ======================================================================
 Synthesize a rigorous, grounded Vedic Narrative with both a Primary Synthesis and 5 Cross-Domain Supplementary Scenarios.
 
@@ -186,11 +243,20 @@ CRITICAL IN-DEPTH REASONING & STRUCTURE REQUIREMENTS (NO ONE-LINERS OR BRIEF SUM
 You MUST provide thorough, detailed, multi-paragraph astrological analysis for every aspect.
 Do NOT output generic one-line or two-line summaries. Deliver deep, nuanced insights.
 
-CRITICAL REASONING ACCURACY DIRECTIVE — USE TRANSIT GRAHA PADA & DEGREE:
-You MUST actively use the transit graha Pada, exact Sputa Degree, and Nakshatra lord relationships for reasoning accuracy in your calculations:
-- Explicitly reference the exact degrees (e.g. 18° 42' or within orb degrees) and exact Nakshatra Padas (e.g., Pada 1, 2, 3, or 4 / Navamsha sub-lord resonance) of transiting Grahas—especially Jupiter (Guru), Saturn (Sani), Mars, Venus, and Moon.
-- Evaluate exact Degree Orbs for aspect drishti (conjunctions and oppositions are most potent when degree difference is tight < 5° to 7°).
-- Account for the Navamsha sign disposition encoded by each Transit Graha Pada to determine real-time delivery capacity and dignity in transit.
+CRITICAL REASONING ACCURACY DIRECTIVE — USE TRANSIT GRAHA PADA, DEGREE & PARASHARA PAYLOADS:
+You MUST actively synthesize the provided deterministic Vedic data points for reasoning accuracy:
+1. TRANSIT GRAHA PADA & DEGREE:
+   - Explicitly reference the exact degrees (e.g. 18° 42' or within orb degrees) and exact Nakshatra Padas (Pada 1, 2, 3, or 4 / Navamsha sub-lord resonance) of transiting Grahas—especially Jupiter (Guru), Saturn (Sani), Mars, Venus, and Moon.
+   - Evaluate exact Degree Orbs for aspect drishti (conjunctions and oppositions are most potent when degree difference is tight < 5° to 7°).
+2. TARA BALA (9-FOLD NAKSHATRA AUSPICIOUSNESS):
+   - Check the pre-calculated Tara Bala for transiting planets from the native's Janma Star. Planets in Sampat, Kshema, Sadhana, Mitra, and Parama Mitra deliver auspicious fruits smoothly. Planets in Vipat, Pratyak, or Naidhana/Vadha cause delays, hurdles, or friction.
+3. CHANDRA BALA & CHANDRASHTAMA WARNINGS:
+   - Factor in the daily Chandra Bala progression. Explicitly warn when transiting Moon is in the 8th house from Janma Rashi (Chandrashtama) regarding emotional volatility, signing new contracts, or sensitive conversations.
+4. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY:
+   - Reference the SAV bindus for the target house and occupied transit signs. Signs with >= 28–32 bindus possess the stamina to manifest real-world results; signs with < 25 bindus require cautious, conserved effort.
+5. DASHA LORDS DOSSIER & HOUSE KARAKAS:
+   - Integrate the MD, AD, and PD lords' house lordships and their direct connection to the target house.
+   - Use the Primary and Secondary Sthira Karakas to ground the concrete real-world outlet impacts (e.g., Sun for vitality/government, Jupiter for wealth/wisdom, Mercury for intellect/career, Venus for romance/partnerships, Moon for mind/mother/home).
 
 Specific required breakdowns:
 1. CAREER & JOB ('career_job'):

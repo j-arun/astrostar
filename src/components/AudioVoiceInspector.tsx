@@ -101,6 +101,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [editablePrompt, setEditablePrompt] = useState<string>('');
   const [isPromptCustomized, setIsPromptCustomized] = useState<boolean>(false);
   const [showPromptStudio, setShowPromptStudio] = useState<boolean>(true);
+  const [promptStudioFold, setPromptStudioFold] = useState<'plain' | 'structured'>('plain');
 
   const handleApplyPreset = (domain: 'career' | 'love' | 'finance' | 'health') => {
     if (!context) return;
@@ -946,79 +947,346 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             </div>
 
             {showPromptStudio && (
-              <div className="p-3 bg-slate-950/90 space-y-2.5 border-t border-slate-800">
-                {/* Domain Focus Quick Injection Chips */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 mr-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
-                    Inject Focused Questions:
-                  </span>
-                  <button
-                    onClick={() => handleApplyPreset('career')}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/50 transition cursor-pointer flex items-center gap-1"
-                    title="Append specific career questions: employment status inference test, job search momentum, kind of job, and new vs existing job phase"
-                  >
-                    <span>💼</span>
-                    <span>Career &amp; Employment Status Test</span>
-                  </button>
-                  <button
-                    onClick={() => handleApplyPreset('love')}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-rose-300 hover:text-rose-200 border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1"
-                    title="Append specific love questions: existing crush trajectory, new crush possibility, romance chemistry, and classical marriage vs living-together manifestation"
-                  >
-                    <span>❤️</span>
-                    <span>Love, Crush &amp; Romance Weather</span>
-                  </button>
-                  <button
-                    onClick={() => handleApplyPreset('finance')}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-sky-200 border border-slate-800 hover:border-sky-500/50 transition cursor-pointer flex items-center gap-1"
-                  >
-                    <span>💰</span>
-                    <span>Finances &amp; Inflows</span>
-                  </button>
-                  <button
-                    onClick={() => handleApplyPreset('health')}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-emerald-300 hover:text-emerald-200 border border-slate-800 hover:border-emerald-500/50 transition cursor-pointer flex items-center gap-1"
-                  >
-                    <span>🩺</span>
-                    <span>Health &amp; Sukha</span>
-                  </button>
+              <div className="p-3 bg-slate-950/90 space-y-3 border-t border-slate-800">
+                {/* TWO-FOLD NAVIGATION TABS */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                    <button
+                      onClick={() => setPromptStudioFold('plain')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        promptStudioFold === 'plain'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                      <span>Fold 1: Plain Text Prompt (Editable)</span>
+                    </button>
+                    <button
+                      onClick={() => setPromptStudioFold('structured')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        promptStudioFold === 'structured'
+                          ? 'bg-amber-500 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Fold 2: Structured Data Payloads (Clean Cards)</span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-950/60 font-mono text-cyan-300">
+                        Parashara
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 font-mono hidden sm:block">
+                    <span className="text-amber-400 font-semibold">{editablePrompt.length}</span> chars &bull; ~{Math.round(editablePrompt.length / 4)} tokens
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                  <span>Edit instructions or custom questions directly below before sending to {activeProvider}:</span>
-                  <span className="text-amber-400 font-semibold">
-                    {editablePrompt.length} chars &bull; ~{Math.round(editablePrompt.length / 4)} tokens
-                  </span>
-                </div>
+                {promptStudioFold === 'plain' ? (
+                  /* FOLD 1: PLAIN TEXT PROMPT (EDITABLE & SUBMITTABLE) */
+                  <div className="space-y-2.5">
+                    {/* Domain Focus Quick Injection Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 mr-1 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        Inject Focused Questions:
+                      </span>
+                      <button
+                        onClick={() => handleApplyPreset('career')}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/50 transition cursor-pointer flex items-center gap-1"
+                        title="Append specific career questions: employment status inference test, job search momentum, kind of job, and new vs existing job phase"
+                      >
+                        <span>💼</span>
+                        <span>Career &amp; Employment Status Test</span>
+                      </button>
+                      <button
+                        onClick={() => handleApplyPreset('love')}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-rose-300 hover:text-rose-200 border border-slate-800 hover:border-rose-500/50 transition cursor-pointer flex items-center gap-1"
+                        title="Append specific love questions: existing crush trajectory, new crush possibility, romance chemistry, and classical marriage vs living-together manifestation"
+                      >
+                        <span>❤️</span>
+                        <span>Love, Crush &amp; Romance Weather</span>
+                      </button>
+                      <button
+                        onClick={() => handleApplyPreset('finance')}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-sky-200 border border-slate-800 hover:border-sky-500/50 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <span>💰</span>
+                        <span>Finances &amp; Inflows</span>
+                      </button>
+                      <button
+                        onClick={() => handleApplyPreset('health')}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-emerald-300 hover:text-emerald-200 border border-slate-800 hover:border-emerald-500/50 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <span>🩺</span>
+                        <span>Health &amp; Sukha</span>
+                      </button>
+                    </div>
 
-                <textarea
-                  value={editablePrompt}
-                  onChange={e => {
-                    setEditablePrompt(e.target.value);
-                    setIsPromptCustomized(true);
-                  }}
-                  rows={11}
-                  className="w-full bg-slate-900 border border-slate-700/80 rounded-lg p-3 font-mono text-[11px] text-slate-200 focus:outline-none focus:border-amber-500 transition leading-relaxed resize-y selection:bg-amber-500/30"
-                  placeholder="System prompt will populate here..."
-                />
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                      <span>Edit instructions or custom questions directly below before sending to {activeProvider}:</span>
+                      <span className="text-amber-400 font-semibold sm:hidden">
+                        {editablePrompt.length} chars &bull; ~{Math.round(editablePrompt.length / 4)} tokens
+                      </span>
+                    </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <span>💡 Edit any text, rule, or test inquiry above and click <strong>"🚀 Send Prompt to LLM"</strong>.</span>
-                    {isPromptCustomized && (
-                      <span className="text-amber-300 font-bold">● Custom prompt active</span>
+                    <textarea
+                      value={editablePrompt}
+                      onChange={e => {
+                        setEditablePrompt(e.target.value);
+                        setIsPromptCustomized(true);
+                      }}
+                      rows={12}
+                      className="w-full bg-slate-900 border border-slate-700/80 rounded-lg p-3 font-mono text-[11px] text-slate-200 focus:outline-none focus:border-amber-500 transition leading-relaxed resize-y selection:bg-amber-500/30"
+                      placeholder="System prompt will populate here..."
+                    />
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <span>💡 Edit any text, rule, or test inquiry above and click <strong>"🚀 Send Prompt to LLM"</strong>.</span>
+                        {isPromptCustomized && (
+                          <span className="text-amber-300 font-bold">● Custom prompt active</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleRefireWithCustomPrompt}
+                        disabled={isGenerating}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow disabled:opacity-50 cursor-pointer"
+                      >
+                        {isGenerating ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                        <span>Submit Prompt to Reasoning Engine</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* FOLD 2: STRUCTURED DATA PAYLOADS (CLEAN EYE CARDS) */
+                  <div className="space-y-3 text-xs">
+                    <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300 text-[11px] leading-relaxed flex items-center justify-between">
+                      <span>
+                        🔍 <strong>Structured Vedic Ground Truth Payload:</strong> All mathematical counts below (Tara Bala, Chandra Bala, SAV points, and Dasha lord dignities) are pre-calculated by deterministic code and fed into the prompt so the LLM does not hallucinate.
+                      </span>
+                      <button
+                        onClick={() => setPromptStudioFold('plain')}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-semibold cursor-pointer text-[10px] shrink-0 ml-2"
+                      >
+                        Switch to Raw Text
+                      </button>
+                    </div>
+
+                    {/* CARD 1: TARA BALA (9-FOLD STELLAR QUALITY FROM JANMA STAR) */}
+                    <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
+                        <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                          <span>🌟</span>
+                          <span>1. Tara Bala of Transiting Planets (from Janma Star: {context.natalJanmaStar?.nakshatra_name || 'Anuradha'} P{context.natalJanmaStar?.pada || 2})</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          9-Fold Parashara Count
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {context.taraBalaTransitPlanets && context.taraBalaTransitPlanets.length > 0 ? (
+                          context.taraBalaTransitPlanets.map((t, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded-lg border text-[11px] space-y-1 ${
+                                t.isAuspicious
+                                  ? 'bg-emerald-950/20 border-emerald-500/30'
+                                  : t.taraNumber === 7
+                                  ? 'bg-rose-950/30 border-rose-500/40'
+                                  : 'bg-slate-950 border-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-white">{t.graha_key}</span>
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                  t.isAuspicious
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : t.taraNumber === 7
+                                    ? 'bg-rose-500/20 text-rose-300'
+                                    : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  {t.taraName.split(' ')[0]} (T{t.taraNumber})
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                in <strong className="text-slate-300">{t.transit_star}</strong> (Pada {t.pada})
+                              </div>
+                              <p className="text-[10px] text-slate-300 leading-tight">
+                                {t.description}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-slate-500 italic p-2">Standard Tara Bala mapped in prompt</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CARD 2: CHANDRA BALA & DAILY MOON PROGRESSION TIMELINE */}
+                    <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
+                        <span className="font-bold text-sky-400 flex items-center gap-1.5">
+                          <span>🌙</span>
+                          <span>2. Chandra Bala &amp; Moon Progression (Janma Rashi: {context.natalJanmaStar?.rashi_name || 'Vrischigam'})</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          2.25-Day Cycle
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {context.chandraBalaDailyTimeline && context.chandraBalaDailyTimeline.length > 0 ? (
+                          context.chandraBalaDailyTimeline.map((cb, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded-lg border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                                cb.isChandrashtama
+                                  ? 'bg-rose-950/30 border-rose-500/50 text-rose-200'
+                                  : cb.isFavorable
+                                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                                  : 'bg-slate-950 border-slate-800 text-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-slate-200">{cb.dayRange}:</span>
+                                <span>Moon in <strong>{cb.moonSignName}</strong></span>
+                                <span className="text-slate-400">({cb.moonStarName})</span>
+                                <span className="px-1.5 py-0.2 rounded bg-black/30 font-mono text-[10px]">
+                                  House {cb.houseFromNatalMoon} from Moon
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  cb.isChandrashtama
+                                    ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50'
+                                    : cb.isFavorable
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-slate-800 text-slate-300'
+                                }`}>
+                                  {cb.isChandrashtama ? '🚨 Chandrashtama' : cb.isFavorable ? '✓ Favorable Chandra Bala' : 'Neutral/Obstruction'}
+                                </span>
+                                {cb.alertFlag && !cb.isChandrashtama && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                                    Target House Transit
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-slate-500 italic p-2">Full Moon 2.25-day cycle provided</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CARD 3: SARVASHTAKAVARGA (SAV) CAPACITY */}
+                    {context.ashtakavargaPayload && (
+                      <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
+                          <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                            <span>📊</span>
+                            <span>3. Sarvashtakavarga (SAV) Bindus: Target House {context.houseNumber} = {context.ashtakavargaPayload.targetHousePoints} Bindus [{context.ashtakavargaPayload.targetHouseStrength}]</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Parashara 337 Baseline
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5 text-[10px]">
+                          {context.ashtakavargaPayload.savPointsDistribution.map((item, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-1.5 rounded border text-center ${
+                                item.houseNumber === context.houseNumber
+                                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                                  : 'bg-slate-950 border-slate-800 text-slate-300'
+                              }`}
+                            >
+                              <div className="text-slate-400 text-[9px]">House {item.houseNumber} ({item.signName.split(' ')[0]})</div>
+                              <div className="text-xs font-mono font-bold mt-0.5">{item.points} Bindus</div>
+                              <div className={`text-[9px] mt-0.5 ${item.points >= 30 ? 'text-emerald-400' : item.points >= 26 ? 'text-slate-400' : 'text-rose-400'}`}>
+                                {item.status}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CARD 4: DASHA LORDS KARMIC DOSSIER & TARGET BHAVA LINKAGE */}
+                    {context.dashaLordsDossier && context.dashaLordsDossier.length > 0 && (
+                      <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
+                          <span className="font-bold text-indigo-400 flex items-center gap-1.5">
+                            <span>👑</span>
+                            <span>4. Dasha Lords Karmic Dossier (MD, AD, PD vs House {context.houseNumber})</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Rule 5 Triad Delivery
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {context.dashaLordsDossier.map((d, idx) => (
+                            <div key={idx} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1 text-[11px]">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-white">{d.role}</span>
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                  d.functionalNature.includes('Benefic') || d.functionalNature.includes('Yoga')
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : d.functionalNature.includes('Malefic')
+                                    ? 'bg-rose-500/20 text-rose-300'
+                                    : 'bg-slate-800 text-slate-300'
+                                }`}>
+                                  {d.functionalNature}
+                                </span>
+                              </div>
+                              <div className="text-amber-300 font-mono font-semibold">{d.lordName}</div>
+                              <div className="text-slate-400 text-[10px]">Lordship: <span className="text-slate-200">{d.ownedHousesTitle}</span></div>
+                              <div className="text-slate-400 text-[10px]">Natal: <span className="text-slate-200">H{d.natalHouseOccupied} ({d.natalDignity})</span></div>
+                              <div className="text-[10px] text-cyan-300/90 pt-1 border-t border-slate-800/80">
+                                <strong>Impact: </strong>{d.targetConnectionReason}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CARD 5: BHAVA STHIRA KARAKAS & REAL-WORLD OUTLET IMPACTS */}
+                    {context.bhavaKarakaInfo && (
+                      <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                          <span className="font-bold text-rose-400 flex items-center gap-1.5">
+                            <span>🎯</span>
+                            <span>5. Bhava Sthira Karakas &amp; Real-World Outlet Impacts (House {context.houseNumber})</span>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Primary &amp; Secondary Karakas:</span>
+                            <span className="text-white font-semibold">
+                              {context.bhavaKarakaInfo.primaryKaraka} (Secondary: {context.bhavaKarakaInfo.secondaryKarakas.join(', ')})
+                            </span>
+                            <p className="text-slate-300 text-[10px] mt-1 leading-relaxed">
+                              {context.bhavaKarakaInfo.significations}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Concrete Physical Outlet:</span>
+                            <p className="text-emerald-300 font-medium text-[11px] leading-relaxed">
+                              {context.bhavaKarakaInfo.outletImpact}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <button
-                    onClick={handleRefireWithCustomPrompt}
-                    disabled={isGenerating}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow disabled:opacity-50 cursor-pointer"
-                  >
-                    {isGenerating ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                    <span>Submit Prompt to Reasoning Engine</span>
-                  </button>
-                </div>
+                )}
               </div>
             )}
           </div>

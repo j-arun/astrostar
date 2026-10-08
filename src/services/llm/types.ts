@@ -130,6 +130,66 @@ export interface VedicHouseContext {
     pdDignity: string;
   };
   language?: 'en' | 'ta';
+  // Advanced Parashara Deterministic Data Payloads
+  natalJanmaStar?: {
+    nakshatra_name: string;
+    pada: number;
+    rashi_name: string;
+    rashi_index: number;
+  };
+  taraBalaTransitPlanets?: Array<{
+    graha_key: string;
+    transit_star: string;
+    pada: number;
+    taraNumber: number;
+    taraName: string;
+    taraTamil: string;
+    quality: string;
+    isAuspicious: boolean;
+    description: string;
+  }>;
+  chandraBalaDailyTimeline?: Array<{
+    dayRange: string;
+    moonSignIndex: number;
+    moonSignName: string;
+    moonStarName: string;
+    houseFromNatalMoon: number;
+    isChandrashtama: boolean;
+    isFavorable: boolean;
+    taraBala: {
+      taraNumber: number;
+      taraName: string;
+      isAuspicious: boolean;
+    };
+    alertFlag?: string;
+  }>;
+  ashtakavargaPayload?: {
+    targetHousePoints: number;
+    targetHouseStrength: string;
+    savPointsDistribution: Array<{
+      houseNumber: number;
+      signIndex: number;
+      signName: string;
+      points: number;
+      status: string;
+    }>;
+  };
+  dashaLordsDossier?: Array<{
+    role: string;
+    lordName: string;
+    ownedHousesTitle: string;
+    functionalNature: string;
+    natalHouseOccupied: number;
+    natalDignity: string;
+    connectsToTargetHouse: boolean;
+    targetConnectionReason: string;
+  }>;
+  bhavaKarakaInfo?: {
+    primaryKaraka: string;
+    secondaryKarakas: string[];
+    significations: string;
+    outletImpact: string;
+  };
 }
 
 export interface EmploymentStatusInference {

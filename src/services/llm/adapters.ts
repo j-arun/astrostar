@@ -885,7 +885,7 @@ export async function purgeOllamaMemory(model?: string, endpoint = 'http://local
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: model || 'qwen2.5:14b-instruct',
+        model: model || 'qwen2.5:7b-instruct',
         keep_alive: 0
       })
     });
@@ -933,9 +933,9 @@ export class QwenLocalAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const prompt = buildVedicPrompt(context, 'Local Qwen 2.5 14B');
+    const prompt = buildVedicPrompt(context, 'Local Qwen 2.5 7B');
     const endpoint = 'http://localhost:11434/api/generate';
-    const targetModel = context.selectedLocalModel || 'qwen2.5:14b-instruct';
+    const targetModel = context.selectedLocalModel || 'qwen2.5:7b-instruct';
 
     // keep_alive: 0 ensures Ollama unloads the model from VRAM/RAM immediately upon finishing
     const requestBody = {
@@ -946,8 +946,8 @@ export class QwenLocalAdapter implements ILLMAdapter {
       keep_alive: 0,
       options: {
         temperature: 0.3,
-        num_predict: 2048,
-        num_ctx: 8192,
+        num_predict: 1536,
+        num_ctx: 6144,
         num_keep: 0
       }
     };
@@ -1061,7 +1061,7 @@ export class QwenLocalAdapter implements ILLMAdapter {
 
 function resStatusSuggestion(errorMsg?: string, model?: string): string {
   if (errorMsg && errorMsg.includes('404')) {
-    return `Model '${model}' is not in your Ollama library yet. Run: \`ollama pull ${model}\` or \`ollama run ${model}\`. If you already pulled another model (e.g. qwen2.5:14b or qwen2.5), select it in the inspector model dropdown.`;
+    return `Model '${model}' is not in your Ollama library yet. Run: \`ollama pull ${model}\` or \`ollama run ${model}\`. If you already pulled another model (e.g. qwen2.5:7b or qwen2.5), select it in the inspector model dropdown.`;
   }
   return 'Make sure Ollama is running with CORS enabled: `OLLAMA_ORIGINS="*" ollama serve`';
 }

@@ -83,7 +83,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [showWireLog, setShowWireLog] = useState<boolean>(false);
   const [wireLogTab, setWireLogTab] = useState<'prompt' | 'request' | 'response' | 'guide'>('prompt');
   const [localOllamaModel, setLocalOllamaModel] = useState<string>(() => {
-    return localStorage.getItem('astro_ollama_model') || 'qwen2.5:14b-instruct';
+    return localStorage.getItem('astro_ollama_model') || 'qwen2.5:7b-instruct';
   });
   const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
@@ -495,7 +495,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                       localStorage.setItem('astro_ollama_model', e.target.value);
                     }}
                     className="bg-transparent text-amber-300 font-mono text-[11px] font-bold w-36 focus:outline-none"
-                    placeholder="qwen2.5:14b-instruct"
+                    placeholder="qwen2.5:7b-instruct"
                     title="Exact Ollama model tag on your machine"
                   />
                 )}
@@ -663,14 +663,14 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 <>
                   <Check className="w-4 h-4 text-emerald-400" />
                   <span>
-                    <strong>Ollama Online!</strong> Detected models: {ollamaPingResult.models?.join(', ') || 'No models pulled yet (run `ollama run qwen2.5:14b-instruct`)'}
+                    <strong>Ollama Online!</strong> Detected models: {ollamaPingResult.models?.join(', ') || 'No models pulled yet (run `ollama run qwen2.5:7b-instruct`)'}
                   </span>
                 </>
               ) : (
                 <>
                   <AlertCircle className="w-4 h-4 text-rose-400" />
                   <span>
-                    <strong>Ollama Offline / Unreachable:</strong> {ollamaPingResult.error}. Run <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-300">ollama run qwen2.5:14b-instruct</code> in your terminal.
+                    <strong>Ollama Offline / Unreachable:</strong> {ollamaPingResult.error}. Run <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-300">ollama run qwen2.5:7b-instruct</code> in your terminal.
                   </span>
                 </>
               )}
@@ -817,9 +817,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 <p className="font-semibold text-white">How to run Private LLM locally on your machine with Ollama:</p>
                 <div className="space-y-1 font-mono text-[11px]">
                   <p className="text-slate-400">1. Install Ollama from <a href="https://ollama.com" target="_blank" rel="noreferrer" className="text-amber-400 underline">ollama.com</a>.</p>
-                  <p className="text-slate-400">2. Pull and start Qwen 2.5 14B with CORS origin permitted for the web browser:</p>
+                  <p className="text-slate-400">2. Pull and start Qwen 2.5 7B with CORS origin permitted for the web browser:</p>
                   <div className="p-2 bg-slate-950 rounded border border-slate-800 text-emerald-400">
-                    OLLAMA_ORIGINS="*" ollama run qwen2.5:14b-instruct
+                    OLLAMA_ORIGINS="*" ollama run qwen2.5:7b-instruct
                   </div>
                   <p className="text-slate-400">3. On Windows (CMD):</p>
                   <div className="p-2 bg-slate-950 rounded border border-slate-800 text-emerald-400">

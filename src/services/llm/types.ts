@@ -16,10 +16,10 @@ export interface LLMProviderConfig {
 export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   local_qwen: {
     id: 'local_qwen',
-    name: 'Local Qwen 2.5 14B',
-    badgeLabel: '🖥️ Local (Qwen 2.5 14B via Ollama)',
-    model: 'qwen2.5:14b-instruct',
-    description: 'Local on-premise execution via Ollama (port 11434). Zero cloud latency, complete privacy.',
+    name: 'Local Qwen 2.5 7B',
+    badgeLabel: '🖥️ Local (Qwen 2.5 7B via Ollama)',
+    model: 'qwen2.5:7b-instruct',
+    description: 'Local on-premise execution via Ollama (port 11434). Zero cloud dependency, rapid 7B reasoning, complete privacy.',
     endpoint: 'http://localhost:11434/api/generate'
   },
   gemini_pro: {

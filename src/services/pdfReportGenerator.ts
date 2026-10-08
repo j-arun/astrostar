@@ -203,7 +203,7 @@ export function generateVedicPdfReport(
     y + 11
   );
   doc.text(
-    `Execution Latency: ${narrative.executionTimeMs} ms • Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}% • Model: ${narrative.ollamaStats?.model || (isLocal ? 'qwen2.5:14b-instruct' : 'gemini-3.8-flash')}`,
+    `Execution Latency: ${narrative.executionTimeMs} ms • Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}% • Model: ${narrative.ollamaStats?.model || (isLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash')}`,
     margin + 4,
     y + 16
   );

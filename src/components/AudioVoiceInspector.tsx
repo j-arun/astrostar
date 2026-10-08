@@ -1343,17 +1343,17 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   <div className="space-y-1.5 mt-2">
                     <p className="text-[11px] text-amber-300 font-mono">
                       Executing local inference on your hardware:{' '}
-                      <span className="font-bold text-white text-xs">{elapsedSeconds}s</span> / 180s limit
+                      <span className="font-bold text-white text-xs">{elapsedSeconds}s</span> / 300s (5m) limit
                     </p>
                     <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
                       <div
                         className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500 transition-all duration-1000"
-                        style={{ width: `${Math.min(100, (elapsedSeconds / 180) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (elapsedSeconds / 300) * 100)}%` }}
                       />
                     </div>
                     <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1">
                       <Clock className="w-3 h-3 text-amber-400" />
-                      <span>Hard 180s cutoff: auto-aborts and reverts to analytical synthesis if struggling</span>
+                      <span>5-minute timeout window (300s): auto-aborts and reverts to analytical synthesis if struggling</span>
                     </p>
                   </div>
                 )}
@@ -1361,16 +1361,16 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             </div>
           ) : narrative ? (
             <div className="space-y-3.5">
-              {/* TIMEOUT WARNING BANNER (IF CUT OFF >180S) */}
-              {narrative.connectionError && (narrative.connectionError.includes('timed out') || narrative.connectionError.includes('180')) && (
+              {/* TIMEOUT WARNING BANNER (IF CUT OFF >300S) */}
+              {narrative.connectionError && (narrative.connectionError.includes('timed out') || narrative.connectionError.includes('300') || narrative.connectionError.includes('180')) && (
                 <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <span className="font-bold text-rose-300 block">
-                      Local LLM Timed Out (&gt;180 Seconds Upper Limit):
+                      Local LLM Timed Out (&gt;5 Minutes / 300s Upper Limit):
                     </span>
                     <p className="leading-relaxed text-slate-300 text-[11px]">
-                      Local hardware was struggling to interpret this complex multi-domain dataset within 180 seconds. The engine safely cut off the local model, purged VRAM to protect system stability, and automatically generated the astrological readout via the Parashara analytical engine.
+                      Local hardware was struggling to complete this deep multi-domain analysis within 5 minutes (300 seconds). The engine safely cut off the local model, purged VRAM to protect system stability, and automatically generated the astrological readout via the Parashara analytical engine.
                     </p>
                   </div>
                 </div>

@@ -953,7 +953,7 @@ export class QwenLocalAdapter implements ILLMAdapter {
     };
 
     let connectionError: string | undefined;
-    const LOCAL_TIMEOUT_MS = 180000; // Strict 180 seconds upper ceiling
+    const LOCAL_TIMEOUT_MS = 300000; // 5 minutes (300 seconds) ceiling to give local hardware ample reasoning headroom
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => {
       controller.abort();
@@ -1033,7 +1033,7 @@ export class QwenLocalAdapter implements ILLMAdapter {
     } catch (err: any) {
       clearTimeout(timeoutTimer);
       if (err.name === 'AbortError' || controller.signal.aborted) {
-        connectionError = 'Local LLM timed out (>180s): Struggling to interpret this complex multi-domain dataset on current hardware within 180 seconds. Aborted and reverted to Parashara analytical synthesis.';
+        connectionError = 'Local LLM timed out (>300s / 5 minutes): Struggling to complete deep multi-domain reasoning on current hardware within 5 minutes. Aborted and reverted to Parashara analytical synthesis.';
       } else {
         connectionError = err.message || 'Failed to connect to http://localhost:11434 (Check if Ollama is running)';
       }

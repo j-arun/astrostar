@@ -121,36 +121,32 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
 
   const taraBalaTable = (context.taraBalaTransitPlanets && context.taraBalaTransitPlanets.length > 0)
     ? context.taraBalaTransitPlanets.map(t => 
-        `  • ${t.graha_key.padEnd(8)}: in ${t.transit_star.padEnd(14)} (P${t.pada}) ==> Tara ${t.taraNumber}: ${t.taraName} (${t.taraTamil}) [${t.quality}] - ${t.description}`
+        `  • ${t.graha_key.padEnd(8)}: ${t.transit_star} (P${t.pada}) -> Tara ${t.taraNumber}: ${t.taraName} (${t.taraTamil}) [${t.quality}] - ${t.description}`
       ).join('\n')
     : '  • Computed per ephemeris.';
 
   const chandraBalaTimelineStr = (context.chandraBalaDailyTimeline && context.chandraBalaDailyTimeline.length > 0)
     ? context.chandraBalaDailyTimeline.map(c => 
-        `  • ${c.dayRange.padEnd(14)}: Moon in ${c.moonSignName} | Star: ${c.moonStarName} | House ${c.houseFromNatalMoon} from Janma Moon | ${c.taraBala.taraName} (Tara ${c.taraBala.taraNumber}) ${c.isChandrashtama ? '===> [🚨 CRITICAL CHANDRASHTAMA: Extreme Emotional Vulnerability, Avoid New Pacts] <===' : c.isFavorable ? '[Favorable Chandra Bala]' : '[Neutral/Frictional]'} ${c.alertFlag ? `[${c.alertFlag}]` : ''}`
+        `  • ${c.dayRange.padEnd(12)}: ${c.moonSignName} | ${c.moonStarName} | H${c.houseFromNatalMoon} from Moon | ${c.taraBala.taraName} (T${c.taraBala.taraNumber}) ${c.isChandrashtama ? '[🚨 CHANDRASHTAMA: Avoid New Pacts/Risks]' : c.isFavorable ? '[Favorable]' : '[Neutral]'}${c.alertFlag ? ` [${c.alertFlag}]` : ''}`
       ).join('\n')
     : '  • Full Chandra Bala computed across 2.25-day sign progression.';
 
   const ashtakavargaStr = context.ashtakavargaPayload
-    ? `Target House ${context.houseNumber} Sarvashtakavarga (SAV) Points: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]
+    ? `Target House ${context.houseNumber} SAV Points: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]
   - SAV Points Zodiac Spread:
-${context.ashtakavargaPayload.savPointsDistribution.map(s => `      House ${String(s.houseNumber).padStart(2, ' ')} (${s.signName.padEnd(20)}): ${s.points} Bindus [${s.status}] ${s.houseNumber === context.houseNumber ? ' <== [TARGET EVALUATED BHAVA]' : ''}`).join('\n')}`
+${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.houseNumber).padStart(2, ' ')} (${s.signName.padEnd(14)}): ${s.points} Bindus [${s.status}]${s.houseNumber === context.houseNumber ? ' <== [TARGET]' : ''}`).join('\n')}`
     : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`;
 
   const dashaDossierStr = (context.dashaLordsDossier && context.dashaLordsDossier.length > 0)
     ? context.dashaLordsDossier.map(d => 
-        `  • ${d.role} [${d.lordName}]:
-      - House Lordship: ${d.ownedHousesTitle} (${d.functionalNature})
-      - Natal Dignity: Occupies House ${d.natalHouseOccupied} (${d.natalDignity})
-      - Target House ${context.houseNumber} Impact: ${d.connectsToTargetHouse ? `DIRECT CONNECTION ===> ${d.targetConnectionReason}` : d.targetConnectionReason}`
+        `  • ${d.role} [${d.lordName}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies H${d.natalHouseOccupied} (${d.natalDignity}) | Target H${context.houseNumber}: ${d.connectsToTargetHouse ? `DIRECT CONNECTION -> ${d.targetConnectionReason}` : d.targetConnectionReason}`
       ).join('\n')
     : '  • MD, AD, and PD lords evaluated against natal houses and target bhava.';
 
   const karakaInfoStr = context.bhavaKarakaInfo
-    ? `Primary Sthira Karaka: ${context.bhavaKarakaInfo.primaryKaraka}
-  Secondary Karakas: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
-  Bhava Significations: ${context.bhavaKarakaInfo.significations}
-  Real-World Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
+    ? `Primary Sthira Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
+  Significations: ${context.bhavaKarakaInfo.significations}
+  Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
     : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`;
 
   return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
@@ -159,48 +155,47 @@ ${context.ashtakavargaPayload.savPointsDistribution.map(s => `      House ${Stri
 1. TARGET BHAVA & TEMPORAL HORIZON
 ======================================================================
 - Targeted House: House ${context.houseNumber} (${bhavaInfo.title})
-- Rashi Sign: ${context.rashiName} (${context.tamilName}) ${context.isLagna ? '[Lagna Sign / 1st House]' : ''}
+- Rashi Sign: ${context.rashiName} (${context.tamilName}) ${context.isLagna ? '[Lagna / 1st House]' : ''}
 - Evaluation Month: ${monthName} ${context.selectedYear}
-- Code Rule Engine Activation Score: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'CRITICAL EVENT EMITTING (Threshold >= 0.55 crossed)' : 'Standard Preparatory / Baseline'})
+- Activation Score: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'CRITICAL EVENT ACTIVATED (Threshold >= 0.55)' : 'Standard Baseline'})
 - Matched Classical Rules:
 ${rulesStr}
 
 ======================================================================
-2. COMPLETE FLATTENED NATAL DATASET (D1 & D9 PLACEMENTS)
+2. NATAL DATASET (D1 & D9 PLACEMENTS)
 ======================================================================
-NATAL D1 (RASI KUNDALI):
+NATAL D1 (RASI):
 ${natalD1Table}
 
-NATAL D9 (NAVAMSHA KUNDALI):
+NATAL D9 (NAVAMSHA):
 ${natalD9Table}
 
 ======================================================================
-3. COMPLETE ALL-GRAHA GOCHARA (TRANSIT) EPHEMERIS FOR ${monthName.toUpperCase()} ${context.selectedYear}
-(Includes Jupiter (Guru), Saturn (Sani), Rahu, Ketu, Mars, Sun, Venus, Mercury, Moon with exact Sputa Degree, Nakshatra, Pada & Aspect Drishti)
+3. GOCHARA (TRANSIT) EPHEMERIS FOR ${monthName.toUpperCase()} ${context.selectedYear}
 ======================================================================
-COMPLETE 9-GRAHA TRANSIT COORDINATES (Degree, Nakshatra, Pada):
+9-GRAHA TRANSITS (Exact Degree, Nakshatra, Pada, Retrograde & Aspect):
 ${allTransitsTable}
 
-★ JUPITER (GURU) GOCHARA TRANSIT POSITION & DRISHTI STATUS:
+★ JUPITER (GURU) GOCHARA STATUS:
 ${jupiterSpotlight}
 
 DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${context.rashiName} / House ${context.houseNumber}):
 ${targetSignTransitResidents}
 
 ======================================================================
-4. PRE-COMPUTED TARA BALA (9-FOLD STELLAR AUSPICIOUSNESS FROM JANMA NAKSHATRA)
+4. PRE-COMPUTED TARA BALA (9-FOLD STELLAR AUSPICIOUSNESS)
 ======================================================================
 ${janmaStarStr}
-ALL-GRAHA TRANSIT TARA BALA (Pre-calculated deterministic counts):
+TRANSIT TARA BALA (From Native Janma Star):
 ${taraBalaTable}
 
 ======================================================================
-5. CHANDRA BALA & DAILY MOON PROGRESSION (WITH CHANDRASHTAMA ALERTS)
+5. CHANDRA BALA & DAILY PROGRESSION (WITH CHANDRASHTAMA)
 ======================================================================
 ${chandraBalaTimelineStr}
 
 ======================================================================
-6. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY REPORT
+6. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY
 ======================================================================
 ${ashtakavargaStr}
 
@@ -210,175 +205,109 @@ ${ashtakavargaStr}
 ${ingressTable}
 
 ======================================================================
-8. DASHA LORDS KARMIC DOSSIER (MD, AD, PD HOUSE LORDSHIPS & TARGET BHAVA CONNECTIVITY)
+8. DASHA LORDS KARMIC DOSSIER (MD, AD, PD HIERARCHY)
 ======================================================================
 ${dashaDelivery}
 Active PD Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
-DETAILED DASHA LORDS BREAKDOWN:
 ${dashaDossierStr}
 
 ======================================================================
-9. BHAVA STHIRA & NAISARGIKA KARAKAS (REAL-WORLD OUTLET IMPACTS)
+9. BHAVA KARAKAS & OUTLET IMPACTS
 ======================================================================
 ${karakaInfoStr}
 
 ======================================================================
-10. USER SPECIFIC INQUIRY
+10. USER INQUIRY
 ======================================================================
 "${context.userQuery || `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`}"
 
 ======================================================================
-11. TASK & FORMATTING INSTRUCTIONS
+11. TASK INSTRUCTIONS & COMPACT JSON CONTRACT
 ======================================================================
-Synthesize a rigorous, grounded Vedic Narrative with both a Primary Synthesis and 5 Cross-Domain Supplementary Scenarios.
+Synthesize a deep, multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).
 
 ${context.language === 'ta' ? `CRITICAL LANGUAGE REQUIREMENT - TAMIL (தமிழ்):
-You MUST formulate all narrative descriptions, astrological reasoning, verdicts, and practical guidance in authentic, formal Tamil (தமிழ்).
-Use classical Vedic astrological terminology in Tamil:
-- லக்னம், தன ஸ்தானம் (2), சுக ஸ்தானம் (4), பூர்வ புண்ணியம் (5), கர்ம ஸ்தானம் (10), லாப ஸ்தானம் (11).
-- தசா புத்தி அந்தர பலன்கள், கோச்சார கிரக அமைப்புகள், குரு/சனி பார்வை, சுப கிரக சேர்க்கை.
-Keep the JSON keys strictly in English as shown below, but ensure ALL string values (summarySentence, verdicts, parts 1-3, astrologicalReasoning, practicalGuidance) are written in natural, fluent Tamil (தமிழ்).
-` : ''}
-CRITICAL IN-DEPTH REASONING & STRUCTURE REQUIREMENTS (NO ONE-LINERS OR BRIEF SUMMARIES):
-You MUST provide thorough, detailed, multi-paragraph astrological analysis for every aspect.
-Do NOT output generic one-line or two-line summaries. Deliver deep, nuanced insights.
+Formulate all descriptions, reasoning, verdicts, and guidance in formal Tamil (தமிழ்).
+Use classical terminology: லக்னம், தன ஸ்தானம் (2), கர்ம ஸ்தானம் (10), தசா புத்தி, குரு/சனி பார்வை.
+Keep JSON keys in English, but all string values in natural Tamil (தமிழ்).
+` : ''}REASONING DIRECTIVES:
+1. TRANSIT GRAHA PADA & DEGREES: Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon. Account for tight aspect drishti orbs (< 5°-7°).
+2. TARA BALA: Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana/Vadha) stellar taras.
+3. CHANDRA BALA & CHANDRASHTAMA: Flag 8th house Moon transits from Janma Rashi with clear cautions.
+4. SAV BINDUS: Reference target house bindus (>=28-32 strong stamina, <25 cautious conservation).
+5. DASHA LORDS: Integrate MD, AD, and PD lordships and direct connections to House ${context.houseNumber}.
 
-CRITICAL REASONING ACCURACY DIRECTIVE — USE TRANSIT GRAHA PADA, DEGREE & PARASHARA PAYLOADS:
-You MUST actively synthesize the provided deterministic Vedic data points for reasoning accuracy:
-1. TRANSIT GRAHA PADA & DEGREE:
-   - Explicitly reference the exact degrees (e.g. 18° 42' or within orb degrees) and exact Nakshatra Padas (Pada 1, 2, 3, or 4 / Navamsha sub-lord resonance) of transiting Grahas—especially Jupiter (Guru), Saturn (Sani), Mars, Venus, and Moon.
-   - Evaluate exact Degree Orbs for aspect drishti (conjunctions and oppositions are most potent when degree difference is tight < 5° to 7°).
-2. TARA BALA (9-FOLD NAKSHATRA AUSPICIOUSNESS):
-   - Check the pre-calculated Tara Bala for transiting planets from the native's Janma Star. Planets in Sampat, Kshema, Sadhana, Mitra, and Parama Mitra deliver auspicious fruits smoothly. Planets in Vipat, Pratyak, or Naidhana/Vadha cause delays, hurdles, or friction.
-3. CHANDRA BALA & CHANDRASHTAMA WARNINGS:
-   - Factor in the daily Chandra Bala progression. Explicitly warn when transiting Moon is in the 8th house from Janma Rashi (Chandrashtama) regarding emotional volatility, signing new contracts, or sensitive conversations.
-4. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY:
-   - Reference the SAV bindus for the target house and occupied transit signs. Signs with >= 28–32 bindus possess the stamina to manifest real-world results; signs with < 25 bindus require cautious, conserved effort.
-5. DASHA LORDS DOSSIER & HOUSE KARAKAS:
-   - Integrate the MD, AD, and PD lords' house lordships and their direct connection to the target house.
-   - Use the Primary and Secondary Sthira Karakas to ground the concrete real-world outlet impacts (e.g., Sun for vitality/government, Jupiter for wealth/wisdom, Mercury for intellect/career, Venus for romance/partnerships, Moon for mind/mother/home).
-
-Specific required breakdowns:
-1. CAREER & JOB ('career_job'):
-   a) TEST TRIGGER - NATIVE EMPLOYMENT STATUS INFERENCE:
-      Infer whether the native is currently actively serving in a job (employed), actively seeking / in transition, or on sabbatical / unemployed.
-      Base this inference strictly on the 10th house (Karma Bhava status, dispositor dignity), 6th house (daily service/employment), 1st house (vitality), active Dasha Triad lord, and current Gochara transits.
-      Provide 'employmentStatusInference': {
-        'status': 'currently_serving' | 'actively_seeking' | 'sabbatical_unemployed',
-        'label': 'Currently Serving in a Job (Employed)' | 'In Transition / Actively Seeking Job' | 'Sabbatical / Unemployed Phase',
-        'indicatorColor': 'green' | 'yellow' | 'amber',
-        'confidence': 0.85,
-        'inferenceReasoning': 'Explicit astrological reasoning explaining how the engine deduced this state...'
-      }
-   b) JOB SEARCH & TIMING AUSPICIOUSNESS:
-      Analyze past job search momentum vs current timing: How much has past delay or struggle factored in, and is this month the correct, auspicious period to land an offer or achieve breakthrough?
-   c) NEW JOB ACQUISITION & MOOD:
-      What kind and mood of job will the native get at this point in time (corporate leadership, tech architecture, client consulting, remote autonomy, or service)? Will this new prospective job be significantly better in compensation, respect, and growth than what they are currently serving (if employed)? If not currently serving, will it provide solid landing?
-   d) EXISTING JOB PHASE:
-      If currently serving, what is the exact workplace climate (management dynamics, promotions, friction, burnout vs recognition)?
-   e) Provide 'detailedParagraphs' with 2-3 substantive, rich paragraphs of career analysis.
-
-2. LOVE, CRUSH & ROMANCE ('love_romance'):
-   a) EXISTING CRUSH OUTLOOK:
-      How will any existing crush or romantic affection evolve this month? Will it find reciprocation, hit emotional friction, or face reality checks?
-   b) NEW CRUSH POSSIBILITY:
-      Is there a distinct astrological trigger for a new crush or romantic interest forming under current 5th/7th/Venus/Moon transits? Provide probability ('High' | 'Moderate' | 'Low') and context.
-   c) ROMANCE CHEMISTRY & FLUTTERING ATMOSPHERE:
-      Describe the psychological and romantic weather: emotional chemistry, passion vs hesitation, romantic excitement.
-   d) REAL LOVE MANIFESTATION OUTCOME:
-      Will real love manifestation work out? What form will it take:
-      'outcomeType': 'classical_traditional_marriage' (sacred lifelong commitment) | 'living_together_modern' (co-habitation / modern partnership) | 'exploratory_flutter' (passing sweet attraction) | 'platonic_delayed'
-      Explain the astrological causal mechanism (5th house Purva Punya, 7th house Kalatra, Venus dignity, D9 Navamsha).
-   e) Provide 'detailedParagraphs' with 2-3 substantive, rich paragraphs of romantic analysis.
-
-3. FINANCE & WEALTH ('finance_wealth'):
-   Liquid cashflow (2nd house) vs long-term property/asset loans (4th house), speculative stock/crypto windfalls (5th/8th), and 11th house residual profit timing. Provide 'detailedParagraphs' with rich paragraphs.
-
-4. HEALTH & VITALITY ('health_vitality'):
-   Physical stamina, Sukha (inner emotional serenity), thoracic/cardiac/digestive vulnerability zones based on 6th/8th houses and Saturn/Mars aspects, and preventive Ayurvedic/lifestyle pacing. Provide 'detailedParagraphs'.
-
-5. FAMILY & HOME ('family_home'):
-   Domestic sanctuary, residence relocation or interior renovations, maternal health, ancestral roots, and family harmony. Provide 'detailedParagraphs'.
-
-Return ONLY a valid, raw JSON object matching this schema (do NOT include markdown code blocks or surrounding commentary):
+Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
-  "summarySentence": "Crisp one-sentence bottom-line synthesis of the event activation.",
+  "summarySentence": "Crisp bottom-line synthesis of event activation.",
   "natalPromiseVsTransitDelivery": {
-    "natalPromiseScore": 0.88,
-    "natalPromiseVerdict": "Strong natal sanction with dignified karakas in birth chart.",
+    "natalPromiseScore": 0.85,
+    "natalPromiseVerdict": "Natal foundation and karaka strength summary.",
     "transitDeliveryScore": 0.78,
-    "transitDeliveryVerdict": "Gochara transits and Rule 5 Dasha Triad permit manifestation with minor friction.",
-    "synthesisVerdict": "High fruition with tangible real-world outcomes before month end."
+    "transitDeliveryVerdict": "Gochara transits and Dasha Triad delivery capacity.",
+    "synthesisVerdict": "Combined fruition and manifestation verdict."
   },
-  "part1_probabilityAndScope": "Detailed breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and the active PD Lord (${context.activeDasha.pratyantardasha}) authority. State clearly whether the event will manifest and why.",
-  "part2_financialAndResources": "Detailed analysis of Financial & Resource Sources. Map the exact origin of capital (e.g. 2nd house liquid savings, 4th house property loans, 9th house fortune/inheritance, 11th house profits/gains) required for or generated by this event.",
-  "part3_microTimingWindow": "Exact 3 to 7 day peak activation window within ${monthName} ${context.selectedYear}. Name the exact calendar days when transiting Moon or fast planets trigger this Bhava.",
-  "peakDateRange": "${monthName} DD – DD, ${context.selectedYear} (Derived strictly from Moon or ingress schedule)",
+  "part1_probabilityAndScope": "Multi-paragraph breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active PD Lord (${context.activeDasha.pratyantardasha}).",
+  "part2_financialAndResources": "Analysis of capital origin (2nd liquid savings, 4th property/loans, 9th fortune, 11th gains).",
+  "part3_microTimingWindow": "Exact 3 to 7 day peak activation window in ${monthName} ${context.selectedYear} when Moon triggers this Bhava.",
+  "peakDateRange": "${monthName} DD – DD, ${context.selectedYear}",
   "overallConfidence": 0.85,
   "supplementaryScenarios": [
     {
       "id": "career_job",
-      "title": "Career & Professional Elevation",
+      "title": "Career, Job Search & Professional Standing",
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.85,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Detailed astrological synthesis connecting 10th house Karma, 6th house service, and active Dasha...",
-      "practicalGuidance": "Actionable strategic workplace guidance...",
+      "astrologicalReasoning": "Synthesis of 10th Karma, 6th service, and active Dasha.",
+      "practicalGuidance": "Actionable strategic workplace guidance.",
       "employmentStatusInference": {
         "status": "currently_serving",
         "label": "Currently Serving in a Job (Employed)",
         "indicatorColor": "green",
         "confidence": 0.86,
-        "inferenceReasoning": "10th lord and 6th lord form a fortified Artha trikona with active Dasha governance..."
+        "inferenceReasoning": "Astrological deduction of employment status from 10th/6th lords and Dasha."
       },
       "jobSearchAnalysis": {
-        "momentum": "Favorable acceleration after past stagnation",
-        "pastStruggleVsCurrentPhase": "Prior periods carried delays due to Saturnian aspect, but current transits unlock recruitment channels.",
-        "timingAuspiciousness": "High-probability window for interview conversions and offer letters."
+        "momentum": "Search momentum trajectory",
+        "pastStruggleVsCurrentPhase": "Past delays vs current transit unlock",
+        "timingAuspiciousness": "Offer letter / conversion probability"
       },
       "newJobAcquisition": {
-        "jobTypeAndMood": "High-responsibility leadership or analytical role in structured enterprise.",
-        "workplaceAtmosphere": "High-growth culture with cross-functional autonomy.",
-        "comparisonWithCurrentRole": "Significantly better in package and growth scope compared to current tenure."
+        "jobTypeAndMood": "Type of prospective role and organizational mood",
+        "workplaceAtmosphere": "Culture and autonomy",
+        "comparisonWithCurrentRole": "Growth/compensation comparison with existing role"
       },
       "existingJobPhase": {
-        "currentPhaseNature": "High workload and organizational reorganization; management testing stamina.",
-        "retentionVsExitAdvice": "Maintain diplomacy and leverage incoming offers for retention bargaining."
+        "currentPhaseNature": "Workplace climate, manager dynamics, burnout vs recognition",
+        "retentionVsExitAdvice": "Retention bargaining vs exit strategy"
       },
-      "detailedParagraphs": [
-        "Paragraph 1 covering employment landscape and natal promise...",
-        "Paragraph 2 covering job search dynamics and timing...",
-        "Paragraph 3 covering comparative evaluation and strategic next steps..."
-      ]
+      "detailedParagraphs": ["Paragraph 1: Employment status & natal promise.", "Paragraph 2: Job search momentum & conversion window.", "Paragraph 3: Role valuation & workplace strategy."]
     },
     {
       "id": "love_romance",
-      "title": "Love, Crush & Romance",
+      "title": "Love, Romance & Relationship Horizon",
       "verdict": "Moderate Progress",
       "confidenceScore": 0.78,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Venus transit aspecting 5th house stimulates romantic affections...",
-      "practicalGuidance": "Communicate heartfelt intentions with emotional honesty...",
+      "astrologicalReasoning": "Venus transit aspecting 5th/7th houses.",
+      "practicalGuidance": "Heartfelt communication and emotional balance.",
       "crushStatusInference": {
-        "existingCrushTrajectory": "Clarification of mutual feelings; conversations deepen if reciprocal.",
+        "existingCrushTrajectory": "Trajectory of existing affections",
         "newCrushProbability": "High",
-        "newCrushDetails": "Transit trigger in 5th house indicates unexpected romantic interest sparking in intellectual/social circles."
+        "newCrushDetails": "Transit trigger in 5th house for new attraction"
       },
       "romanceAtmosphere": {
-        "emotionalWeather": "Sweet emotional fluttering with anticipation and curiosity.",
+        "emotionalWeather": "Atmosphere and chemistry description",
         "chemistryRating": 82
       },
       "manifestationPath": {
         "outcomeType": "classical_traditional_marriage",
         "outcomeLabel": "Classical Sacred Union & Long-Term Commitment",
-        "manifestationLikelihood": "High karmic viability to mature into enduring marital union.",
-        "astrologicalPathReasoning": "Jupiter rays on 7th Kalatra Bhava and fortified 5th lord in Navamsha D9."
+        "manifestationLikelihood": "Likelihood of long-term union",
+        "astrologicalPathReasoning": "5th/7th lords and Venus/Jupiter rays"
       },
-      "detailedParagraphs": [
-        "Paragraph 1 covering emotional weather and romantic openness...",
-        "Paragraph 2 covering crush developments and mutual chemistry...",
-        "Paragraph 3 covering love manifestation path and long-term marriage viability..."
-      ]
+      "detailedParagraphs": ["Paragraph 1: Romantic weather & openness.", "Paragraph 2: Crush evolution & mutual chemistry.", "Paragraph 3: Manifestation outcome & marriage viability."]
     },
     {
       "id": "health_vitality",
@@ -386,17 +315,14 @@ Return ONLY a valid, raw JSON object matching this schema (do NOT include markdo
       "verdict": "Caution Required",
       "confidenceScore": 0.76,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Saturn presence in 4th chest/cardiac zone urges pacing of physical exertion...",
-      "practicalGuidance": "Maintain consistent sleep and cardiovascular care; avoid overthinking.",
+      "astrologicalReasoning": "6th/8th houses and Saturn/Mars aspect influence.",
+      "practicalGuidance": "Ayurvedic pacing, sleep rhythm, stress decompression.",
       "healthDetails": {
-        "vulnerableZones": ["Thoracic / cardiac zone", "Nervous fatigue", "Sleep cycles"],
-        "mentalTranquilityAndStress": "Mental peace fluctuates under work stress; needs conscious decompression.",
-        "holisticRemedies": "Pranayama, hydration, and restorative sleep discipline."
+        "vulnerableZones": ["Thoracic/cardiac", "Nervous fatigue", "Digestive pace"],
+        "mentalTranquilityAndStress": "Mental peace evaluation under active Dasha",
+        "holisticRemedies": "Pranayama, hydration, mindful pacing"
       },
-      "detailedParagraphs": [
-        "Paragraph 1 covering physical stamina and organ systems...",
-        "Paragraph 2 covering mental serenity and practical preventive remedies..."
-      ]
+      "detailedParagraphs": ["Paragraph 1: Physical stamina & vulnerable zones.", "Paragraph 2: Mental serenity & preventive routines."]
     },
     {
       "id": "finance_wealth",
@@ -404,17 +330,14 @@ Return ONLY a valid, raw JSON object matching this schema (do NOT include markdo
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.84,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Venus in 11th Labha supports asset acquisition and equity appreciation...",
-      "practicalGuidance": "Review loan terms carefully; long-term compounding is solid.",
+      "astrologicalReasoning": "2nd Dhana, 4th assets, 11th Labha alignments.",
+      "practicalGuidance": "Capital deployment and debt leverage review.",
       "financeDetails": {
-        "liquidityVsOutflow": "Liquid savings in 2nd house remain stable; capital deployed toward fixed assets.",
-        "windfallAndSpeculation": "Moderate speculative upside; avoid high-leverage gambles.",
-        "debtAndAssetFinancing": "Institutional loans or asset financing approved with favorable terms."
+        "liquidityVsOutflow": "Liquid cashflow vs fixed deployment",
+        "windfallAndSpeculation": "Speculative upside vs risk discipline",
+        "debtAndAssetFinancing": "Institutional borrowing or asset financing"
       },
-      "detailedParagraphs": [
-        "Paragraph 1 covering cashflow liquidity and milestone inflows...",
-        "Paragraph 2 covering capital assets, investments, and debt leverage..."
-      ]
+      "detailedParagraphs": ["Paragraph 1: Cashflow liquidity & milestone inflows.", "Paragraph 2: Capital assets, investments & debt management."]
     },
     {
       "id": "family_home",
@@ -422,17 +345,14 @@ Return ONLY a valid, raw JSON object matching this schema (do NOT include markdo
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.88,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Primary House 4 domain activates home improvement and maternal harmony...",
-      "practicalGuidance": "Upgrade household living spaces and spend quality time supporting family elders.",
+      "astrologicalReasoning": "4th house Griha Saukhya & Matru Bhava dynamics.",
+      "practicalGuidance": "Home improvement and elder support.",
       "familyDetails": {
-        "domesticAmbiance": "Peaceful domestic atmosphere with interior upgrades.",
-        "maternalWellbeing": "Mother's health and emotional blessings are fortified.",
-        "propertyAndRelocation": "Excellent timing for home acquisition, renovation, or relocation."
+        "domesticAmbiance": "Home atmosphere and upgrades",
+        "maternalWellbeing": "Mother's health and vitality",
+        "propertyAndRelocation": "Real estate, renovation, or relocation scope"
       },
-      "detailedParagraphs": [
-        "Paragraph 1 covering domestic living sanctuary...",
-        "Paragraph 2 covering maternal wellbeing and familial alignment..."
-      ]
+      "detailedParagraphs": ["Paragraph 1: Domestic living sanctuary.", "Paragraph 2: Maternal harmony & family alignment."]
     }
   ]
 }`;

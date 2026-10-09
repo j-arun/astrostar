@@ -62,6 +62,15 @@ const DOMAIN_ICONS: Record<string, string> = {
   family_home: '🏡'
 };
 
+const formatTimeDisplay = (totalSec: number): string => {
+  if (totalSec < 60) {
+    return `${totalSec.toFixed(1)}s`;
+  }
+  const mins = Math.floor(totalSec / 60);
+  const secs = Math.floor(totalSec % 60);
+  return `${totalSec.toFixed(1)}s (${mins}m ${secs}s)`;
+};
+
 export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   isOpen,
   onClose,
@@ -426,10 +435,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               onClick={handleDownloadPdf}
               disabled={isGenerating || !narrative || isExportingPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow disabled:opacity-40"
-              title="Download Astrological Inference Report (PDF) with time period, MD/AD/PD lords, and LLM inference"
+              title="Download 3-Page Audit PDF: Page 1 = Dispatched Prompt, Pages 2 & 3 = Full LLM Reasoning & Response"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'Download 3-Page PDF'}</span>
             </button>
 
             <button
@@ -671,7 +680,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 title={`Total roundtrip execution duration: ${(narrative.executionTimeMs / 1000).toFixed(2)}s`}
               >
                 <Clock className="w-3 h-3 text-blue-400" />
-                Time Taken: <span className="text-white font-extrabold">{(narrative.executionTimeMs / 1000).toFixed(1)}s</span>
+                Time Taken: <span className="text-white font-extrabold">{formatTimeDisplay(narrative.executionTimeMs / 1000)}</span>
                 {narrative.providerUsed === 'local_qwen' && (
                   <span className="text-[10px] text-blue-400/80 font-normal">
                     ({narrative.timeoutEnforced ? `${narrative.configuredTimeoutSeconds}s cap` : '⚡ Full Throttle'})
@@ -890,7 +899,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
                     <span className="text-[10px] text-slate-500 uppercase block font-sans">Total Time Taken</span>
                     <span className="text-white font-extrabold text-sm block mt-0.5">
-                      {narrative?.executionTimeMs !== undefined ? `${(narrative.executionTimeMs / 1000).toFixed(2)}s` : 'N/A'}
+                      {narrative?.executionTimeMs !== undefined ? formatTimeDisplay(narrative.executionTimeMs / 1000) : 'N/A'}
                     </span>
                   </div>
                   <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
@@ -1468,7 +1477,11 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </span>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-amber-300 font-mono font-bold text-[12px]">
-                  {narrative?.executionTimeMs !== undefined ? `${(narrative.executionTimeMs / 1000).toFixed(1)}s` : isGenerating ? `${elapsedSeconds}s...` : 'N/A'}
+                  {narrative?.executionTimeMs !== undefined
+                    ? formatTimeDisplay(narrative.executionTimeMs / 1000)
+                    : isGenerating
+                    ? formatTimeDisplay(elapsedSeconds)
+                    : 'N/A'}
                 </span>
                 <span className="text-[9px] text-slate-400 font-mono truncate">
                   {narrative?.providerUsed === 'local_qwen' ? (narrative.connectionStatus === 'connected_live' ? '• Live' : '• Fallback') : ''}
@@ -1490,7 +1503,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-amber-300 font-mono">
                         Executing local inference on your hardware:{' '}
-                        <span className="font-bold text-white text-xs">{elapsedSeconds}s</span> / {timeoutSeconds}s limit
+                        <span className="font-bold text-white text-xs">{formatTimeDisplay(elapsedSeconds)}</span> / {timeoutSeconds}s limit
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
                         <div
@@ -1507,7 +1520,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-emerald-300 font-mono">
                         Executing local inference at <span className="font-bold text-white">Full Throttle (No Timeout)</span>:{' '}
-                        <span className="font-extrabold text-white text-sm bg-slate-900 px-2 py-0.5 rounded border border-emerald-500/40">{elapsedSeconds}s elapsed</span>
+                        <span className="font-extrabold text-white text-sm bg-slate-900 px-2 py-0.5 rounded border border-emerald-500/40">{formatTimeDisplay(elapsedSeconds)} elapsed</span>
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60 relative">
                         <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full animate-pulse w-full" />
@@ -1987,9 +2000,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     <FileText className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="font-bold text-amber-300 text-xs">Download Astrological Inference Report (PDF)</span>
+                    <span className="font-bold text-amber-300 text-xs">Download 3-Page Astrological Inference & Prompt Audit Report (PDF)</span>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Formatted document with Time Period, MD / AD / PD Lords, chart significations, and complete 3-part LLM inference.
+                      Standardized 3-Page Dossier: <strong>Page 1 = Exact Dispatched Prompt</strong> (audit Gemini vs Claude prompt stream), <strong>Pages 2 &amp; 3 = Complete Model Synthesis &amp; 5-Domain Karakatwa Response</strong>.
                     </p>
                   </div>
                 </div>
@@ -1999,7 +2012,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold transition text-xs shadow-md disabled:opacity-40 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>{isExportingPdf ? 'Generating PDF...' : 'Download PDF Report'}</span>
+                  <span>{isExportingPdf ? 'Generating PDF...' : 'Download 3-Page PDF Report'}</span>
                 </button>
               </div>
             </div>
@@ -2021,10 +2034,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               onClick={handleDownloadPdf}
               disabled={!narrative || isExportingPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-50 shadow"
-              title="Download full Astrological Inference PDF"
+              title="Download 3-Page Audit PDF: Page 1 = Prompt, Pages 2 & 3 = Response"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'Download 3-Page PDF'}</span>
             </button>
 
             <button

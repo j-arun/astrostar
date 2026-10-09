@@ -28,7 +28,8 @@ import {
   ChevronUp,
   Cpu,
   FileText,
-  Layers
+  Layers,
+  Database
 } from 'lucide-react';
 import {
   LLMProviderId,
@@ -36,7 +37,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs } from '../services/llm/adapters';
 import { generateVedicPdfReport } from '../services/pdfReportGenerator';
 
 const MONTH_NAMES = [
@@ -117,7 +118,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
 
   // Wire Telemetry State
   const [showWireLog, setShowWireLog] = useState<boolean>(false);
-  const [wireLogTab, setWireLogTab] = useState<'prompt' | 'request' | 'response' | 'telemetry' | 'guide'>('prompt');
+  const [wireLogTab, setWireLogTab] = useState<'prompt' | 'request' | 'response' | 'telemetry' | 'db_logs' | 'guide'>('prompt');
+  const [dbLogs, setDbLogs] = useState<any[]>([]);
+  const [loadingDbLogs, setLoadingDbLogs] = useState<boolean>(false);
   const [localOllamaModel, setLocalOllamaModel] = useState<string>(() => {
     return localStorage.getItem('astro_ollama_model') || 'qwen2.5:7b-instruct';
   });
@@ -258,10 +261,23 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         timeoutSeconds
       });
       setNarrative(result);
+      loadDbLogs().catch(() => {});
     } catch (e) {
       console.error('LLM synthesis error:', e);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const loadDbLogs = async () => {
+    setLoadingDbLogs(true);
+    try {
+      const logs = await fetchRecentLLMPromptLogs(30);
+      setDbLogs(logs);
+    } catch (e) {
+      console.error('Failed to load DB logs:', e);
+    } finally {
+      setLoadingDbLogs(false);
     }
   };
 
@@ -745,6 +761,21 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </span>
             )}
 
+            {narrative?.logId && (
+              <span
+                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono font-bold"
+                title={`Audit Log Table: llm_prompt_logs | Sequence #${narrative.runningNumber}`}
+              >
+                <Database className="w-3 h-3 text-emerald-400" />
+                Log ID: <span className="text-white font-extrabold">{narrative.logId}</span>
+                {narrative.runningNumber && (
+                  <span className="text-[10px] text-emerald-400/80 font-normal">
+                    (#{narrative.runningNumber})
+                  </span>
+                )}
+              </span>
+            )}
+
             {narrative?.memoryPurged && (
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-semibold" title="VRAM memory purged immediately upon completion to prevent delay on subsequent prompts">
                 <Zap className="w-2.5 h-2.5 text-emerald-400" />
@@ -866,17 +897,21 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </div>
 
               {/* Sub tabs */}
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg">
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg flex-wrap">
                 {[
                   { id: 'prompt', label: '1. Prompt Sent' },
                   { id: 'request', label: '2. Wire Request JSON' },
                   { id: 'response', label: '3. Raw Response Wire' },
                   { id: 'telemetry', label: '4. ⏱️ Performance & Timing' },
-                  { id: 'guide', label: '5. Local Setup Guide' }
+                  { id: 'db_logs', label: '5. 🗄️ Audit Table (llm_prompt_logs)' },
+                  { id: 'guide', label: '6. Local Setup Guide' }
                 ].map(t => (
                   <button
                     key={t.id}
-                    onClick={() => setWireLogTab(t.id as any)}
+                    onClick={() => {
+                      setWireLogTab(t.id as any);
+                      if (t.id === 'db_logs') loadDbLogs();
+                    }}
                     className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                       wireLogTab === t.id
                         ? 'bg-amber-500 text-slate-950 font-bold'
@@ -1005,6 +1040,128 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* TAB CONTENT: DATABASE AUDIT TABLE LOGS */}
+            {wireLogTab === 'db_logs' && (
+              <div className="bg-slate-900 p-3.5 rounded-lg border border-slate-800 space-y-3 text-slate-300">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-emerald-400" />
+                    <span className="font-bold text-white text-xs">PostgreSQL Table: <code className="text-emerald-400 bg-slate-950 px-1.5 py-0.5 rounded font-mono">llm_prompt_logs</code></span>
+                    <span className="text-[11px] text-slate-400 hidden sm:inline">(Auto-persists every inference across Ollama, Gemini &amp; Claude)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={loadDbLogs}
+                      disabled={loadingDbLogs}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-mono flex items-center gap-1 border border-slate-700 transition"
+                    >
+                      <RotateCcw className={`w-3 h-3 ${loadingDbLogs ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
+                      Refresh Logs
+                    </button>
+                    <button
+                      onClick={() => handleCopy(`CREATE SEQUENCE IF NOT EXISTS llm_prompt_log_seq MINVALUE 1 MAXVALUE 100 START WITH 1 INCREMENT BY 1 CYCLE;
+
+CREATE TABLE IF NOT EXISTS llm_prompt_logs (
+    id SERIAL PRIMARY KEY,
+    log_id VARCHAR(64) UNIQUE NOT NULL,
+    running_number INTEGER NOT NULL,
+    engine VARCHAR(50) NOT NULL,
+    model_name VARCHAR(100),
+    fired_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    prompt_text TEXT NOT NULL,
+    response_text TEXT NOT NULL,
+    time_taken_ms INTEGER NOT NULL,
+    status VARCHAR(30) DEFAULT 'SUCCESS',
+    response_json JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_engine ON llm_prompt_logs(engine);
+CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_fired_at ON llm_prompt_logs(fired_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(running_number);`, 'sql_script')}
+                      className="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-[11px] font-mono flex items-center gap-1 border border-emerald-500/30 transition"
+                    >
+                      {copied === 'sql_script' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copied === 'sql_script' ? 'Copied DDL SQL!' : 'Copy SQL Script'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current Active Run Card */}
+                {narrative?.logId ? (
+                  <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/30 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] font-mono">
+                    <div>
+                      <span className="text-slate-500 block">Current Log ID</span>
+                      <span className="text-emerald-300 font-bold">{narrative.logId}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Running Seq #</span>
+                      <span className="text-white font-bold">#{narrative.runningNumber || '1'} (Cycle 1..100)</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Engine &amp; Model</span>
+                      <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'} ({narrative.ollamaStats?.model || 'gemini-3.8-flash'})</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Time Taken</span>
+                      <span className="text-cyan-300 font-bold">{narrative.executionTimeMs} ms</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 bg-slate-950 rounded border border-slate-800 text-[11px] text-slate-400">
+                    💡 Click <strong>"Generate Astrological Reasoning"</strong> or select a house to fire an LLM run. It will automatically write into table <code>llm_prompt_logs</code> and display the assigned Log ID.
+                  </div>
+                )}
+
+                {/* Recent Table Logs */}
+                <div className="space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold block">Recent Persisted Logs ({dbLogs.length} rows):</span>
+                  {loadingDbLogs ? (
+                    <div className="p-4 text-center text-slate-500 font-mono text-[11px]">Loading table logs...</div>
+                  ) : dbLogs.length === 0 ? (
+                    <div className="p-3 bg-slate-950 rounded border border-slate-800 text-center text-slate-500 font-mono text-[11px]">
+                      No previous logs found yet. Run an inference to see rows inserted into table <code>llm_prompt_logs</code>.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-56 rounded border border-slate-800">
+                      <table className="w-full text-left font-mono text-[10px]">
+                        <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                          <tr>
+                            <th className="p-1.5">Seq</th>
+                            <th className="p-1.5">Log ID</th>
+                            <th className="p-1.5">Engine</th>
+                            <th className="p-1.5">Fired At</th>
+                            <th className="p-1.5">Duration</th>
+                            <th className="p-1.5">Status</th>
+                            <th className="p-1.5">Prompt Preview</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
+                          {dbLogs.map((log: any, idx: number) => (
+                            <tr key={log.log_id || idx} className="hover:bg-slate-800/40">
+                              <td className="p-1.5 text-slate-400">#{log.running_number}</td>
+                              <td className="p-1.5 text-emerald-300 font-bold">{log.log_id}</td>
+                              <td className="p-1.5 text-amber-300">{log.engine}</td>
+                              <td className="p-1.5 text-slate-400">{log.fired_at ? new Date(log.fired_at).toLocaleTimeString() : '-'}</td>
+                              <td className="p-1.5 text-cyan-300">{log.time_taken_ms}ms</td>
+                              <td className="p-1.5">
+                                <span className={`px-1 py-0.5 rounded text-[9px] ${log.status === 'SUCCESS' ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>
+                                  {log.status || 'SUCCESS'}
+                                </span>
+                              </td>
+                              <td className="p-1.5 text-slate-400 max-w-xs truncate" title={log.prompt_text}>
+                                {log.prompt_text?.slice(0, 50)}...
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

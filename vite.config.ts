@@ -366,6 +366,87 @@ function astroApiPlugin(): Plugin {
           return;
         }
 
+        // 7. POST /api/llm/log - Persist LLM prompt and response audit entry
+        if (url === '/api/llm/log' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const data = JSON.parse(body || '{}');
+              const engine = data.engine || 'Gemini';
+              const engineClean = engine.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8) || 'LLM';
+              const runningNum = ((global as any).__llm_log_seq = ((global as any).__llm_log_seq || 0) % 100 + 1);
+              const nowStr = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+              const logId = `LOG-${engineClean}-${String(runningNum).padStart(3, '0')}-${nowStr}`;
+
+              const logEntry = {
+                log_id: logId,
+                running_number: runningNum,
+                engine: data.engine || 'Gemini',
+                model_name: data.model_name || data.model || '',
+                fired_at: data.fired_at || new Date().toISOString(),
+                prompt_text: data.prompt_text || data.prompt || '',
+                response_text: data.response_text || data.response || '',
+                time_taken_ms: Number(data.time_taken_ms || data.duration_ms || 0),
+                status: data.status || 'SUCCESS',
+                response_json: data.response_json || data.rawResponseBody || null,
+                created_at: new Date().toISOString()
+              };
+
+              // Persist to local JSON data store
+              const dataPath = path.resolve(__dirname, 'src/data/stored_prompt_logs.json');
+              let existingLogs: any[] = [];
+              if (fs.existsSync(dataPath)) {
+                try {
+                  existingLogs = JSON.parse(fs.readFileSync(dataPath, 'utf-8') || '[]');
+                } catch {}
+              }
+              existingLogs.unshift(logEntry);
+              if (existingLogs.length > 200) {
+                existingLogs = existingLogs.slice(0, 200);
+              }
+              fs.writeFileSync(dataPath, JSON.stringify(existingLogs, null, 2), 'utf-8');
+
+              // Asynchronously forward to Python Postgres API server (port 5000) if active
+              try {
+                fetch('http://127.0.0.1:5000/api/llm/log', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data)
+                }).catch(() => {});
+              } catch {}
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                log_id: logId,
+                running_number: runningNum,
+                persisted_in: 'stored_prompt_logs.json & postgresql (if active)'
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 8. GET /api/llm/logs - Retrieve LLM prompt logs
+        if (url.startsWith('/api/llm/logs') && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          const dataPath = path.resolve(__dirname, 'src/data/stored_prompt_logs.json');
+          let logs: any[] = [];
+          if (fs.existsSync(dataPath)) {
+            try {
+              logs = JSON.parse(fs.readFileSync(dataPath, 'utf-8') || '[]');
+            } catch {}
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify({ logs }));
+          return;
+        }
+
         next();
       });
     }

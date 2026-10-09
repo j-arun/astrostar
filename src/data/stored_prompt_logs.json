@@ -1,0 +1,15 @@
+[
+  {
+    "log_id": "LOG-GEMINI-001-20261009084353",
+    "running_number": 1,
+    "engine": "Gemini",
+    "model_name": "gemini-3.8-flash",
+    "fired_at": "2026-10-09T08:43:53.256Z",
+    "prompt_text": "Test prompt October 2026",
+    "response_text": "Test response",
+    "time_taken_ms": 1250,
+    "status": "SUCCESS",
+    "response_json": null,
+    "created_at": "2026-10-09T08:43:53.256Z"
+  }
+]

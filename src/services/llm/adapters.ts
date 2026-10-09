@@ -1611,8 +1611,61 @@ export class ClaudeAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    return synthesizeAnalyticalVedicNarrative(context, 'claude', startMs);
+    const prompt = buildVedicPrompt(context, 'Anthropic Claude');
+    const narrative = synthesizeAnalyticalVedicNarrative(context, 'claude', startMs);
+    return {
+      ...narrative,
+      promptSent: prompt,
+      endpointUsed: 'Anthropic Claude Engine (Deterministic Parashara Logic)'
+    };
   }
+}
+
+export interface LLMPromptLogPayload {
+  engine: 'Ollama' | 'Gemini' | 'Claude';
+  model_name?: string;
+  fired_at: string;
+  prompt_text: string;
+  response_text: string;
+  time_taken_ms: number;
+  status: 'SUCCESS' | 'FALLBACK' | 'ERROR';
+  response_json?: any;
+}
+
+/**
+ * Persists LLM prompt & response audit log entry into PostgreSQL table llm_prompt_logs
+ * and local fallback storage.
+ */
+export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{ success: boolean; log_id?: string; running_number?: number }> {
+  try {
+    const res = await fetch('/api/llm/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn('Could not post to /api/llm/log:', e);
+  }
+  return { success: false };
+}
+
+/**
+ * Retrieves the latest LLM inference prompt logs from the database
+ */
+export async function fetchRecentLLMPromptLogs(limit: number = 20): Promise<any[]> {
+  try {
+    const res = await fetch(`/api/llm/logs?limit=${limit}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.logs || [];
+    }
+  } catch (e) {
+    console.warn('Could not fetch LLM prompt logs:', e);
+  }
+  return [];
 }
 
 /**
@@ -1626,8 +1679,55 @@ export class LLMReasoningService {
   };
 
   async generate(providerId: LLMProviderId, context: VedicHouseContext): Promise<LLMThreePartNarrative> {
+    const startMs = Date.now();
     const adapter = this.adapters[providerId] || this.adapters.local_qwen;
-    return adapter.generateReasoning(context);
+    const result = await adapter.generateReasoning(context);
+
+    // Map provider to engine name
+    const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
+      local_qwen: 'Ollama',
+      gemini_pro: 'Gemini',
+      claude: 'Claude'
+    };
+    const engine = engineMap[providerId] || 'Gemini';
+    const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
+      providerId === 'gemini_pro' ? 'gemini-3.8-flash' :
+      providerId === 'claude' ? 'claude-3-5-sonnet' :
+      (context.selectedLocalModel || 'qwen2.5:7b-instruct')
+    );
+
+    const responseText = (typeof result.rawResponseBody === 'string' ? result.rawResponseBody : null)
+      || result.rawResponseBody?.response
+      || result.rawResponseBody?.text
+      || result.rawMarkdown
+      || result.part1_probabilityAndScope
+      || '';
+
+    const status = result.connectionStatus === 'connected_live' ? 'SUCCESS'
+      : (result.connectionStatus === 'connection_failed_fallback' ? 'FALLBACK' : 'SUCCESS');
+
+    // Automatically fire write into the audit table immediately upon response
+    try {
+      const logRes = await persistLLMPromptLog({
+        engine,
+        model_name: modelName,
+        fired_at: new Date(startMs).toISOString(),
+        prompt_text: result.promptSent || '',
+        response_text: typeof responseText === 'string' ? responseText : JSON.stringify(responseText),
+        time_taken_ms: result.executionTimeMs || (Date.now() - startMs),
+        status,
+        response_json: result.rawResponseBody
+      });
+
+      if (logRes?.log_id) {
+        result.logId = logRes.log_id;
+        result.runningNumber = logRes.running_number;
+      }
+    } catch (logErr) {
+      console.warn('Error firing LLM prompt log write:', logErr);
+    }
+
+    return result;
   }
 }
 

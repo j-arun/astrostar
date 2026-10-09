@@ -324,6 +324,8 @@ export interface LLMThreePartNarrative {
     promptEvalCount?: number;
     evalCount?: number;
   };
+  logId?: string;
+  runningNumber?: number;
 }
 
 export interface ILLMAdapter {

@@ -313,6 +313,28 @@ def ensure_tables_exist(conn):
             response_payload JSONB NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE SEQUENCE IF NOT EXISTS llm_prompt_log_seq
+            MINVALUE 1
+            MAXVALUE 100
+            START WITH 1
+            INCREMENT BY 1
+            CYCLE;
+
+        CREATE TABLE IF NOT EXISTS llm_prompt_logs (
+            id SERIAL PRIMARY KEY,
+            log_id VARCHAR(64) UNIQUE NOT NULL,
+            running_number INTEGER NOT NULL,
+            engine VARCHAR(50) NOT NULL,
+            model_name VARCHAR(100),
+            fired_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            prompt_text TEXT NOT NULL,
+            response_text TEXT NOT NULL,
+            time_taken_ms INTEGER NOT NULL,
+            status VARCHAR(30) DEFAULT 'SUCCESS',
+            response_json JSONB,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     conn.commit()
     cur.close()
@@ -391,6 +413,124 @@ def save_person_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, An
     except Exception as e:
         if conn: conn.close()
         return {"success": False, "error": str(e)}
+
+
+def save_llm_prompt_log_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+    engine = data.get("engine", "Gemini")
+    model_name = data.get("model_name", "")
+    fired_at = data.get("fired_at") or datetime.now().isoformat()
+    prompt_text = data.get("prompt_text") or data.get("prompt", "")
+    response_text = data.get("response_text") or data.get("response", "")
+    time_taken_ms = int(data.get("time_taken_ms") or data.get("duration_ms") or 0)
+    status = data.get("status", "SUCCESS")
+    response_json = data.get("response_json") or data.get("rawResponseBody")
+
+    now_str = datetime.now().strftime("%Y%m%d%H%M%S")
+    engine_clean = re.sub(r'[^A-Za-z0-9]', '', engine).upper()[:8] or "LLM"
+
+    conn = get_db_connection(cfg)
+    if conn:
+        try:
+            ensure_tables_exist(conn)
+            cur = conn.cursor()
+            cur.execute("SELECT nextval('llm_prompt_log_seq');")
+            running_num = int(cur.fetchone()[0])
+            log_id = f"LOG-{engine_clean}-{running_num:03d}-{now_str}"
+
+            cur.execute("""
+                INSERT INTO llm_prompt_logs (
+                    log_id, running_number, engine, model_name, fired_at,
+                    prompt_text, response_text, time_taken_ms, status, response_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """, (
+                log_id, running_num, engine, model_name, fired_at,
+                prompt_text, response_text, time_taken_ms, status,
+                json.dumps(response_json) if response_json is not None else None
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {
+                "success": True,
+                "log_id": log_id,
+                "running_number": running_num,
+                "persisted_in": "postgresql.llm_prompt_logs"
+            }
+        except Exception as e:
+            if conn:
+                conn.rollback()
+                conn.close()
+            print(f"Error persisting LLM log to DB: {e}")
+
+    # Fallback storage if PostgreSQL is offline
+    fallback_path = os.path.join(os.path.dirname(__file__), "scripts", "stored_prompt_logs.json")
+    try:
+        logs = []
+        if os.path.exists(fallback_path):
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                logs = json.load(f)
+        running_num = (len(logs) % 100) + 1
+        log_id = f"LOG-{engine_clean}-{running_num:03d}-{now_str}"
+        entry = {
+            "log_id": log_id,
+            "running_number": running_num,
+            "engine": engine,
+            "model_name": model_name,
+            "fired_at": fired_at,
+            "prompt_text": prompt_text,
+            "response_text": response_text,
+            "time_taken_ms": time_taken_ms,
+            "status": status,
+            "response_json": response_json,
+            "created_at": datetime.now().isoformat()
+        }
+        logs.insert(0, entry)
+        if len(logs) > 200:
+            logs = logs[:200]
+        with open(fallback_path, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=2)
+        return {
+            "success": True,
+            "log_id": log_id,
+            "running_number": running_num,
+            "persisted_in": "scripts/stored_prompt_logs.json (DB offline fallback)"
+        }
+    except Exception as e2:
+        return {"success": False, "error": str(e2)}
+
+
+def get_llm_prompt_logs_from_db(cfg: Dict[str, Any], limit: int = 50) -> List[Dict[str, Any]]:
+    conn = get_db_connection(cfg)
+    if conn:
+        try:
+            ensure_tables_exist(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("""
+                SELECT id, log_id, running_number, engine, model_name,
+                       fired_at, prompt_text, response_text, time_taken_ms, status, created_at
+                FROM llm_prompt_logs
+                ORDER BY id DESC
+                LIMIT %s;
+            """, (limit,))
+            rows = cur.fetchall()
+            for r in rows:
+                if r.get("fired_at"): r["fired_at"] = str(r["fired_at"])
+                if r.get("created_at"): r["created_at"] = str(r["created_at"])
+            cur.close()
+            conn.close()
+            return rows
+        except Exception:
+            if conn: conn.close()
+
+    fallback_path = os.path.join(os.path.dirname(__file__), "scripts", "stored_prompt_logs.json")
+    if os.path.exists(fallback_path):
+        try:
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                return json.load(f)[:limit]
+        except Exception:
+            pass
+    return []
+
 
 
 # =============================================================================
@@ -805,6 +945,14 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"persons": persons}).encode())
             return
 
+        elif parsed.path.startswith("/api/llm/logs"):
+            params = urllib.parse.parse_qs(parsed.query)
+            limit = int(params.get("limit", [50])[0])
+            logs = get_llm_prompt_logs_from_db(cfg, limit=limit)
+            self._set_headers(200)
+            self.wfile.write(json.dumps({"logs": logs}, indent=2).encode())
+            return
+
         elif parsed.path == "/api/user-queries/recent":
             # Fetch recent queries from user_queries table
             conn = get_db_connection(cfg)
@@ -975,6 +1123,19 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                     self._set_headers(500)
                     self.wfile.write(json.dumps({"error": str(e2)}).encode())
                     return
+
+        elif parsed.path == "/api/llm/log":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                data = json.loads(body_bytes.decode()) if body_bytes else {}
+            except Exception:
+                data = {}
+            res = save_llm_prompt_log_to_db(cfg, data)
+            status = 200 if res.get("success") else 500
+            self._set_headers(status)
+            self.wfile.write(json.dumps(res, indent=2).encode())
+            return
 
         elif parsed.path == "/api/horoscope/save-person":
             content_length = int(self.headers.get("Content-Length", 0))

@@ -43,6 +43,7 @@ import {
 } from '../data/parasharaCalculations';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext } from '../services/llm/types';
+import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 
 export function getSignIndexFromName(signName: string, fallback = 9): number {
   if (!signName) return fallback;
@@ -563,10 +564,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
       const spans = monthlyGrahaSpans.filter(s => s.graha_key === g);
       if (spans.length > 1) {
         for (let i = 1; i < spans.length; i++) {
-          events.push(`${g} enters ${spans[i].sign_name.split(' ')[0]} on Day ${spans[i].start_day}`);
+          events.push(`${toCleanEnglishPlanet(g)} enters ${toCleanEnglishSign(spans[i].sign_name)} on Day ${spans[i].start_day}`);
         }
       } else if (spans.length === 1) {
-        events.push(`${g} transits continuously in ${spans[0].sign_name.split(' ')[0]} (Days 1–${daysInMonth})`);
+        events.push(`${toCleanEnglishPlanet(g)} transits continuously in ${toCleanEnglishSign(spans[0].sign_name)} (Days 1–${daysInMonth})`);
       }
     }
     return events;
@@ -655,7 +656,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     const ctx: VedicHouseContext = {
       houseNumber: houseNum,
       rashiIndex: signIndex,
-      rashiName: signDef.eng.split(' ')[0],
+      rashiName: toCleanEnglishSign(signDef.eng),
       tamilName: signDef.tamil,
       isLagna: isLagnaHouse,
       activationScore: houseActivation?.totalScore || 0,
@@ -693,16 +694,16 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
           const dist = ((signIndex - rashiIdx + 12) % 12) + 1;
           if (dist === 7) {
             aspectsTarget = true;
-            aspectType = '7th Direct Aspect (Opposition Drishti)';
+            aspectType = '7th Direct Opposition Aspect';
           } else if (t.graha_key === 'Jupiter' && (dist === 5 || dist === 9)) {
             aspectsTarget = true;
-            aspectType = `${dist}th Special Trinal Drishti (Guru Drishti)`;
+            aspectType = `${dist}th Special Trinal Aspect (Jupiter Aspect)`;
           } else if (t.graha_key === 'Saturn' && (dist === 3 || dist === 10)) {
             aspectsTarget = true;
-            aspectType = `${dist}th Special Sani Drishti`;
+            aspectType = `${dist}th Special Aspect (Saturn Aspect)`;
           } else if (t.graha_key === 'Mars' && (dist === 4 || dist === 8)) {
             aspectsTarget = true;
-            aspectType = `${dist}th Special Sevvai Drishti`;
+            aspectType = `${dist}th Special Aspect (Mars Aspect)`;
           } else if ((t.graha_key === 'Rahu' || t.graha_key === 'Ketu') && (dist === 5 || dist === 9)) {
             aspectsTarget = true;
             aspectType = `${dist}th Nodal Trinal Aspect`;
@@ -740,7 +741,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
       natalJanmaStar: {
         nakshatra_name: activeProfile.birth_star || 'Anuradha',
         pada: activeProfile.birth_star_pada || 2,
-        rashi_name: activeProfile.birth_rashi || 'Vrischigam',
+        rashi_name: toCleanEnglishSign(activeProfile.birth_rashi || 'Scorpio'),
         rashi_index: natalRashiIdx
       },
       // 2. Tara Bala for all 9 transiting planets

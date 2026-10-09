@@ -10,26 +10,280 @@ import {
   ILLMAdapter
 } from './types';
 
-// Classical House (Bhava) Significations Matrix
+// Classical House Significations Matrix (Clean Unified English)
 const BHAVA_NAMES: Record<number, { title: string; karakas: string; financialRole: string }> = {
-  1: { title: 'Tanu Bhava (1st - Self, Vitality & Identity)', karakas: 'Sun, Mars', financialRole: 'Personal direct efforts & self-made income' },
-  2: { title: 'Dhana Bhava (2nd - Accumulated Wealth, Liquid Savings & Family)', karakas: 'Jupiter, Mercury', financialRole: 'Accumulated liquid cash, savings deposits & family wealth' },
-  3: { title: 'Sahaja Bhava (3rd - Enterprise, Valor & Contracts)', karakas: 'Mars, Saturn', financialRole: 'Commission, short contracts, media, trade & entrepreneurial grit' },
-  4: { title: 'Sukha Bhava (4th - Real Estate, Vehicles & Fixed Assets)', karakas: 'Moon, Venus, Mars', financialRole: 'Collateral loans, mortgage financing, property equity & fixed capital' },
-  5: { title: 'Putra Bhava (5th - Intellect, Speculation & Creativity)', karakas: 'Jupiter', financialRole: 'Speculative investments, stock equity, bonuses & creative ventures' },
-  6: { title: 'Ari / Rina Bhava (6th - Debt, Banking Loans & Litigation)', karakas: 'Mars, Saturn', financialRole: 'Bank borrowings, credit lines, debt restructuring & servicing' },
-  7: { title: 'Yuvati Bhava (7th - Partnerships, Legal Contracts & Public Standing)', karakas: 'Venus', financialRole: 'Joint venture equity, business partnership capital & customer contracts' },
-  8: { title: 'Randhra Bhava (8th - Sudden Windfalls, Insurance & Inheritance)', karakas: 'Saturn', financialRole: 'Insurance claims, inheritance, joint spousal funds & unearned windfalls' },
-  9: { title: 'Bhagya Bhava (9th - Fortune, Divine Grace & Long Journeys)', karakas: 'Jupiter, Sun', financialRole: 'Ancestral capital, divine fortune, venture patronage & high-ticket investments' },
-  10: { title: 'Karma Bhava (10th - Career Elevation, Status & Authority)', karakas: 'Sun, Mercury, Saturn', financialRole: 'Corporate salary, executive remuneration, professional turnover' },
-  11: { title: 'Labha Bhava (11th - Maximum Gains, Profits & Large Networks)', karakas: 'Jupiter', financialRole: 'Residual income, milestone profits, venture syndicates & large scale inflows' },
-  12: { title: 'Vyaya Bhava (12th - Capital Outflows, Foreign Investments & Exit)', karakas: 'Saturn, Ketu', financialRole: 'Institutional foreign capital, high-ticket expenses & investment deployments' }
+  1: { title: '1st House (Self, Vitality & Identity)', karakas: 'Sun, Mars', financialRole: 'Personal direct efforts & self-made income' },
+  2: { title: '2nd House (Accumulated Wealth, Liquid Savings & Family)', karakas: 'Jupiter, Mercury', financialRole: 'Accumulated liquid cash, savings deposits & family wealth' },
+  3: { title: '3rd House (Enterprise, Valor & Contracts)', karakas: 'Mars, Saturn', financialRole: 'Commission, short contracts, media, trade & entrepreneurial grit' },
+  4: { title: '4th House (Real Estate, Vehicles & Fixed Assets)', karakas: 'Moon, Venus, Mars', financialRole: 'Collateral loans, mortgage financing, property equity & fixed capital' },
+  5: { title: '5th House (Intellect, Speculation & Creativity)', karakas: 'Jupiter', financialRole: 'Speculative investments, stock equity, bonuses & creative ventures' },
+  6: { title: '6th House (Debt, Banking Loans & Litigation)', karakas: 'Mars, Saturn', financialRole: 'Bank borrowings, credit lines, debt restructuring & servicing' },
+  7: { title: '7th House (Partnerships, Legal Contracts & Public Standing)', karakas: 'Venus', financialRole: 'Joint venture equity, business partnership capital & customer contracts' },
+  8: { title: '8th House (Sudden Windfalls, Insurance & Inheritance)', karakas: 'Saturn', financialRole: 'Insurance claims, inheritance, joint spousal funds & unearned windfalls' },
+  9: { title: '9th House (Fortune, Divine Grace & Higher Pursuits)', karakas: 'Jupiter, Sun', financialRole: 'Ancestral capital, divine fortune, venture patronage & high-ticket investments' },
+  10: { title: '10th House (Career Elevation, Status & Authority)', karakas: 'Sun, Mercury, Saturn', financialRole: 'Corporate salary, executive remuneration, professional turnover' },
+  11: { title: '11th House (Maximum Gains, Profits & Large Networks)', karakas: 'Jupiter', financialRole: 'Residual income, milestone profits, venture syndicates & large scale inflows' },
+  12: { title: '12th House (Capital Outflows, Foreign Investments & Exit)', karakas: 'Saturn, Ketu', financialRole: 'Institutional foreign capital, high-ticket expenses & investment deployments' }
 };
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+export const ZODIAC_ENGLISH_LOOKUP: Record<string, string> = {
+  // English standard
+  'aries': 'Aries',
+  'taurus': 'Taurus',
+  'gemini': 'Gemini',
+  'cancer': 'Cancer',
+  'leo': 'Leo',
+  'virgo': 'Virgo',
+  'libra': 'Libra',
+  'scorpio': 'Scorpio',
+  'sagittarius': 'Sagittarius',
+  'capricorn': 'Capricorn',
+  'aquarius': 'Aquarius',
+  'pisces': 'Pisces',
+
+  // Sanskrit / Tamil / South Indian transliterations & Tamil script
+  'mesham': 'Aries',
+  'mesha': 'Aries',
+  'மேஷம்': 'Aries',
+
+  'rishabam': 'Taurus',
+  'rishaba': 'Taurus',
+  'vrishabha': 'Taurus',
+  'vrishabh': 'Taurus',
+  'ரிஷபம்': 'Taurus',
+
+  'mithunam': 'Gemini',
+  'mithuna': 'Gemini',
+  'மிதுனம்': 'Gemini',
+
+  'katakam': 'Cancer',
+  'kadagam': 'Cancer',
+  'kadaga': 'Cancer',
+  'karkataka': 'Cancer',
+  'karka': 'Cancer',
+  'kadakam': 'Cancer',
+  'கடகம்': 'Cancer',
+
+  'simham': 'Leo',
+  'simha': 'Leo',
+  'சிம்மம்': 'Leo',
+
+  'kanni': 'Virgo',
+  'kanya': 'Virgo',
+  'கன்னி': 'Virgo',
+
+  'thulaam': 'Libra',
+  'thulam': 'Libra',
+  'tula': 'Libra',
+  'துலாம்': 'Libra',
+
+  'vrischigam': 'Scorpio',
+  'viruchigam': 'Scorpio',
+  'vrischika': 'Scorpio',
+  'vruschikam': 'Scorpio',
+  'விருச்சிகம்': 'Scorpio',
+
+  'dhanus': 'Sagittarius',
+  'dhanusu': 'Sagittarius',
+  'dhanu': 'Sagittarius',
+  'தனுசு': 'Sagittarius',
+
+  'makaram': 'Capricorn',
+  'makara': 'Capricorn',
+  'மகரம்': 'Capricorn',
+
+  'kumbam': 'Aquarius',
+  'kumbha': 'Aquarius',
+  'கும்பம்': 'Aquarius',
+
+  'meenam': 'Pisces',
+  'meena': 'Pisces',
+  'மீனம்': 'Pisces'
+};
+
+export const PLANET_ENGLISH_LOOKUP: Record<string, string> = {
+  // English
+  'sun': 'Sun',
+  'surya': 'Sun',
+  'suryan': 'Sun',
+  'suriyan': 'Sun',
+  'ravi': 'Sun',
+  'ஞாயிறு': 'Sun',
+
+  'moon': 'Moon',
+  'chandra': 'Moon',
+  'chandran': 'Moon',
+  'soma': 'Moon',
+  'திங்கள்': 'Moon',
+
+  'mars': 'Mars',
+  'mangal': 'Mars',
+  'sevvai': 'Mars',
+  'chevvai': 'Mars',
+  'angaraka': 'Mars',
+  'kuja': 'Mars',
+  'செவ்வாய்': 'Mars',
+
+  'mercury': 'Mercury',
+  'budha': 'Mercury',
+  'budhan': 'Mercury',
+  'புதன்': 'Mercury',
+
+  'jupiter': 'Jupiter',
+  'guru': 'Jupiter',
+  'brihaspati': 'Jupiter',
+  'vyazhan': 'Jupiter',
+  'வியாழன்': 'Jupiter',
+
+  'venus': 'Venus',
+  'sukra': 'Venus',
+  'shukra': 'Venus',
+  'velli': 'Venus',
+  'வெள்ளி': 'Venus',
+
+  'saturn': 'Saturn',
+  'sani': 'Saturn',
+  'shani': 'Saturn',
+  'shaneeshwara': 'Saturn',
+  'சனி': 'Saturn',
+
+  'rahu': 'Rahu',
+  'ராகு': 'Rahu',
+
+  'ketu': 'Ketu',
+  'கேது': 'Ketu',
+
+  'lagna': 'Ascendant',
+  'ascendant': 'Ascendant'
+};
+
+/**
+ * Normalizes zodiac sign names to pure, clean standard English:
+ * e.g., "Katakam (Cancer)" -> "Cancer"
+ * e.g., "Kadaga" / "Kadagam" -> "Cancer"
+ * e.g., "Meenam (Pisces)" -> "Pisces"
+ * e.g., "Meenam" -> "Pisces"
+ * e.g., "Mesham (Aries)" -> "Aries"
+ * e.g., "Vrischigam (Scorpio)" -> "Scorpio"
+ */
+export function toCleanEnglishSign(raw?: string): string {
+  if (!raw) return '';
+  const clean = raw.trim();
+
+  // 1. If text has parentheses e.g. "Katakam (Cancer)" or "Cancer (Katakam)"
+  const parenMatch = clean.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1]) {
+    const inside = parenMatch[1].trim().toLowerCase();
+    if (ZODIAC_ENGLISH_LOOKUP[inside]) {
+      return ZODIAC_ENGLISH_LOOKUP[inside];
+    }
+  }
+
+  // 2. Check text outside parentheses
+  const outside = clean.replace(/\s*\(.*?\)/g, '').trim().toLowerCase();
+  if (ZODIAC_ENGLISH_LOOKUP[outside]) {
+    return ZODIAC_ENGLISH_LOOKUP[outside];
+  }
+
+  // 3. Check individual tokens
+  const words = clean.toLowerCase().split(/[\s,()/-]+/);
+  for (const w of words) {
+    if (ZODIAC_ENGLISH_LOOKUP[w]) {
+      return ZODIAC_ENGLISH_LOOKUP[w];
+    }
+  }
+
+  // Fallback: strip Tamil script and parentheses
+  return clean.replace(/[\u0B80-\u0BFF]/g, '').replace(/\s*\(.*?\)/g, '').trim();
+}
+
+/**
+ * Normalizes planet names to pure, clean standard English:
+ * e.g., "Jupiter (Guru)" -> "Jupiter"
+ * e.g., "Guru" -> "Jupiter"
+ * e.g., "Mars (Sevvai)" -> "Mars"
+ * e.g., "Sevvai" -> "Mars"
+ * e.g., "Saturn (Sani)" -> "Saturn"
+ */
+export function toCleanEnglishPlanet(raw?: string): string {
+  if (!raw) return '';
+  const clean = raw.trim();
+
+  const parenMatch = clean.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1]) {
+    const inside = parenMatch[1].trim().toLowerCase();
+    if (PLANET_ENGLISH_LOOKUP[inside]) {
+      return PLANET_ENGLISH_LOOKUP[inside];
+    }
+  }
+
+  const outside = clean.replace(/\s*\(.*?\)/g, '').trim().toLowerCase();
+  if (PLANET_ENGLISH_LOOKUP[outside]) {
+    return PLANET_ENGLISH_LOOKUP[outside];
+  }
+
+  const words = clean.toLowerCase().split(/[\s,()/-]+/);
+  for (const w of words) {
+    if (PLANET_ENGLISH_LOOKUP[w]) {
+      return PLANET_ENGLISH_LOOKUP[w];
+    }
+  }
+
+  return clean.replace(/[\u0B80-\u0BFF]/g, '').replace(/\s*\(.*?\)/g, '').trim();
+}
+
+/**
+ * Replaces any transliterated Tamil/Sanskrit zodiac and planet words within sentences
+ * with their standard English equivalents, removing redundancy:
+ * e.g., "Jupiter transiting in Kadaga" -> "Jupiter transiting in Cancer"
+ * e.g., "Sun enters Katakam on Day 15" -> "Sun enters Cancer on Day 15"
+ */
+export function cleanEnglishSentence(sentence?: string): string {
+  if (!sentence) return '';
+  let res = sentence;
+
+  // Remove Tamil script characters
+  res = res.replace(/[\u0B80-\u0BFF]+/g, '');
+
+  // Remove redundant parentheses containing known signs or planets
+  res = res.replace(/\((?:Guru|Sevvai|Sani|Sukra|Budha|Surya|Chandra|Katakam|Kadagam|Meenam|Mesham|Rishabam|Mithunam|Simham|Kanni|Thulaam|Vrischigam|Dhanus|Makaram|Kumbam)\)/gi, '');
+
+  // Replace specific transliterated signs
+  const signReplacements: [RegExp, string][] = [
+    [/\b(?:Kadaga|Kadagam|Katakam|Karkataka|Karka)\b/gi, 'Cancer'],
+    [/\b(?:Meenam|Meena)\b/gi, 'Pisces'],
+    [/\b(?:Mesham|Mesha)\b/gi, 'Aries'],
+    [/\b(?:Rishabam|Rishaba|Vrishabha)\b/gi, 'Taurus'],
+    [/\b(?:Mithunam|Mithuna)\b/gi, 'Gemini'],
+    [/\b(?:Simham|Simha)\b/gi, 'Leo'],
+    [/\b(?:Kanni|Kanya)\b/gi, 'Virgo'],
+    [/\b(?:Thulaam|Thulam|Tula)\b/gi, 'Libra'],
+    [/\b(?:Vrischigam|Viruchigam|Vrischika)\b/gi, 'Scorpio'],
+    [/\b(?:Dhanus|Dhanusu|Dhanu)\b/gi, 'Sagittarius'],
+    [/\b(?:Makaram|Makara)\b/gi, 'Capricorn'],
+    [/\b(?:Kumbam|Kumbha)\b/gi, 'Aquarius'],
+    [/\bGuru\b/gi, 'Jupiter'],
+    [/\b(?:Sevvai|Chevvai|Mangal|Angaraka)\b/gi, 'Mars'],
+    [/\b(?:Sukra|Shukra|Velli)\b/gi, 'Venus'],
+    [/\b(?:Sani|Shani|Shaneeshwara)\b/gi, 'Saturn'],
+    [/\b(?:Budha|Budhan)\b/gi, 'Mercury'],
+    [/\b(?:Surya|Suryan|Suriyan|Ravi)\b/gi, 'Sun'],
+    [/\b(?:Chandra|Chandran|Soma)\b/gi, 'Moon'],
+    [/\bDrishti\b/gi, 'Aspect']
+  ];
+
+  for (const [pattern, replacement] of signReplacements) {
+    res = res.replace(pattern, replacement);
+  }
+
+  // Clean double spaces or orphaned parentheses
+  return res.replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim();
+}
 
 /**
  * Builds the canonical Vedic reasoning prompt based on the native's chart and active transit context
@@ -47,19 +301,20 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
   };
 
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
+  const cleanTargetSign = toCleanEnglishSign(context.rashiName) || `House ${context.houseNumber}`;
 
   // 1. Flattened Natal D1 Placements table
   const natalD1Table = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
     ? context.flattenedNatalD1.map(p => 
-        `  • ${p.body_name.padEnd(9)}: ${p.rashi_name} (H${p.house_number || '?'}) | Sputa: ${p.degree_sputa || 'N/A'} | Nakshatra: ${p.nakshatra_name || 'N/A'} (Pada ${p.pada || '?'}) ${p.is_retrograde ? '[R]' : ''}`
+        `  • ${toCleanEnglishPlanet(p.body_name).padEnd(9)}: ${toCleanEnglishSign(p.rashi_name).padEnd(12)} (House ${p.house_number || '?'}) | Degree: ${p.degree_sputa || 'N/A'} | Nakshatra: ${p.nakshatra_name || 'N/A'} (Pada ${p.pada || '?'}) ${p.is_retrograde ? '[R]' : '[Direct]'}`
       ).join('\n')
     : (context.natalOccupants.length > 0
-        ? context.natalOccupants.map(o => `  • ${o.body_name} (Sputa: ${o.degree_sputa || 'N/A'}, Nakshatra: ${o.nakshatra_name || 'N/A'})`).join('\n')
+        ? context.natalOccupants.map(o => `  • ${toCleanEnglishPlanet(o.body_name)}: ${cleanTargetSign} | Degree: ${o.degree_sputa || 'N/A'} | Nakshatra: ${o.nakshatra_name || 'N/A'}`).join('\n')
         : '  • None (Empty Bhava)');
 
   // 2. Flattened Natal D9 Navamsha table
   const natalD9Table = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
-    ? context.flattenedNatalD9.map(p => `  • ${p.body_name.padEnd(9)}: ${p.rashi_name} | Sputa: ${p.degree_sputa || 'N/A'}`).join('\n')
+    ? context.flattenedNatalD9.map(p => `  • ${toCleanEnglishPlanet(p.body_name).padEnd(9)}: ${toCleanEnglishSign(p.rashi_name).padEnd(12)} | Degree: ${p.degree_sputa || 'N/A'}`).join('\n')
     : '  • Standard D9 placements align with natal varga grid';
 
   // 3. Complete All-Graha Gochara Transits (Full Zodiac Ephemeris including Jupiter)
@@ -69,45 +324,45 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
   const allTransitsTable = allTransits.length > 0
     ? allTransits.map(t => {
         const aspectNote = t.aspects_target_house ? ` ===> [${t.aspect_type}]` : '';
-        return `  • ${t.graha_key.padEnd(8)}: ${t.transit_rashi_name.padEnd(11)} (House ${t.house_from_lagna}) | Sputa: ${(t.degree_sputa || 'N/A').padEnd(11)} | Nakshatra: ${(t.nakshatra_name || 'N/A').padEnd(15)} (Pada ${t.pada || '?'}) ${t.is_retrograde ? '[R] (Retrograde)' : '[Direct]'}${t.is_custom ? ' [USER OVERRIDE]' : ''}${aspectNote}`;
+        return `  • ${toCleanEnglishPlanet(t.graha_key).padEnd(8)}: ${toCleanEnglishSign(t.transit_rashi_name).padEnd(11)} (House ${t.house_from_lagna}) | Degree: ${(t.degree_sputa || 'N/A').padEnd(10)} | Nakshatra: ${(t.nakshatra_name || 'N/A').padEnd(14)} (Pada ${t.pada || '?'}) | Motion: ${t.is_retrograde ? 'Retrograde [R]' : 'Direct'}${t.is_custom ? ' [USER OVERRIDE]' : ''}${aspectNote}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
-        ? context.transitOccupants.map(t => `  • ${t.graha_key} | Sputa: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`).join('\n')
+        ? context.transitOccupants.map(t => `  • ${toCleanEnglishPlanet(t.graha_key)}: Degree: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`).join('\n')
         : '  • Full planetary Gochara transits computed per ephemeris.');
 
   const targetSignTransitResidents = context.transitOccupants.length > 0
     ? context.transitOccupants.map(t => 
-        `  • ${t.graha_key}${t.is_custom ? ' [USER DRAG-AND-DROP ADJUSTED OVERRIDE]' : ''} ${t.is_retrograde ? '[R]' : '[Direct]'} | Sputa: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`
+        `  • ${toCleanEnglishPlanet(t.graha_key)}${t.is_custom ? ' [USER ADJUSTED OVERRIDE]' : ''}: Motion: ${t.is_retrograde ? 'Retrograde [R]' : 'Direct'} | Degree: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`
       ).join('\n')
     : '  • No Direct Transit Residents currently occupying this sign (Bhava operates via Lord governance and Aspect Drishti).';
 
   const jupiterSpotlight = jupiterTransit
-    ? `  • Current Sign: ${jupiterTransit.transit_rashi_name} (${jupiterTransit.transit_rashi_tamil || 'வியாழன்'}) in House ${jupiterTransit.house_from_lagna} from Natal Lagna
-  • Exact Sputa Degree: ${jupiterTransit.degree_sputa}
-  • Nakshatra & Pada: ${jupiterTransit.nakshatra_name} (Pada ${jupiterTransit.pada}) [Nakshatra Lord: ${jupiterTransit.nakshatra_lord || 'N/A'}]
-  • Motion: ${jupiterTransit.is_retrograde ? 'Retrograde [R] (வக்ரம்)' : 'Direct (நேர்கதி)'}
-  • Drishti on Target House ${context.houseNumber}: ${jupiterTransit.aspects_target_house ? `ACTIVE GURU DRISHTI ===> [${jupiterTransit.aspect_type}]` : `No direct 5/7/9 Drishti to House ${context.houseNumber} (Occupies House ${jupiterTransit.house_from_lagna})`}`
-    : `  • Jupiter (Guru) is transiting per ephemeris with active benefic influence.`;
+    ? `  • Current Sign: ${toCleanEnglishSign(jupiterTransit.transit_rashi_name)} (House ${jupiterTransit.house_from_lagna} from Natal Lagna)
+  • Exact Degree: ${jupiterTransit.degree_sputa}
+  • Nakshatra & Pada: ${jupiterTransit.nakshatra_name} (Pada ${jupiterTransit.pada}) [Lord: ${toCleanEnglishPlanet(jupiterTransit.nakshatra_lord || 'N/A')}]
+  • Motion: ${jupiterTransit.is_retrograde ? 'Retrograde [R]' : 'Direct'}
+  • Aspect on Target House ${context.houseNumber}: ${jupiterTransit.aspects_target_house ? `ACTIVE JUPITER DRISHTI ===> [${jupiterTransit.aspect_type}]` : `No direct 5/7/9 Drishti to House ${context.houseNumber} (Occupies House ${jupiterTransit.house_from_lagna})`}`
+    : `  • Jupiter is transiting per ephemeris with active benefic influence.`;
 
-  // 4. Moon (Chandra) 2.25-day Sign Progression Timeline
+  // 4. Moon 2.25-day Sign Progression Timeline
   const moonSpansTable = (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0)
     ? context.monthlyMoonSpans.map(m => 
-        `  • ${m.label} ${m.houseNumber === context.houseNumber ? '===> [DIRECT TRANSIT OVER TARGET HOUSE] <===' : [1, 4, 5, 7, 9, 10, 11].includes(m.houseNumber) ? '[Kendra/Trikona Angle]' : ''}`
+        `  • Day ${m.startDay}–${m.endDay}: Moon in ${toCleanEnglishSign(m.signName)} (House ${m.houseNumber}) ${m.houseNumber === context.houseNumber ? '===> [DIRECT TRANSIT OVER TARGET HOUSE] <===' : [1, 4, 5, 7, 9, 10, 11].includes(m.houseNumber) ? '[Angular/Trinal House]' : ''}`
       ).join('\n')
     : '  • Moon completes one 360-degree zodiacal circuit through 12 signs (~2.25 days per sign)';
 
-  // 5. Fast Graha Ingress Events
+  // 5. Fast Planet Ingress Events
   const ingressTable = (context.monthlyIngressEvents && context.monthlyIngressEvents.length > 0)
-    ? context.monthlyIngressEvents.map(e => `  • ${e}`).join('\n')
-    : '  • Major slow Grahas maintain sign stability; fast Grahas transition per ephemeris.';
+    ? context.monthlyIngressEvents.map(e => `  • ${cleanEnglishSentence(e)}`).join('\n')
+    : '  • Major slow planets maintain sign stability; fast planets transition per ephemeris.';
 
   // 6. Dasha Triad Delivery Report (Rule 5)
   const dashaDelivery = context.dashaDeliveryReport
     ? `Dasha Triad Delivery Index: ${(context.dashaDeliveryReport.overallIndex * 100).toFixed(0)}% (${context.dashaDeliveryReport.status})
-  - MD Lord (${context.activeDasha.mahadasha}): ${context.dashaDeliveryReport.mdDignity} [Score: ${context.dashaDeliveryReport.mdScore.toFixed(2)}]
-  - AD Lord (${context.activeDasha.antardasha}): ${context.dashaDeliveryReport.adDignity} [Score: ${context.dashaDeliveryReport.adScore.toFixed(2)}]
-  - PD Lord (${context.activeDasha.pratyantardasha}): ${context.dashaDeliveryReport.pdDignity} [Score: ${context.dashaDeliveryReport.pdScore.toFixed(2)}]`
-    : `Active Vimshottari Hierarchy: MD: ${context.activeDasha.mahadasha} > AD: ${context.activeDasha.antardasha} > PD: ${context.activeDasha.pratyantardasha}`;
+  - MD Lord (${toCleanEnglishPlanet(context.activeDasha.mahadasha)}): ${context.dashaDeliveryReport.mdDignity} [Score: ${context.dashaDeliveryReport.mdScore.toFixed(2)}]
+  - AD Lord (${toCleanEnglishPlanet(context.activeDasha.antardasha)}): ${context.dashaDeliveryReport.adDignity} [Score: ${context.dashaDeliveryReport.adScore.toFixed(2)}]
+  - PD Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}): ${context.dashaDeliveryReport.pdDignity} [Score: ${context.dashaDeliveryReport.pdScore.toFixed(2)}]`
+    : `Active Vimshottari Hierarchy: MD: ${toCleanEnglishPlanet(context.activeDasha.mahadasha)} > AD: ${toCleanEnglishPlanet(context.activeDasha.antardasha)} > PD: ${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}`;
 
   // 7. Matched Rules
   const rulesStr = context.matchedRules.length > 0
@@ -116,35 +371,35 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
 
   // 8. Advanced Parashara Payloads (Tara Bala, Chandra Bala, Ashtakavarga, Dasha Dossier, Karakas)
   const janmaStarStr = context.natalJanmaStar
-    ? `Native Janma Star: ${context.natalJanmaStar.nakshatra_name} (Pada ${context.natalJanmaStar.pada}) in ${context.natalJanmaStar.rashi_name}`
-    : 'Native Janma Star: Anuradha (Pada 2) in Vrischigam';
+    ? `Native Janma Star: ${context.natalJanmaStar.nakshatra_name} (Pada ${context.natalJanmaStar.pada}) in ${toCleanEnglishSign(context.natalJanmaStar.rashi_name)}`
+    : 'Native Janma Star: Anuradha (Pada 2) in Scorpio';
 
   const taraBalaTable = (context.taraBalaTransitPlanets && context.taraBalaTransitPlanets.length > 0)
     ? context.taraBalaTransitPlanets.map(t => 
-        `  • ${t.graha_key.padEnd(8)}: ${t.transit_star} (P${t.pada}) -> Tara ${t.taraNumber}: ${t.taraName} (${t.taraTamil}) [${t.quality}] - ${t.description}`
+        `  • ${toCleanEnglishPlanet(t.graha_key).padEnd(8)}: ${t.transit_star} (Pada ${t.pada}) -> Tara ${t.taraNumber}: ${t.taraName} [${t.quality}] - ${t.description}`
       ).join('\n')
     : '  • Computed per ephemeris.';
 
   const chandraBalaTimelineStr = (context.chandraBalaDailyTimeline && context.chandraBalaDailyTimeline.length > 0)
     ? context.chandraBalaDailyTimeline.map(c => 
-        `  • ${c.dayRange.padEnd(12)}: ${c.moonSignName} | ${c.moonStarName} | H${c.houseFromNatalMoon} from Moon | ${c.taraBala.taraName} (T${c.taraBala.taraNumber}) ${c.isChandrashtama ? '[🚨 CHANDRASHTAMA: Avoid New Pacts/Risks]' : c.isFavorable ? '[Favorable]' : '[Neutral]'}${c.alertFlag ? ` [${c.alertFlag}]` : ''}`
+        `  • ${c.dayRange.padEnd(12)}: ${toCleanEnglishSign(c.moonSignName)} | ${c.moonStarName} | House ${c.houseFromNatalMoon} from Moon | ${c.taraBala.taraName} (T${c.taraBala.taraNumber}) ${c.isChandrashtama ? '[🚨 CHANDRASHTAMA: Avoid New Pacts/Risks]' : c.isFavorable ? '[Favorable]' : '[Neutral]'}${c.alertFlag ? ` [${c.alertFlag}]` : ''}`
       ).join('\n')
     : '  • Full Chandra Bala computed across 2.25-day sign progression.';
 
   const ashtakavargaStr = context.ashtakavargaPayload
     ? `Target House ${context.houseNumber} SAV Points: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]
   - SAV Points Zodiac Spread:
-${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.houseNumber).padStart(2, ' ')} (${s.signName.padEnd(14)}): ${s.points} Bindus [${s.status}]${s.houseNumber === context.houseNumber ? ' <== [TARGET]' : ''}`).join('\n')}`
+${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.houseNumber).padStart(2, ' ')} (${toCleanEnglishSign(s.signName).padEnd(12)}): ${s.points} Bindus [${s.status}]${s.houseNumber === context.houseNumber ? ' <== [TARGET]' : ''}`).join('\n')}`
     : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`;
 
   const dashaDossierStr = (context.dashaLordsDossier && context.dashaLordsDossier.length > 0)
     ? context.dashaLordsDossier.map(d => 
-        `  • ${d.role} [${d.lordName}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies H${d.natalHouseOccupied} (${d.natalDignity}) | Target H${context.houseNumber}: ${d.connectsToTargetHouse ? `DIRECT CONNECTION -> ${d.targetConnectionReason}` : d.targetConnectionReason}`
+        `  • ${d.role} [${toCleanEnglishPlanet(d.lordName)}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies House ${d.natalHouseOccupied} (${d.natalDignity}) | Target House ${context.houseNumber}: ${d.connectsToTargetHouse ? `DIRECT CONNECTION -> ${d.targetConnectionReason}` : d.targetConnectionReason}`
       ).join('\n')
     : '  • MD, AD, and PD lords evaluated against natal houses and target bhava.';
 
   const karakaInfoStr = context.bhavaKarakaInfo
-    ? `Primary Sthira Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
+    ? `Primary Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
   Significations: ${context.bhavaKarakaInfo.significations}
   Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
     : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`;
@@ -155,7 +410,7 @@ ${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.
 1. TARGET BHAVA & TEMPORAL HORIZON
 ======================================================================
 - Targeted House: House ${context.houseNumber} (${bhavaInfo.title})
-- Rashi Sign: ${context.rashiName} (${context.tamilName}) ${context.isLagna ? '[Lagna / 1st House]' : ''}
+- Zodiac Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna (1st House)]' : ''}
 - Evaluation Month: ${monthName} ${context.selectedYear}
 - Activation Score: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'CRITICAL EVENT ACTIVATED (Threshold >= 0.55)' : 'Standard Baseline'})
 - Matched Classical Rules:
@@ -173,13 +428,13 @@ ${natalD9Table}
 ======================================================================
 3. GOCHARA (TRANSIT) EPHEMERIS FOR ${monthName.toUpperCase()} ${context.selectedYear}
 ======================================================================
-9-GRAHA TRANSITS (Exact Degree, Nakshatra, Pada, Retrograde & Aspect):
+9-GRAHA TRANSITS (Exact Degree, Nakshatra, Pada, Motion & Aspect):
 ${allTransitsTable}
 
-★ JUPITER (GURU) GOCHARA STATUS:
+★ JUPITER TRANSIT STATUS:
 ${jupiterSpotlight}
 
-DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${context.rashiName} / House ${context.houseNumber}):
+DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${cleanTargetSign} / House ${context.houseNumber}):
 ${targetSignTransitResidents}
 
 ======================================================================
@@ -226,30 +481,37 @@ ${karakaInfoStr}
 ======================================================================
 Synthesize a deep, multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).
 
-${context.language === 'ta' ? `CRITICAL LANGUAGE REQUIREMENT - TAMIL (தமிழ்):
-Formulate all descriptions, reasoning, verdicts, and guidance in formal Tamil (தமிழ்).
-Use classical terminology: லக்னம், தன ஸ்தானம் (2), கர்ம ஸ்தானம் (10), தசா புத்தி, குரு/சனி பார்வை.
-Keep JSON keys in English, but all string values in natural Tamil (தமிழ்).
-` : ''}REASONING DIRECTIVES:
-1. TRANSIT GRAHA PADA & DEGREES: Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon. Account for tight aspect drishti orbs (< 5°-7°).
-2. TARA BALA: Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana/Vadha) stellar taras.
-3. CHANDRA BALA & CHANDRASHTAMA: Flag 8th house Moon transits from Janma Rashi with clear cautions.
+LANGUAGE & REASONING REQUIREMENT - UNIFIED ENGLISH ONLY:
+- Strictly formulate all descriptions, reasoning, verdicts, and actionable guidance in clear, articulate English.
+- Use standard English sign names: Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces.
+- Use standard English planet names: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu.
+- Do NOT use Tamil or Tamil transliterations (do NOT write Kadaga, Kadagam, Meenam, Mesham, Sevvai, Sukra, Sani, Guru, or Drishti).
+- Keep JSON keys and all string values in English.
+
+CRITICAL PLAIN TEXT REQUIREMENT FOR JSON PROSE FIELDS:
+- 'part1_probabilityAndScope', 'part2_financialAndResources', and 'part3_microTimingWindow' MUST BE PLAIN TEXT ENGLISH PROSE STRINGS (multi-paragraph).
+- NEVER output raw JSON objects, key-value pairs, or code blocks inside these fields. Write clean, direct English sentences.
+
+REASONING DIRECTIVES:
+1. TRANSIT GRAHA PADA & DEGREES: Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon. Account for tight aspect orbs (< 5°-7°).
+2. TARA BALA: Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
+3. CHANDRA BALA: Flag 8th house Moon transits from Janma Rashi with clear cautions.
 4. SAV BINDUS: Reference target house bindus (>=28-32 strong stamina, <25 cautious conservation).
-5. DASHA LORDS: Integrate MD, AD, and PD lordships and direct connections to House ${context.houseNumber}.
+5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and direct connections to House ${context.houseNumber}.
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
-  "summarySentence": "Crisp bottom-line synthesis of event activation.",
+  "summarySentence": "Crisp bottom-line synthesis of event activation in plain English.",
   "natalPromiseVsTransitDelivery": {
     "natalPromiseScore": 0.85,
-    "natalPromiseVerdict": "Natal foundation and karaka strength summary.",
+    "natalPromiseVerdict": "Natal foundation and karaka strength summary in English.",
     "transitDeliveryScore": 0.78,
     "transitDeliveryVerdict": "Gochara transits and Dasha Triad delivery capacity.",
     "synthesisVerdict": "Combined fruition and manifestation verdict."
   },
-  "part1_probabilityAndScope": "Multi-paragraph breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active PD Lord (${context.activeDasha.pratyantardasha}).",
+  "part1_probabilityAndScope": "Multi-paragraph English breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active Pratyantardasha Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}).",
   "part2_financialAndResources": "Analysis of capital origin (2nd liquid savings, 4th property/loans, 9th fortune, 11th gains).",
-  "part3_microTimingWindow": "Exact 3 to 7 day peak activation window in ${monthName} ${context.selectedYear} when Moon triggers this Bhava.",
+  "part3_microTimingWindow": "Exact 3 to 7 day peak activation window in ${monthName} ${context.selectedYear} when Moon triggers this House.",
   "peakDateRange": "${monthName} DD – DD, ${context.selectedYear}",
   "overallConfidence": 0.85,
   "supplementaryScenarios": [
@@ -259,7 +521,7 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.85,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Synthesis of 10th Karma, 6th service, and active Dasha.",
+      "astrologicalReasoning": "Synthesis of 10th career, 6th service, and active Dasha lords in English.",
       "practicalGuidance": "Actionable strategic workplace guidance.",
       "employmentStatusInference": {
         "status": "currently_serving",
@@ -311,16 +573,16 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     },
     {
       "id": "health_vitality",
-      "title": "Health & Mental Tranquility (Sukha)",
+      "title": "Health & Physical Vitality",
       "verdict": "Caution Required",
       "confidenceScore": 0.76,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
       "astrologicalReasoning": "6th/8th houses and Saturn/Mars aspect influence.",
-      "practicalGuidance": "Ayurvedic pacing, sleep rhythm, stress decompression.",
+      "practicalGuidance": "Pacing, sleep rhythm, stress decompression.",
       "healthDetails": {
         "vulnerableZones": ["Thoracic/cardiac", "Nervous fatigue", "Digestive pace"],
         "mentalTranquilityAndStress": "Mental peace evaluation under active Dasha",
-        "holisticRemedies": "Pranayama, hydration, mindful pacing"
+        "holisticRemedies": "Breathing exercises, hydration, mindful pacing"
       },
       "detailedParagraphs": ["Paragraph 1: Physical stamina & vulnerable zones.", "Paragraph 2: Mental serenity & preventive routines."]
     },
@@ -330,7 +592,7 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.84,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "2nd Dhana, 4th assets, 11th Labha alignments.",
+      "astrologicalReasoning": "2nd savings, 4th assets, 11th gains alignments.",
       "practicalGuidance": "Capital deployment and debt leverage review.",
       "financeDetails": {
         "liquidityVsOutflow": "Liquid cashflow vs fixed deployment",
@@ -341,11 +603,11 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     },
     {
       "id": "family_home",
-      "title": "Domestic Peace & Family",
+      "title": "Domestic Peace & Family Harmony",
       "verdict": "Favorable Expansion",
       "confidenceScore": 0.88,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "4th house Griha Saukhya & Matru Bhava dynamics.",
+      "astrologicalReasoning": "4th house domestic harmony, residence, and maternal vitality dynamics.",
       "practicalGuidance": "Home improvement and elder support.",
       "familyDetails": {
         "domesticAmbiance": "Home atmosphere and upgrades",
@@ -862,18 +1124,83 @@ function unescapeJsonString(str: string): string {
   }
 }
 
-function sanitizeCleanField(val: any, fallbackVal: string): string {
-  if (!val || typeof val !== 'string') return fallbackVal;
-  const trimmed = val.trim();
-  // If the field accidentally contains a JSON object or array string
-  if (trimmed.startsWith('{') && (trimmed.includes('"summarySentence"') || trimmed.includes('"part1_probabilityAndScope"') || trimmed.includes('"natalPromiseVsTransitDelivery"'))) {
-    const innerMatch = trimmed.match(/"part1_probabilityAndScope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    if (innerMatch && innerMatch[1]) {
-      return unescapeJsonString(innerMatch[1]);
+/**
+ * Robustly converts any arbitrary output (raw string, nested JSON object, array, or stringified JSON)
+ * into clean, readable human English prose without exposing JSON syntax, curly braces, quotes, or keys.
+ */
+export function extractReadableProse(val: any, fallbackVal: string = ''): string {
+  if (val === undefined || val === null) return fallbackVal;
+
+  // 1. If it's an object / dictionary, convert keys & values to clean English paragraphs
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(val)) {
+      if (typeof v === 'string' && v.trim().length > 0) {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+        parts.push(`${label.charAt(0).toUpperCase() + label.slice(1)}: ${v.trim()}`);
+      } else if (typeof v === 'number' || typeof v === 'boolean') {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+        parts.push(`${label.charAt(0).toUpperCase() + label.slice(1)}: ${v}`);
+      } else if (Array.isArray(v)) {
+        parts.push(v.map(item => (typeof item === 'string' ? item : JSON.stringify(item))).join('\n'));
+      } else if (v && typeof v === 'object') {
+        parts.push(extractReadableProse(v, ''));
+      }
     }
-    return fallbackVal;
+    const joined = parts.filter(Boolean).join('\n\n');
+    return joined.length > 0 ? joined : fallbackVal;
   }
-  return trimmed;
+
+  // 2. If it's an array
+  if (Array.isArray(val)) {
+    return val.map(item => extractReadableProse(item, '')).filter(Boolean).join('\n\n') || fallbackVal;
+  }
+
+  if (typeof val !== 'string') return fallbackVal;
+
+  const trimmed = val.trim();
+
+  // 3. If string is serialized JSON (starts with { or [)
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.part1_probabilityAndScope) {
+          return extractReadableProse(parsed.part1_probabilityAndScope, fallbackVal);
+        }
+        if (parsed.event_probability_and_scope) {
+          return extractReadableProse(parsed.event_probability_and_scope, fallbackVal);
+        }
+        if (parsed.summarySentence && !parsed.part2_financialAndResources) {
+          return parsed.summarySentence;
+        }
+        return extractReadableProse(parsed, fallbackVal);
+      }
+    } catch {
+      // If parsing fails, extract text matches from key: "value" pairs
+      const textMatches = trimmed.match(/"([^"]+)":\s*"((?:[^"\\]|\\.)*)"/g);
+      if (textMatches && textMatches.length > 0) {
+        const lines: string[] = [];
+        for (const tm of textMatches) {
+          const m = tm.match(/"([^"]+)":\s*"((?:[^"\\]|\\.)*)"/);
+          if (m && m[1] && m[2]) {
+            const key = m[1].replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+            const textVal = m[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            lines.push(`${key.charAt(0).toUpperCase() + key.slice(1)}: ${textVal}`);
+          }
+        }
+        if (lines.length > 0) return lines.join('\n\n');
+      }
+    }
+  }
+
+  // Strip accidental outer curly braces or quotes
+  const cleaned = trimmed.replace(/^\{+/, '').replace(/\}+$/, '').trim();
+  return cleaned.length > 0 ? cleaned : fallbackVal;
+}
+
+function sanitizeCleanField(val: any, fallbackVal: string): string {
+  return extractReadableProse(val, fallbackVal);
 }
 
 function repairTruncatedJson(str: string): string {
@@ -976,6 +1303,31 @@ function extractFieldsViaRegex(raw: string, fallback: import('./types').LLMThree
   };
 }
 
+function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThreePartNarrative): any {
+  if (!parsed || typeof parsed !== 'object') return fallback;
+
+  let root = parsed;
+  if (root.response && typeof root.response === 'object') root = root.response;
+  else if (root.result && typeof root.result === 'object') root = root.result;
+  else if (root.analysis && typeof root.analysis === 'object') root = root.analysis;
+  else if (root.data && typeof root.data === 'object') root = root.data;
+  else if (root.prediction && typeof root.prediction === 'object') root = root.prediction;
+
+  const p1 = root.part1_probabilityAndScope ?? root.part1 ?? root.event_probability_and_scope ?? root.eventProbabilityAndScope ?? root.probability_and_scope ?? root.probabilityAndScope ?? root['Part 1: Event Probability & Scope'] ?? root['Part 1'];
+  const p2 = root.part2_financialAndResources ?? root.part2 ?? root.financial_and_resources ?? root.financialAndResources ?? root['Part 2: Financial & Resource Sources'] ?? root['Part 2'];
+  const p3 = root.part3_microTimingWindow ?? root.part3 ?? root.micro_timing_window ?? root.microTimingWindow ?? root['Part 3: Micro-Timing Window'] ?? root['Part 3'];
+  const sum = root.summarySentence ?? root.summary ?? root.overview;
+
+  return {
+    ...fallback,
+    ...root,
+    part1_probabilityAndScope: sanitizeCleanField(p1, fallback.part1_probabilityAndScope),
+    part2_financialAndResources: sanitizeCleanField(p2, fallback.part2_financialAndResources),
+    part3_microTimingWindow: sanitizeCleanField(p3, fallback.part3_microTimingWindow),
+    summarySentence: sanitizeCleanField(sum, fallback.summarySentence)
+  };
+}
+
 export function extractAndParseVedicJson(
   rawResp: string,
   fallback: import('./types').LLMThreePartNarrative
@@ -1012,13 +1364,7 @@ export function extractAndParseVedicJson(
   try {
     const parsed = JSON.parse(candidate);
     if (parsed && typeof parsed === 'object') {
-      return {
-        ...parsed,
-        part1_probabilityAndScope: sanitizeCleanField(parsed.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
-        part2_financialAndResources: sanitizeCleanField(parsed.part2_financialAndResources, fallback.part2_financialAndResources),
-        part3_microTimingWindow: sanitizeCleanField(parsed.part3_microTimingWindow, fallback.part3_microTimingWindow),
-        summarySentence: sanitizeCleanField(parsed.summarySentence, fallback.summarySentence)
-      };
+      return buildNormalizedResult(parsed, fallback);
     }
   } catch {
     // Attempt 2: Auto-repair unclosed quotes / braces
@@ -1026,13 +1372,7 @@ export function extractAndParseVedicJson(
       const repaired = repairTruncatedJson(candidate);
       const parsed = JSON.parse(repaired);
       if (parsed && typeof parsed === 'object') {
-        return {
-          ...parsed,
-          part1_probabilityAndScope: sanitizeCleanField(parsed.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
-          part2_financialAndResources: sanitizeCleanField(parsed.part2_financialAndResources, fallback.part2_financialAndResources),
-          part3_microTimingWindow: sanitizeCleanField(parsed.part3_microTimingWindow, fallback.part3_microTimingWindow),
-          summarySentence: sanitizeCleanField(parsed.summarySentence, fallback.summarySentence)
-        };
+        return buildNormalizedResult(parsed, fallback);
       }
     } catch {
       // Attempt 3: Regex field extraction

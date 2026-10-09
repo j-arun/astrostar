@@ -775,7 +775,22 @@ export function generateVedicPdfReport(
     );
   }
 
-  // Save the 3-Page PDF file
-  const filename = `Vedic_Inference_H${context.houseNumber}_${context.rashiName}_MD_${context.activeDasha.mahadasha}_AD_${context.activeDasha.antardasha}_PD_${context.activeDasha.pratyantardasha}.pdf`;
+  // Determine provider label for filename: Gemini | Ollama | Claude
+  let providerTag = 'Gemini';
+  if (narrative.providerUsed === 'local_qwen') {
+    providerTag = 'Ollama';
+  } else if (narrative.providerUsed === 'claude') {
+    providerTag = 'Claude';
+  } else if (narrative.providerUsed === 'gemini_pro') {
+    providerTag = 'Gemini';
+  } else {
+    providerTag = narrative.isPrivateLocal ? 'Ollama' : 'Gemini';
+  }
+
+  const monthName = MONTH_NAMES[context.selectedMonth] || `Month${context.selectedMonth + 1}`;
+  const year = context.selectedYear;
+
+  // Save the 3-Page PDF file with standardized naming: Month_Year_Provider_AstroPredictions.pdf
+  const filename = `${monthName}_${year}_${providerTag}_AstroPredictions.pdf`;
   doc.save(filename);
 }

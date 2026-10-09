@@ -71,6 +71,28 @@ const formatTimeDisplay = (totalSec: number): string => {
   return `${totalSec.toFixed(1)}s (${mins}m ${secs}s)`;
 };
 
+const cleanNarrativeText = (text: string | undefined): string => {
+  if (!text) return '';
+  const trimmed = text.trim();
+  // If the raw text contains raw JSON object/schema code, extract the true text
+  if (trimmed.startsWith('{') && (trimmed.includes('"summarySentence"') || trimmed.includes('"part1_probabilityAndScope"'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed.part1_probabilityAndScope || parsed.summarySentence || trimmed;
+    } catch {
+      const match = trimmed.match(/"part1_probabilityAndScope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (match && match[1]) {
+        try {
+          return JSON.parse(`"${match[1]}"`);
+        } catch {
+          return match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        }
+      }
+    }
+  }
+  return trimmed;
+};
+
 export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   isOpen,
   onClose,
@@ -1616,8 +1638,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     Confidence: {(narrative.overallConfidence * 100).toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {narrative.part1_probabilityAndScope}
+                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                  {cleanNarrativeText(narrative.part1_probabilityAndScope)}
                 </p>
               </div>
 
@@ -1630,8 +1652,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   </div>
                   <span className="text-[10px] font-mono text-sky-400/80">Capital Origin</span>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {narrative.part2_financialAndResources}
+                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                  {cleanNarrativeText(narrative.part2_financialAndResources)}
                 </p>
               </div>
 
@@ -1646,8 +1668,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     {narrative.peakDateRange}
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {narrative.part3_microTimingWindow}
+                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                  {cleanNarrativeText(narrative.part3_microTimingWindow)}
                 </p>
               </div>
 

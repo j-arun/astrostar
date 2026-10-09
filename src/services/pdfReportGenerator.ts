@@ -16,6 +16,27 @@ function formatDuration(ms: number): string {
   return `${sec.toFixed(1)}s (${m}m ${s}s)`;
 }
 
+function cleanNarrativeText(text: string | undefined): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && (trimmed.includes('"summarySentence"') || trimmed.includes('"part1_probabilityAndScope"'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed.part1_probabilityAndScope || parsed.summarySentence || trimmed;
+    } catch {
+      const match = trimmed.match(/"part1_probabilityAndScope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (match && match[1]) {
+        try {
+          return JSON.parse(`"${match[1]}"`);
+        } catch {
+          return match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        }
+      }
+    }
+  }
+  return trimmed;
+}
+
 export function generateVedicPdfReport(
   context: VedicHouseContext,
   narrative: LLMThreePartNarrative
@@ -466,7 +487,7 @@ export function generateVedicPdfReport(
   // Part 1: Event Probability & Scope
   renderCompactPart(
     'PART 1: EVENT PROBABILITY & SCOPE',
-    narrative.part1_probabilityAndScope,
+    cleanNarrativeText(narrative.part1_probabilityAndScope),
     `Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`,
     [180, 83, 9], // Amber
     46
@@ -475,7 +496,7 @@ export function generateVedicPdfReport(
   // Part 2: Financial & Resource Sources
   renderCompactPart(
     'PART 2: FINANCIAL & RESOURCE SOURCES',
-    narrative.part2_financialAndResources,
+    cleanNarrativeText(narrative.part2_financialAndResources),
     'Signification Analysis',
     [2, 132, 199], // Sky
     44
@@ -484,7 +505,7 @@ export function generateVedicPdfReport(
   // Part 3: Micro-Timing Window (Pratyantardasha)
   renderCompactPart(
     'PART 3: MICRO-TIMING WINDOW (PRATYANTARDASHA)',
-    narrative.part3_microTimingWindow,
+    cleanNarrativeText(narrative.part3_microTimingWindow),
     `Peak: ${narrative.peakDateRange || 'Active Month'}`,
     [16, 185, 129], // Emerald
     42

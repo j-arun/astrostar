@@ -846,6 +846,204 @@ function mergeScenarios(
 }
 
 /**
+ * Ultra-resilient JSON parser for LLM responses (Ollama, Gemini, Claude).
+ * Solves:
+ * 1. DeepSeek / Qwen reasoning tags: <think>...</think>
+ * 2. Markdown code fences: ```json ... ``` or ``` ... ```
+ * 3. Conversational preamble / postamble: "Here is the JSON: { ... } Hope this helps"
+ * 4. Truncated / unclosed JSON: auto-recovers balanced braces or uses regex field extraction
+ * 5. String-nested JSON: Prevents raw JSON from ever being placed into text fields like part1_probabilityAndScope
+ */
+function unescapeJsonString(str: string): string {
+  try {
+    return JSON.parse(`"${str}"`);
+  } catch {
+    return str.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+}
+
+function sanitizeCleanField(val: any, fallbackVal: string): string {
+  if (!val || typeof val !== 'string') return fallbackVal;
+  const trimmed = val.trim();
+  // If the field accidentally contains a JSON object or array string
+  if (trimmed.startsWith('{') && (trimmed.includes('"summarySentence"') || trimmed.includes('"part1_probabilityAndScope"') || trimmed.includes('"natalPromiseVsTransitDelivery"'))) {
+    const innerMatch = trimmed.match(/"part1_probabilityAndScope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (innerMatch && innerMatch[1]) {
+      return unescapeJsonString(innerMatch[1]);
+    }
+    return fallbackVal;
+  }
+  return trimmed;
+}
+
+function repairTruncatedJson(str: string): string {
+  let trimmed = str.trim();
+  
+  // If unclosed string literal, close it
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '\\' && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"' && !escaped) {
+      inString = !inString;
+    }
+    escaped = false;
+  }
+  if (inString) {
+    trimmed += '"';
+  }
+
+  // Count open brackets [ vs ]
+  const openBrackets = (trimmed.match(/\[/g) || []).length;
+  const closeBrackets = (trimmed.match(/\]/g) || []).length;
+  for (let i = 0; i < openBrackets - closeBrackets; i++) {
+    trimmed += ']';
+  }
+
+  // Count open braces { vs }
+  const openBraces = (trimmed.match(/\{/g) || []).length;
+  const closeBraces = (trimmed.match(/\}/g) || []).length;
+  for (let i = 0; i < openBraces - closeBraces; i++) {
+    trimmed += '}';
+  }
+
+  return trimmed;
+}
+
+function extractFieldsViaRegex(raw: string, fallback: import('./types').LLMThreePartNarrative): any {
+  const result: any = {};
+
+  const summaryMatch = raw.match(/"summarySentence"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (summaryMatch && summaryMatch[1]) {
+    result.summarySentence = unescapeJsonString(summaryMatch[1]);
+  }
+
+  const p1Match = raw.match(/"part1_probabilityAndScope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (p1Match && p1Match[1]) {
+    result.part1_probabilityAndScope = unescapeJsonString(p1Match[1]);
+  }
+
+  const p2Match = raw.match(/"part2_financialAndResources"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (p2Match && p2Match[1]) {
+    result.part2_financialAndResources = unescapeJsonString(p2Match[1]);
+  }
+
+  const p3Match = raw.match(/"part3_microTimingWindow"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (p3Match && p3Match[1]) {
+    result.part3_microTimingWindow = unescapeJsonString(p3Match[1]);
+  }
+
+  const peakMatch = raw.match(/"peakDateRange"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (peakMatch && peakMatch[1]) {
+    result.peakDateRange = unescapeJsonString(peakMatch[1]);
+  }
+
+  const confMatch = raw.match(/"overallConfidence"\s*:\s*([0-9.]+)/);
+  if (confMatch && confMatch[1]) {
+    result.overallConfidence = parseFloat(confMatch[1]);
+  }
+
+  const natalMatch = raw.match(/"natalPromiseVsTransitDelivery"\s*:\s*({[\s\S]*?})/);
+  if (natalMatch && natalMatch[1]) {
+    try {
+      result.natalPromiseVsTransitDelivery = JSON.parse(natalMatch[1]);
+    } catch {}
+  }
+
+  const suppMatch = raw.match(/"supplementaryScenarios"\s*:\s*(\[[\s\S]*?\])/);
+  if (suppMatch && suppMatch[1]) {
+    try {
+      result.supplementaryScenarios = JSON.parse(suppMatch[1]);
+    } catch {
+      try {
+        const repaired = repairTruncatedJson(suppMatch[1]);
+        result.supplementaryScenarios = JSON.parse(repaired);
+      } catch {}
+    }
+  }
+
+  return {
+    ...fallback,
+    ...result,
+    part1_probabilityAndScope: sanitizeCleanField(result.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
+    part2_financialAndResources: sanitizeCleanField(result.part2_financialAndResources, fallback.part2_financialAndResources),
+    part3_microTimingWindow: sanitizeCleanField(result.part3_microTimingWindow, fallback.part3_microTimingWindow),
+    summarySentence: sanitizeCleanField(result.summarySentence, fallback.summarySentence)
+  };
+}
+
+export function extractAndParseVedicJson(
+  rawResp: string,
+  fallback: import('./types').LLMThreePartNarrative
+): any {
+  if (!rawResp || typeof rawResp !== 'string' || rawResp.trim().length === 0) {
+    return fallback;
+  }
+
+  let text = rawResp.trim();
+
+  // 1. Strip reasoning / thinking tags e.g. <think>...</think>
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // 2. Strip markdown code fences if present
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch && fenceMatch[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  // 3. Find outer JSON object boundaries { ... }
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+
+  let candidate = text;
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    candidate = text.substring(firstBrace, lastBrace + 1).trim();
+  } else if (firstBrace !== -1) {
+    candidate = text.substring(firstBrace).trim();
+  }
+
+  // Attempt 1: Direct JSON.parse
+  try {
+    const parsed = JSON.parse(candidate);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        ...parsed,
+        part1_probabilityAndScope: sanitizeCleanField(parsed.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
+        part2_financialAndResources: sanitizeCleanField(parsed.part2_financialAndResources, fallback.part2_financialAndResources),
+        part3_microTimingWindow: sanitizeCleanField(parsed.part3_microTimingWindow, fallback.part3_microTimingWindow),
+        summarySentence: sanitizeCleanField(parsed.summarySentence, fallback.summarySentence)
+      };
+    }
+  } catch {
+    // Attempt 2: Auto-repair unclosed quotes / braces
+    try {
+      const repaired = repairTruncatedJson(candidate);
+      const parsed = JSON.parse(repaired);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          ...parsed,
+          part1_probabilityAndScope: sanitizeCleanField(parsed.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
+          part2_financialAndResources: sanitizeCleanField(parsed.part2_financialAndResources, fallback.part2_financialAndResources),
+          part3_microTimingWindow: sanitizeCleanField(parsed.part3_microTimingWindow, fallback.part3_microTimingWindow),
+          summarySentence: sanitizeCleanField(parsed.summarySentence, fallback.summarySentence)
+        };
+      }
+    } catch {
+      // Attempt 3: Regex field extraction
+      return extractFieldsViaRegex(candidate, fallback);
+    }
+  }
+
+  return extractFieldsViaRegex(candidate, fallback);
+}
+
+/**
  * 1. Qwen Local Adapter (Ollama port 11434 with Parashara fallback)
  */
 export class QwenLocalAdapter implements ILLMAdapter {
@@ -867,7 +1065,7 @@ export class QwenLocalAdapter implements ILLMAdapter {
       keep_alive: '5m',
       options: {
         temperature: 0.3,
-        num_predict: 1200,
+        num_predict: 3500, // Generous token ceiling so local LLM completes entire JSON without abrupt cutoff
         num_ctx: 8192
       }
     };
@@ -905,23 +1103,8 @@ export class QwenLocalAdapter implements ILLMAdapter {
 
         // Model is kept active in VRAM for fast subsequent inferences.
         // It can be manually evicted anytime via the "Purge VRAM" button in the inspector header.
-
-        let parsed: any = {};
-        try {
-          let rawResp = (json.response || '').trim();
-          if (rawResp.startsWith('```json')) rawResp = rawResp.substring(7);
-          if (rawResp.startsWith('```')) rawResp = rawResp.substring(3);
-          if (rawResp.endsWith('```')) rawResp = rawResp.substring(0, rawResp.length - 3);
-          parsed = JSON.parse(rawResp.trim());
-        } catch {
-          parsed = {
-            part1_probabilityAndScope: json.response || 'Local Qwen synthesis generated.',
-            part2_financialAndResources: 'Derived from chart significations.',
-            part3_microTimingWindow: 'Active during the current Pratyantardasha window.'
-          };
-        }
-
         const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen', startMs);
+        const parsed = extractAndParseVedicJson(json.response || '', fallback);
 
         return {
           part1_probabilityAndScope: parsed.part1_probabilityAndScope || fallback.part1_probabilityAndScope,
@@ -1031,19 +1214,8 @@ export class GeminiStudioAdapter implements ILLMAdapter {
 
       if (res.ok) {
         const json = await res.json();
-        // Clean markdown backticks if Gemini wrapped the JSON in ```json ... ```
-        let cleanText = (json.text || '').trim();
-        if (cleanText.startsWith('```json')) {
-          cleanText = cleanText.substring(7);
-        } else if (cleanText.startsWith('```')) {
-          cleanText = cleanText.substring(3);
-        }
-        if (cleanText.endsWith('```')) {
-          cleanText = cleanText.substring(0, cleanText.length - 3);
-        }
-        cleanText = cleanText.trim();
-
-        const parsed = JSON.parse(cleanText);
+        const fallback = synthesizeAnalyticalVedicNarrative(context, 'gemini_pro', startMs);
+        const parsed = extractAndParseVedicJson(json.text || '', fallback);
 
         const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (GOOGLE GEMINI)
 **Target:** House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})  
@@ -1060,8 +1232,6 @@ ${parsed.part2_financialAndResources}
 #### 3. Micro-Timing Window
 ${parsed.part3_microTimingWindow}
 `;
-
-        const fallback = synthesizeAnalyticalVedicNarrative(context, 'gemini_pro', startMs);
 
         return {
           part1_probabilityAndScope: parsed.part1_probabilityAndScope || fallback.part1_probabilityAndScope,

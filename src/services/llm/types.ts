@@ -121,6 +121,8 @@ export interface VedicHouseContext {
     label: string;
   }>;
   monthlyIngressEvents?: Array<string>;
+  isComprehensiveMonthly?: boolean;
+  activeDomainFilter?: 'all' | 'career' | 'finance' | 'love' | 'health' | 'family';
   dashaDeliveryReport?: {
     overallIndex: number;
     status: string;

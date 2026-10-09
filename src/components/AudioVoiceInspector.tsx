@@ -39,6 +39,11 @@ import {
 import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt } from '../services/llm/adapters';
 import { generateVedicPdfReport } from '../services/pdfReportGenerator';
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 interface AudioVoiceInspectorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -149,13 +154,27 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     const basePrompt = buildVedicPrompt({ ...context, language: selectedLanguage, customPromptOverride: undefined }, activeProvider);
     let appendText = '';
     if (domain === 'career') {
-      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - CAREER & EMPLOYMENT STATUS INQUIRY\n======================================================================\nCRITICAL CAREER REASONING REQUIREMENTS:\n1. NATIVE EMPLOYMENT STATUS TEST: Explicitly deduce based on 10th house Karma, 6th house service, active Dasha Triad lord, and current Gochara transits whether the native is currently actively serving in a job (employed), in transition / actively seeking placement, or on sabbatical. Provide the status deduction ('currently_serving' | 'actively_seeking' | 'sabbatical_unemployed') and astrological rationale.\n2. USE TRANSIT GRAHA PADA & DEGREE: Use transit graha Pada, degree, and Nakshatra lords for reasoning accuracy when calculating aspect drishti to 10th and 6th houses.\n3. JOB SEARCH & TIMING: Analyze past struggle vs current momentum. Is this month the auspicious turning point for landing an offer?\n4. NEW JOB ACQUISITION: What kind and mood of job will the native get (corporate leadership, tech architecture, client consulting, remote autonomy)? Will it be significantly better than the role they are currently serving (if employed)?\n5. EXISTING JOB PHASE: If currently serving, what is the workplace atmosphere (management friction, workload, promotions vs burnout)?\n6. Deliver rich multi-paragraph analysis, NOT one-liners.`;
+      appendText = `\n\n### Domain Focus: Career & Employment Status Inquiry
+1. NATIVE EMPLOYMENT STATUS: Deduce based on 10th house, 6th house, active Dasha Triad lord, and current Gochara transits whether native is employed, in transition, or on sabbatical. Provide deduction and astrological rationale.
+2. JOB SEARCH & TIMING: Analyze momentum. Is this month the auspicious turning point for landing an offer?
+3. NEW ROLE OUTLOOK: Type of prospective role and organizational mood vs current standing.
+4. WORKPLACE CLIMATE: Atmosphere, leadership relations, workload, and recognition.`;
     } else if (domain === 'love') {
-      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - LOVE, CRUSH & ROMANTIC MANIFESTATION INQUIRY\n======================================================================\nCRITICAL ROMANTIC REASONING REQUIREMENTS:\n1. EXISTING CRUSH TRAJECTORY: How will any existing romantic crush or affectionate bond evolve this month? Will it find reciprocation, hit friction, or clarify boundaries?\n2. NEW CRUSH FORMATION: Is there a strong astrological trigger for a new crush or romantic interest forming under current 5th/7th/Venus/Moon transits? Probability and context.\n3. USE TRANSIT GRAHA PADA & DEGREE: Use transit graha Pada, degree, and Nakshatra lords for reasoning accuracy in assessing Venus, Moon, and 7th lord interactions.\n4. ROMANCE CHEMISTRY & FLUTTERING: Describe the emotional weather, psychological fluttering, and chemistry rating.\n5. REAL LOVE MANIFESTATION HORIZON: Will real love manifestation work out? What form will it take: classical traditional marriage/formal commitment vs modern living-together / co-habitation vs passing romantic flutter? Detail the 5th, 7th, Venus, Jupiter, and D9 Navamsha indications.\n6. Deliver rich multi-paragraph analysis, NOT one-liners.`;
+      appendText = `\n\n### Domain Focus: Love, Romance & Relationships Inquiry
+1. ROMANTIC TRAJECTORY: Evolution of affections, reciprocity, or clarity of boundaries.
+2. NEW CONNECTION PROBABILITY: Transit triggers for new romantic interest under 5th/7th/Venus transits.
+3. EMOTIONAL WEATHER: Chemistry, emotional comfort, and mutual affinity.
+4. LONG-TERM VIABILITY: Commitment outlook, formal union vs courtship.`;
     } else if (domain === 'finance') {
-      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - WEALTH, CASHFLOW & CAPITAL INFLOWS\n======================================================================\n1. Map liquid cash reserves (2nd house) vs long-term fixed assets/collateral (4th house).\n2. Speculative windfalls vs debt obligations and 11th house gains.\n3. USE TRANSIT GRAHA PADA & DEGREE: Use transit graha Pada and degree for reasoning accuracy on 2nd, 5th, 8th, and 11th house activations.\n4. Detailed multi-paragraph financial reasoning.`;
+      appendText = `\n\n### Domain Focus: Wealth, Cashflow & Capital Inflows
+1. Liquid reserves (2nd house) vs long-term fixed assets/property (4th house).
+2. Professional income vs 11th house gains and unexpected expenses.
+3. Investment timing and debt management.`;
     } else if (domain === 'health') {
-      appendText = `\n\n======================================================================\nUSER CUSTOM PROMPT INJECTION - HEALTH, SUKHA & VULNERABILITY ZONES\n======================================================================\n1. Map physical stamina, thoracic/cardiac/digestive vulnerability zones based on 6th/8th houses and Saturn/Mars aspects.\n2. Mental tranquility (Sukha) and stress management.\n3. USE TRANSIT GRAHA PADA & DEGREE: Use transit graha Pada and degree for reasoning accuracy on malefic aspects and Moon transit timing.\n4. Holistic lifestyle and Ayurvedic pacing guidance.`;
+      appendText = `\n\n### Domain Focus: Health, Vitality & Well-being
+1. Physical stamina and vulnerability zones based on 6th/8th houses and Saturn/Mars aspects.
+2. Mental tranquility, sleep rhythm, and stress decompression.
+3. Holistic wellness and pacing recommendations.`;
     }
 
     setEditablePrompt(basePrompt + appendText);
@@ -424,12 +443,27 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                  <span>House {context.houseNumber}</span>
-                  <span className="text-slate-400">&bull;</span>
-                  <span className="text-amber-300">{context.rashiName}</span>
-                  <span className="text-xs text-slate-400 font-normal font-mono">({context.tamilName})</span>
+                  {context.isComprehensiveMonthly ? (
+                    <>
+                      <span>Monthly Vedic Report</span>
+                      <span className="text-slate-400">&bull;</span>
+                      <span className="text-amber-300">{MONTH_NAMES[context.selectedMonth]} {context.selectedYear}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>House {context.houseNumber}</span>
+                      <span className="text-slate-400">&bull;</span>
+                      <span className="text-amber-300">{context.rashiName}</span>
+                      <span className="text-xs text-slate-400 font-normal font-mono">({context.tamilName})</span>
+                    </>
+                  )}
                 </h3>
-                {context.isEventActive ? (
+                {context.isComprehensiveMonthly ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-indigo-400" />
+                    Full-Month Scope
+                  </span>
+                ) : context.isEventActive ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1 animate-pulse">
                     <Zap className="w-3 h-3 fill-current" />
                     Event Active ({context.activationScore.toFixed(2)})
@@ -1680,10 +1714,16 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     <div>
                       <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Layers className="w-4 h-4 text-amber-400" />
-                        <span>Supplementary Cross-Domain Readouts (House {context.houseNumber} Impact)</span>
+                        <span>
+                          {context.isComprehensiveMonthly
+                            ? `Core Life Domains Evaluation (${MONTH_NAMES[context.selectedMonth]} ${context.selectedYear})`
+                            : `Cross-Domain Readouts (House ${context.houseNumber} Impact)`}
+                        </span>
                       </h4>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        How this month's primary house activation impacts other vital life areas via Bhavat Bhavam &amp; Drishti
+                        {context.isComprehensiveMonthly
+                          ? 'Comprehensive monthly synthesis across all 5 core life domains (Career, Wealth, Love, Health, Family)'
+                          : "How this month's primary house activation impacts other vital life areas via Bhavat Bhavam & Drishti"}
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">

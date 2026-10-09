@@ -813,14 +813,147 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     setIsInspectorOpen(true);
   };
 
+  const handleOpenMonthlyReport = () => {
+    const signDef = SOUTH_INDIAN_SIGNS.find(s => s.index === natalLagnaIdx) || SOUTH_INDIAN_SIGNS[0];
+
+    const flattenedD1 = activeRecord.placements
+      .filter(p => p.chart_type === 'D1')
+      .map(p => {
+        const signMeta = SOUTH_INDIAN_SIGNS.find(s => {
+          const norm = p.rashi_name.toLowerCase();
+          return s.eng.toLowerCase().includes(norm) || norm.includes(s.tamil);
+        });
+        const sIdx = signMeta ? signMeta.index : 9;
+        const hNum = ((sIdx - natalLagnaIdx + 12) % 12) + 1;
+        return {
+          body_name: p.body_name,
+          rashi_name: p.rashi_name,
+          degree_sputa: p.degree_sputa,
+          nakshatra_name: p.nakshatra_name,
+          pada: p.pada,
+          house_number: hNum,
+          is_retrograde: p.is_retrograde
+        };
+      });
+
+    const flattenedD9 = activeRecord.placements
+      .filter(p => p.chart_type === 'D9')
+      .map(p => ({
+        body_name: p.body_name,
+        rashi_name: p.rashi_name,
+        degree_sputa: p.degree_sputa
+      }));
+
+    const ctx: VedicHouseContext = {
+      houseNumber: 1,
+      rashiIndex: natalLagnaIdx,
+      rashiName: toCleanEnglishSign(signDef.eng),
+      tamilName: signDef.tamil,
+      isLagna: true,
+      activationScore: 1.0,
+      isEventActive: true,
+      isComprehensiveMonthly: true,
+      activeDomainFilter: 'all',
+      matchedRules: [],
+      natalOccupants: [],
+      transitOccupants: [],
+      allTransitPlacements: transitPlacements.map(t => {
+        const rashiIdx = t.transit_rashi_index;
+        const hFromLagna = ((rashiIdx - natalLagnaIdx + 12) % 12) + 1;
+        return {
+          graha_key: t.graha_key,
+          graha_name: t.graha_name,
+          graha_tamil: t.graha_tamil,
+          transit_rashi_index: rashiIdx,
+          transit_rashi_name: t.transit_rashi_name,
+          transit_rashi_tamil: t.transit_rashi_tamil,
+          house_from_lagna: hFromLagna,
+          degree_sputa: t.degree_sputa,
+          degree_in_sign_float: t.degree_in_sign_float,
+          nakshatra_name: t.graha_pada_chara?.nakshatra_name || 'N/A',
+          nakshatra_lord: t.graha_pada_chara?.nakshatra_lord || '',
+          pada: t.graha_pada_chara?.pada || 1,
+          is_retrograde: t.is_retrograde,
+          is_custom: !!(t as any).is_custom_user_adjusted
+        };
+      }),
+      activeDasha: activeDashaHierarchy,
+      selectedMonth,
+      selectedYear,
+      flattenedNatalD1: flattenedD1,
+      flattenedNatalD9: flattenedD9,
+      monthlyMoonSpans,
+      monthlyIngressEvents,
+      dashaDeliveryReport,
+      natalJanmaStar: {
+        nakshatra_name: activeProfile.birth_star || 'Anuradha',
+        pada: activeProfile.birth_star_pada || 2,
+        rashi_name: toCleanEnglishSign(activeProfile.birth_rashi || 'Scorpio'),
+        rashi_index: natalRashiIdx
+      },
+      taraBalaTransitPlanets: transitPlacements.map(tp => {
+        const star = tp.graha_pada_chara?.nakshatra_name || 'Ashwini';
+        const pada = tp.graha_pada_chara?.pada || 1;
+        const tb = calculateTaraBala(activeProfile.birth_star || 'Anuradha', star);
+        return {
+          graha_key: tp.graha_key,
+          transit_star: star,
+          pada,
+          taraNumber: tb.taraNumber,
+          taraName: tb.taraName,
+          taraTamil: tb.taraTamil,
+          quality: tb.quality,
+          isAuspicious: tb.isAuspicious,
+          description: tb.description
+        };
+      }),
+      chandraBalaDailyTimeline: (monthlyMoonSpans || []).map(ms => {
+        const cb = calculateChandraBala(natalRashiIdx, ms.signIndex);
+        const approxStarIdx = ((ms.signIndex - 1) * 2 + 1) % 27;
+        const approxStar = NAKSHATRAS[approxStarIdx] || 'Rohini';
+        const tb = calculateTaraBala(activeProfile.birth_star || 'Anuradha', approxStar);
+        let alertFlag: string | undefined = undefined;
+        if (cb.isChandrashtama) {
+          alertFlag = 'CRITICAL CHANDRASHTAMA WARNING: 8th House from Janma Rashi';
+        }
+        return {
+          dayRange: `Day ${ms.startDay}–${ms.endDay}`,
+          moonSignIndex: ms.signIndex,
+          moonSignName: ms.signName,
+          moonStarName: approxStar,
+          houseFromNatalMoon: cb.houseFromMoon,
+          isChandrashtama: cb.isChandrashtama,
+          isFavorable: cb.isFavorable,
+          taraBala: {
+            taraNumber: tb.taraNumber,
+            taraName: tb.taraName,
+            isAuspicious: tb.isAuspicious
+          },
+          alertFlag
+        };
+      }),
+      ashtakavargaPayload: (() => {
+        const sav = computeSarvashtakavarga(natalLagnaIdx, 1, flattenedD1);
+        return {
+          targetHousePoints: sav.targetHousePoints,
+          targetHouseStrength: sav.targetHouseStrength,
+          savPointsDistribution: sav.allHousesOverview
+        };
+      })(),
+      dashaLordsDossier: [
+        generateDashaLordDossier('Mahadasha (MD)', activeDashaHierarchy.mahadasha, natalLagnaIdx, 1, flattenedD1),
+        generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, 1, flattenedD1),
+        generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, 1, flattenedD1)
+      ],
+      bhavaKarakaInfo: BHAVA_KARAKAS_METADATA[1]
+    };
+
+    setInspectorHouseContext(ctx);
+    setIsInspectorOpen(true);
+  };
+
   const handleOpenTopEventInspector = () => {
-    const sorted = [...houseActivations].sort((a, b) => b.totalScore - a.totalScore);
-    const top = sorted[0];
-    if (top) {
-      handleOpenHouseInspector(top.signIndex);
-    } else {
-      handleOpenHouseInspector(natalLagnaIdx);
-    }
+    handleOpenMonthlyReport();
   };
 
   // Timeline Navigation Handlers
@@ -1028,21 +1161,21 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
               </select>
             </div>
 
-            {/* Edit & Submit LLM Reasoning Prompt Button */}
+            {/* Monthly Vedic Report Button */}
             <button
-              onClick={handleOpenTopEventInspector}
+              onClick={handleOpenMonthlyReport}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
-              title="Open Multi-LLM Reasoning Engine with Editable Astrological Prompt (Career, Job Search, Love & Romance)"
+              title={`Open Multi-LLM Reasoning Engine for Comprehensive Monthly Report (${MONTH_NAMES[selectedMonth]} ${selectedYear})`}
             >
               <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>Edit &amp; Submit Prompt</span>
+              <span>Monthly Report Prompt</span>
             </button>
 
             {/* Quick Open Audio Voice Inspector Button */}
             <button
-              onClick={handleOpenTopEventInspector}
+              onClick={handleOpenMonthlyReport}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 transition shadow-sm font-bold text-xs cursor-pointer"
-              title="Open Multi-LLM Audio Voice Inspector for Top Active House"
+              title={`Open Multi-LLM Audio Voice Inspector for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
             >
               <Volume2 className="w-3.5 h-3.5" />
               <span>Voice Inspector</span>

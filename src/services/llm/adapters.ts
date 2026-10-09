@@ -303,46 +303,45 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
   const cleanTargetSign = toCleanEnglishSign(context.rashiName) || `House ${context.houseNumber}`;
 
-  // 1. Flattened Natal D1 Placements table
+  // Compact formatting helpers
+  const formatDegreeCompact = (deg?: string): string => {
+    if (!deg) return '00°00\'';
+    const clean = deg.replace(/\s+/g, '');
+    const m = clean.match(/(\d+°\d+['']?)/);
+    return m ? m[1] : clean;
+  };
+
+  const formatNakshatraCompact = (nak?: string, pada?: number): string => {
+    if (!nak || nak === 'N/A') return 'N/A';
+    const cleanStar = nak.replace(/\s*\(.*?\)/g, '').trim();
+    return pada ? `${cleanStar} P${pada}` : cleanStar;
+  };
+
+  // 1. Flattened Natal D1 Placements (Compact)
   const natalD1Table = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
     ? context.flattenedNatalD1.map(p => 
-        `  • ${toCleanEnglishPlanet(p.body_name).padEnd(9)}: ${toCleanEnglishSign(p.rashi_name).padEnd(12)} (House ${p.house_number || '?'}) | Degree: ${p.degree_sputa || 'N/A'} | Nakshatra: ${p.nakshatra_name || 'N/A'} (Pada ${p.pada || '?'}) ${p.is_retrograde ? '[R]' : '[Direct]'}`
+        `  ${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} H${p.house_number || '?'} — ${formatDegreeCompact(p.degree_sputa)} — ${formatNakshatraCompact(p.nakshatra_name, p.pada)}${p.is_retrograde ? ' [R]' : ''}`
       ).join('\n')
     : (context.natalOccupants.length > 0
-        ? context.natalOccupants.map(o => `  • ${toCleanEnglishPlanet(o.body_name)}: ${cleanTargetSign} | Degree: ${o.degree_sputa || 'N/A'} | Nakshatra: ${o.nakshatra_name || 'N/A'}`).join('\n')
-        : '  • None (Empty Bhava)');
+        ? context.natalOccupants.map(o => `  ${toCleanEnglishPlanet(o.body_name)} — ${cleanTargetSign} — ${formatDegreeCompact(o.degree_sputa)} — ${formatNakshatraCompact(o.nakshatra_name)}`).join('\n')
+        : '  None (Empty Bhava)');
 
-  // 2. Flattened Natal D9 Navamsha table
+  // 2. Flattened Natal D9 Navamsha (Compact)
   const natalD9Table = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
-    ? context.flattenedNatalD9.map(p => `  • ${toCleanEnglishPlanet(p.body_name).padEnd(9)}: ${toCleanEnglishSign(p.rashi_name).padEnd(12)} | Degree: ${p.degree_sputa || 'N/A'}`).join('\n')
-    : '  • Standard D9 placements align with natal varga grid';
+    ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} — ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
+    : 'Standard D9 alignments align with natal grid';
 
-  // 3. Complete All-Graha Gochara Transits (Full Zodiac Ephemeris including Jupiter)
+  // 3. Complete All-Graha Gochara Transits (Single unified ephemeris)
   const allTransits = context.allTransitPlacements || [];
-  const jupiterTransit = allTransits.find(t => t.graha_key === 'Jupiter');
 
   const allTransitsTable = allTransits.length > 0
     ? allTransits.map(t => {
-        const aspectNote = t.aspects_target_house ? ` ===> [${t.aspect_type}]` : '';
-        return `  • ${toCleanEnglishPlanet(t.graha_key).padEnd(8)}: ${toCleanEnglishSign(t.transit_rashi_name).padEnd(11)} (House ${t.house_from_lagna}) | Degree: ${(t.degree_sputa || 'N/A').padEnd(10)} | Nakshatra: ${(t.nakshatra_name || 'N/A').padEnd(14)} (Pada ${t.pada || '?'}) | Motion: ${t.is_retrograde ? 'Retrograde [R]' : 'Direct'}${t.is_custom ? ' [USER OVERRIDE]' : ''}${aspectNote}`;
+        const aspectNote = t.aspects_target_house ? ` [Aspect: ${t.aspect_type}]` : '';
+        return `  ${toCleanEnglishPlanet(t.graha_key)} — ${toCleanEnglishSign(t.transit_rashi_name)} H${t.house_from_lagna} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}${t.is_retrograde ? ' [R]' : ''}${t.is_custom ? ' [Override]' : ''}${aspectNote}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
-        ? context.transitOccupants.map(t => `  • ${toCleanEnglishPlanet(t.graha_key)}: Degree: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`).join('\n')
-        : '  • Full planetary Gochara transits computed per ephemeris.');
-
-  const targetSignTransitResidents = context.transitOccupants.length > 0
-    ? context.transitOccupants.map(t => 
-        `  • ${toCleanEnglishPlanet(t.graha_key)}${t.is_custom ? ' [USER ADJUSTED OVERRIDE]' : ''}: Motion: ${t.is_retrograde ? 'Retrograde [R]' : 'Direct'} | Degree: ${t.degree_sputa || 'N/A'} | Nakshatra: ${t.nakshatra_name || 'N/A'} (Pada ${t.pada || '?'})`
-      ).join('\n')
-    : '  • No Direct Transit Residents currently occupying this sign (Bhava operates via Lord governance and Aspect Drishti).';
-
-  const jupiterSpotlight = jupiterTransit
-    ? `  • Current Sign: ${toCleanEnglishSign(jupiterTransit.transit_rashi_name)} (House ${jupiterTransit.house_from_lagna} from Natal Lagna)
-  • Exact Degree: ${jupiterTransit.degree_sputa}
-  • Nakshatra & Pada: ${jupiterTransit.nakshatra_name} (Pada ${jupiterTransit.pada}) [Lord: ${toCleanEnglishPlanet(jupiterTransit.nakshatra_lord || 'N/A')}]
-  • Motion: ${jupiterTransit.is_retrograde ? 'Retrograde [R]' : 'Direct'}
-  • Aspect on Target House ${context.houseNumber}: ${jupiterTransit.aspects_target_house ? `ACTIVE JUPITER DRISHTI ===> [${jupiterTransit.aspect_type}]` : `No direct 5/7/9 Drishti to House ${context.houseNumber} (Occupies House ${jupiterTransit.house_from_lagna})`}`
-    : `  • Jupiter is transiting per ephemeris with active benefic influence.`;
+        ? context.transitOccupants.map(t => `  ${toCleanEnglishPlanet(t.graha_key)} — ${cleanTargetSign} H${context.houseNumber} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
+        : '  Full planetary Gochara transits computed per ephemeris.');
 
   // 4. Moon 2.25-day Sign Progression Timeline
   const moonSpansTable = (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0)
@@ -369,34 +368,32 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.matchedRules.map(r => `• ${r.ruleName} (Weight: ${r.weight}): ${r.reason}`).join('\n')
     : '• Baseline house evaluation';
 
-  // 8. Advanced Parashara Payloads (Tara Bala, Chandra Bala, Ashtakavarga, Dasha Dossier, Karakas)
+  // 7. Advanced Parashara Payloads (Tara Bala, Chandra Bala, Ashtakavarga, Dasha Dossier, Karakas)
   const janmaStarStr = context.natalJanmaStar
     ? `Native Janma Star: ${context.natalJanmaStar.nakshatra_name} (Pada ${context.natalJanmaStar.pada}) in ${toCleanEnglishSign(context.natalJanmaStar.rashi_name)}`
     : 'Native Janma Star: Anuradha (Pada 2) in Scorpio';
 
   const taraBalaTable = (context.taraBalaTransitPlanets && context.taraBalaTransitPlanets.length > 0)
     ? context.taraBalaTransitPlanets.map(t => 
-        `  • ${toCleanEnglishPlanet(t.graha_key).padEnd(8)}: ${t.transit_star} (Pada ${t.pada}) -> Tara ${t.taraNumber}: ${t.taraName} [${t.quality}] - ${t.description}`
+        `  ${toCleanEnglishPlanet(t.graha_key)} — ${t.transit_star} P${t.pada} — ${t.taraName} (Tara ${t.taraNumber}: ${t.quality})`
       ).join('\n')
-    : '  • Computed per ephemeris.';
+    : '  Computed per ephemeris.';
 
   const chandraBalaTimelineStr = (context.chandraBalaDailyTimeline && context.chandraBalaDailyTimeline.length > 0)
     ? context.chandraBalaDailyTimeline.map(c => 
-        `  • ${c.dayRange.padEnd(12)}: ${toCleanEnglishSign(c.moonSignName)} | ${c.moonStarName} | House ${c.houseFromNatalMoon} from Moon | ${c.taraBala.taraName} (T${c.taraBala.taraNumber}) ${c.isChandrashtama ? '[🚨 CHANDRASHTAMA: Avoid New Pacts/Risks]' : c.isFavorable ? '[Favorable]' : '[Neutral]'}${c.alertFlag ? ` [${c.alertFlag}]` : ''}`
+        `  ${c.dayRange}: Moon in ${toCleanEnglishSign(c.moonSignName)} (${c.moonStarName}) — H${c.houseFromNatalMoon} from Moon — ${c.taraBala.taraName} (T${c.taraBala.taraNumber})${c.isChandrashtama ? ' [🚨 CHANDRASHTAMA: Caution]' : c.isFavorable ? ' [Favorable]' : ''}${c.alertFlag ? ` [${c.alertFlag}]` : ''}`
       ).join('\n')
-    : '  • Full Chandra Bala computed across 2.25-day sign progression.';
+    : '  Full Chandra Bala computed across 2.25-day sign progression.';
 
   const ashtakavargaStr = context.ashtakavargaPayload
-    ? `Target House ${context.houseNumber} SAV Points: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]
-  - SAV Points Zodiac Spread:
-${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.houseNumber).padStart(2, ' ')} (${toCleanEnglishSign(s.signName).padEnd(12)}): ${s.points} Bindus [${s.status}]${s.houseNumber === context.houseNumber ? ' <== [TARGET]' : ''}`).join('\n')}`
+    ? `Target House ${context.houseNumber}: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]\n  Spread: ${context.ashtakavargaPayload.savPointsDistribution.map(s => `H${s.houseNumber}:${s.points}`).join(' | ')}`
     : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`;
 
   const dashaDossierStr = (context.dashaLordsDossier && context.dashaLordsDossier.length > 0)
     ? context.dashaLordsDossier.map(d => 
-        `  • ${d.role} [${toCleanEnglishPlanet(d.lordName)}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies House ${d.natalHouseOccupied} (${d.natalDignity}) | Target House ${context.houseNumber}: ${d.connectsToTargetHouse ? `DIRECT CONNECTION -> ${d.targetConnectionReason}` : d.targetConnectionReason}`
+        `  ${d.role} [${toCleanEnglishPlanet(d.lordName)}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies House ${d.natalHouseOccupied} (${d.natalDignity}) | ${d.connectsToTargetHouse ? `Connects: ${d.targetConnectionReason}` : d.targetConnectionReason}`
       ).join('\n')
-    : '  • MD, AD, and PD lords evaluated against natal houses and target bhava.';
+    : '  MD, AD, and PD lords evaluated against natal houses and target bhava.';
 
   const karakaInfoStr = context.bhavaKarakaInfo
     ? `Primary Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
@@ -404,82 +401,59 @@ ${context.ashtakavargaPayload.savPointsDistribution.map(s => `      H${String(s.
   Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
     : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`;
 
+  const horizonSection = context.isComprehensiveMonthly
+    ? `### Monthly Scope & Horizon — ${monthName} ${context.selectedYear}
+- Focus: Comprehensive Full-Month Vedic Synthesis across Core Life Domains
+- Domain Focus Filter: ${context.activeDomainFilter && context.activeDomainFilter !== 'all' ? `Focused on ${context.activeDomainFilter.toUpperCase()}` : 'All Core Life Domains (Career, Finance, Love, Health, Family)'}
+- Key Anchors: Double Transit Sanction (Saturn & Jupiter), Ingress Milestones, and Vimshottari Dasha Triad`
+    : `### Target Horizon
+- House: House ${context.houseNumber} (${bhavaInfo.title}) — Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna]' : ''}
+- Month: ${monthName} ${context.selectedYear}
+- Activation: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'Event Activated' : 'Standard Baseline'})
+${rulesStr}`;
+
   return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
 
-======================================================================
-1. TARGET BHAVA & TEMPORAL HORIZON
-======================================================================
-- Targeted House: House ${context.houseNumber} (${bhavaInfo.title})
-- Zodiac Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna (1st House)]' : ''}
-- Evaluation Month: ${monthName} ${context.selectedYear}
-- Activation Score: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'CRITICAL EVENT ACTIVATED (Threshold >= 0.55)' : 'Standard Baseline'})
-- Matched Classical Rules:
-${rulesStr}
+${horizonSection}
 
-======================================================================
-2. NATAL DATASET (D1 & D9 PLACEMENTS)
-======================================================================
-NATAL D1 (RASI):
+### Natal Chart
+D1 Rasi:
 ${natalD1Table}
 
-NATAL D9 (NAVAMSHA):
-${natalD9Table}
+D9 Navamsha:
+  ${natalD9Table}
 
-======================================================================
-3. GOCHARA (TRANSIT) EPHEMERIS FOR ${monthName.toUpperCase()} ${context.selectedYear}
-======================================================================
-9-GRAHA TRANSITS (Exact Degree, Nakshatra, Pada, Motion & Aspect):
+### Transit Ephemeris — ${monthName} ${context.selectedYear}
 ${allTransitsTable}
 
-★ JUPITER TRANSIT STATUS:
-${jupiterSpotlight}
-
-DIRECT TRANSIT RESIDENTS IN TARGET SIGN (${cleanTargetSign} / House ${context.houseNumber}):
-${targetSignTransitResidents}
-
-======================================================================
-4. PRE-COMPUTED TARA BALA (9-FOLD STELLAR AUSPICIOUSNESS)
-======================================================================
+### Tara Bala
 ${janmaStarStr}
-TRANSIT TARA BALA (From Native Janma Star):
 ${taraBalaTable}
 
-======================================================================
-5. CHANDRA BALA & DAILY PROGRESSION (WITH CHANDRASHTAMA)
-======================================================================
+### Chandra Bala & Daily Progression
 ${chandraBalaTimelineStr}
 
-======================================================================
-6. SARVASHTAKAVARGA (SAV) BINDUS CAPACITY
-======================================================================
+### Sarvashtakavarga (SAV)
 ${ashtakavargaStr}
 
-======================================================================
-7. PLANETARY INGRESS EVENTS IN ${monthName.toUpperCase()} ${context.selectedYear}
-======================================================================
+### Planetary Ingress Events — ${monthName} ${context.selectedYear}
 ${ingressTable}
 
-======================================================================
-8. DASHA LORDS KARMIC DOSSIER (MD, AD, PD HIERARCHY)
-======================================================================
+### Vimshottari Dasha Hierarchy
 ${dashaDelivery}
 Active PD Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
 ${dashaDossierStr}
 
-======================================================================
-9. BHAVA KARAKAS & OUTLET IMPACTS
-======================================================================
+### Bhava Karakas & Significations
 ${karakaInfoStr}
 
-======================================================================
-10. USER INQUIRY
-======================================================================
-"${context.userQuery || `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`}"
+### User Inquiry
+"${context.userQuery || (context.isComprehensiveMonthly ? `Provide a comprehensive monthly Vedic evaluation for ${monthName} ${context.selectedYear}` : `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`)}"
 
-======================================================================
-11. TASK INSTRUCTIONS & COMPACT JSON CONTRACT
-======================================================================
-Synthesize a deep, multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).
+### Task Instructions & Compact JSON Contract
+${context.isComprehensiveMonthly
+  ? `Synthesize a comprehensive, multi-paragraph Vedic analysis for ${monthName} ${context.selectedYear} evaluating overarching Gochara transits across all 5 core life domains (career_job, love_romance, health_vitality, finance_wealth, family_home).`
+  : `Synthesize a deep, multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).`}
 
 LANGUAGE & REASONING REQUIREMENT - UNIFIED ENGLISH ONLY:
 - Strictly formulate all descriptions, reasoning, verdicts, and actionable guidance in clear, articulate English.
@@ -509,9 +483,9 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     "transitDeliveryVerdict": "Gochara transits and Dasha Triad delivery capacity.",
     "synthesisVerdict": "Combined fruition and manifestation verdict."
   },
-  "part1_probabilityAndScope": "Multi-paragraph English breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active Pratyantardasha Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}).",
-  "part2_financialAndResources": "Analysis of capital origin (2nd liquid savings, 4th property/loans, 9th fortune, 11th gains).",
-  "part3_microTimingWindow": "Exact 3 to 7 day peak activation window in ${monthName} ${context.selectedYear} when Moon triggers this House.",
+  "part1_probabilityAndScope": "${context.isComprehensiveMonthly ? `Multi-paragraph English breakdown of comprehensive monthly event probabilities and overarching trajectory across core life domains for ${monthName} ${context.selectedYear}.` : `Multi-paragraph English breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active Pratyantardasha Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}).`}",
+  "part2_financialAndResources": "${context.isComprehensiveMonthly ? `Comprehensive analysis of monthly capital flow, wealth, liquid savings (2nd), and financial gains (11th) for ${monthName} ${context.selectedYear}.` : `Analysis of capital origin (2nd liquid savings, 4th property/loans, 9th fortune, 11th gains).`}",
+  "part3_microTimingWindow": "${context.isComprehensiveMonthly ? `Peak favorable vs cautionary date windows across the lunar progression in ${monthName} ${context.selectedYear}.` : `Exact 3 to 7 day peak activation window in ${monthName} ${context.selectedYear} when Moon triggers this House.`}",
   "peakDateRange": "${monthName} DD – DD, ${context.selectedYear}",
   "overallConfidence": 0.85,
   "supplementaryScenarios": [

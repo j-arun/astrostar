@@ -686,8 +686,43 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </div>
             )}
 
-            {/* Ollama Timeout & Throttle Configuration */}
-            {activeProvider === 'local_qwen' && (
+            {/* LM Studio / Bionic Model Tag Selector */}
+            {activeProvider === 'local_qwen_14b' && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
+                <span className="text-[10px] text-slate-400 font-mono">14B Model:</span>
+                {availableLmStudioModels.length > 0 ? (
+                  <select
+                    value={localLmStudioModel}
+                    onChange={(e) => {
+                      setLocalLmStudioModel(e.target.value);
+                      localStorage.setItem('astro_lmstudio_model', e.target.value);
+                    }}
+                    className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold focus:outline-none cursor-pointer"
+                  >
+                    {availableLmStudioModels.map(m => (
+                      <option key={m} value={m} className="bg-slate-900 text-white font-mono">
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={localLmStudioModel}
+                    onChange={(e) => {
+                      setLocalLmStudioModel(e.target.value);
+                      localStorage.setItem('astro_lmstudio_model', e.target.value);
+                    }}
+                    className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold w-40 focus:outline-none"
+                    placeholder="qwen2.5-14b-instruct"
+                    title="Exact model identifier loaded in LM Studio / Bionic"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Local LLM (7B & 14B) Timeout & Throttle Configuration */}
+            {(activeProvider === 'local_qwen' || activeProvider === 'local_qwen_14b') && (
               <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
                 <span className="text-[10px] text-slate-400 font-mono">Timeout:</span>
                 <button
@@ -718,7 +753,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                       setTimeoutSeconds(val);
                       localStorage.setItem('astro_ollama_timeout_seconds', String(val));
                     }}
-                    className="bg-slate-950 text-amber-300 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none cursor-pointer"
+                    className={`bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none cursor-pointer ${
+                      activeProvider === 'local_qwen_14b' ? 'text-emerald-300' : 'text-amber-300'
+                    }`}
                     title="Select timeout limit in seconds"
                   >
                     <option value="180">180s (3m)</option>
@@ -885,6 +922,18 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               {showWireLog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
 
+            {activeProvider === 'local_qwen_14b' && (
+              <button
+                onClick={handleTestLmStudioConnection}
+                disabled={lmStudioPingResult?.checking}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 transition text-[11px]"
+                title="Pings http://localhost:1234/v1/models to verify if LM Studio / Bionic server is running"
+              >
+                <Radio className={`w-3 h-3 ${lmStudioPingResult?.checking ? 'text-emerald-400 animate-spin' : 'text-slate-400'}`} />
+                <span>Test LM Studio</span>
+              </button>
+            )}
+
             {activeProvider === 'local_qwen' && (
               <>
                 <button
@@ -935,6 +984,37 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             </div>
             <button
               onClick={() => setOllamaPingResult(null)}
+              className="text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* LIVE LM STUDIO / BIONIC HEALTH PING RESULT CARD (WHEN TESTED) */}
+        {lmStudioPingResult && (
+          <div className={`px-5 py-2 text-xs border-b border-slate-800 flex items-center justify-between ${
+            lmStudioPingResult.isOnline ? 'bg-emerald-950/40 text-emerald-200' : 'bg-rose-950/30 text-rose-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {lmStudioPingResult.isOnline ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>
+                    <strong>LM Studio / Bionic Online (Port 1234)!</strong> Detected models: {lmStudioPingResult.models?.join(', ') || 'Loaded in LM Studio'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 text-rose-400" />
+                  <span>
+                    <strong>LM Studio / Bionic Offline:</strong> {lmStudioPingResult.error || 'Server not reachable on port 1234'}. Ensure the local server is started in LM Studio with CORS enabled.
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setLmStudioPingResult(null)}
               className="text-slate-400 hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
@@ -1856,13 +1936,13 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               <RotateCcw className="w-8 h-8 text-amber-400 animate-spin" />
               <div className="text-center space-y-1">
                 <p className="text-xs font-mono font-bold text-white">
-                  Running {LLM_PROVIDERS[activeProvider].name} {activeProvider === 'local_qwen' ? `(${localOllamaModel})` : ''}...
+                  Running {LLM_PROVIDERS[activeProvider].name} {activeProvider === 'local_qwen' ? `(${localOllamaModel})` : activeProvider === 'local_qwen_14b' ? `(${localLmStudioModel})` : ''}...
                 </p>
-                {activeProvider === 'local_qwen' && (
+                {(activeProvider === 'local_qwen' || activeProvider === 'local_qwen_14b') && (
                   enableTimeout ? (
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-amber-300 font-mono">
-                        Executing local inference on your hardware:{' '}
+                        Executing {activeProvider === 'local_qwen_14b' ? '14B' : '7B'} local inference on your hardware:{' '}
                         <span className="font-bold text-white text-xs">{formatTimeDisplay(elapsedSeconds)}</span> / {timeoutSeconds}s limit
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
@@ -1879,7 +1959,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   ) : (
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-emerald-300 font-mono">
-                        Executing local inference at <span className="font-bold text-white">Full Throttle (No Timeout)</span>:{' '}
+                        Executing {activeProvider === 'local_qwen_14b' ? '14B (LLM Studio)' : '7B (Ollama)'} inference at <span className="font-bold text-white">Full Throttle</span>:{' '}
                         <span className="font-extrabold text-white text-sm bg-slate-900 px-2 py-0.5 rounded border border-emerald-500/40">{formatTimeDisplay(elapsedSeconds)} elapsed</span>
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60 relative">
@@ -1887,7 +1967,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                       <p className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1">
                         <Zap className="w-3 h-3 text-emerald-400" />
-                        <span>Default full-time mode: Running without timeout cut-off until your laptop completes synthesis.</span>
+                        <span>Running full-time on your local hardware until completion.</span>
                       </p>
                     </div>
                   )
@@ -1937,6 +2017,43 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                               className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
                             >
                               <span>🖥️ Switch to Local 7B (Ollama)</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : narrative.providerUsed === 'local_qwen_14b' && !narrative.connectionError.includes('timed out') ? (
+                    /* 1b. LM STUDIO / BIONIC 14B CONNECTION ERROR */
+                    <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs space-y-2 shadow-sm animate-fadeIn">
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1 flex-1">
+                          <span className="font-bold text-amber-300 block">
+                            ⚡ LM Studio / Bionic (Local 14B) Notice:
+                          </span>
+                          <p className="leading-relaxed text-slate-300 text-[11px]">
+                            {narrative.connectionError}
+                          </p>
+                          <div className="text-[11px] text-slate-400 bg-slate-950/80 p-2 rounded border border-slate-800 space-y-1 mt-1">
+                            <p><strong>Troubleshooting LM Studio / Bionic:</strong></p>
+                            <p>1. Ensure LM Studio is open and the <strong>Qwen 2.5 14B Instruct</strong> model is loaded in memory.</p>
+                            <p>2. Start the local server on <strong>port 1234</strong> (Local Server tab &gt; Start Server).</p>
+                            <p>3. Enable <strong>CORS</strong> in LM Studio server settings.</p>
+                          </div>
+                          <div className="pt-1 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleTestLmStudioConnection}
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
+                            >
+                              Scan LM Studio Port 1234
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onChangeProvider('local_qwen')}
+                              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
+                            >
+                              Switch to 7B (Ollama)
                             </button>
                           </div>
                         </div>

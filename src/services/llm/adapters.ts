@@ -1621,7 +1621,29 @@ export class Qwen14BStudioAdapter implements ILLMAdapter {
     }
 
     const storedModel = typeof window !== 'undefined' ? localStorage.getItem('astro_lmstudio_model') : null;
-    const targetModel = context.selectedLmStudioModel || storedModel || 'qwen2.5-14b-instruct';
+    let targetModel = context.selectedLmStudioModel || storedModel || 'qwen2.5-14b-instruct';
+
+    // Auto-discover currently loaded model from LM Studio if not explicitly set
+    if (!context.selectedLmStudioModel) {
+      try {
+        const cleanBase = configuredEndpoint.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
+        const modelsRes = await fetch(`${cleanBase}/v1/models`, {
+          signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(1500) : undefined
+        });
+        if (modelsRes.ok) {
+          const mData = await modelsRes.json().catch(() => null);
+          if (mData?.data && Array.isArray(mData.data) && mData.data.length > 0) {
+            const detectedId = mData.data[0]?.id || mData.data[0]?.name;
+            if (detectedId) {
+              targetModel = detectedId;
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('astro_lmstudio_model', detectedId);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
 
     const systemInstruction = `You are an elite Parashara Vedic Astrological Reasoning System.
 Analyze the transit and Vimshottari Dasha planetary context provided.
@@ -1643,7 +1665,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
       ],
       temperature: 0.25,
       max_tokens: 4096,
-      response_format: { type: 'json_object' }
+      stream: false
     };
 
     let connectionError: string | undefined;
@@ -1669,15 +1691,25 @@ You MUST respond strictly with a valid JSON object matching this schema:
         signal: controller.signal
       });
 
-      // If server returned 400 because response_format is not supported, retry without response_format
-      if (!res.ok && res.status === 400) {
-        delete requestBody.response_format;
-        res = await fetch(configuredEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        });
+      // If server returned 404 (Model not found) or 400 (Model not loaded), retry with discovered loaded model
+      if (!res.ok && (res.status === 404 || res.status === 400)) {
+        try {
+          const cleanBase = configuredEndpoint.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
+          const modelsRes = await fetch(`${cleanBase}/v1/models`).catch(() => null);
+          if (modelsRes && modelsRes.ok) {
+            const mData = await modelsRes.json().catch(() => null);
+            if (mData?.data?.[0]?.id) {
+              requestBody.model = mData.data[0].id;
+              targetModel = mData.data[0].id;
+              res = await fetch(configuredEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
+              });
+            }
+          }
+        } catch {}
       }
 
       if (timeoutTimer) {
@@ -1687,12 +1719,17 @@ You MUST respond strictly with a valid JSON object matching this schema:
       if (res.ok) {
         const json = await res.json();
         const contentStr = json.choices?.[0]?.message?.content || json.choices?.[0]?.text || '';
+        const cleanContent = (contentStr || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
         const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen_14b', startMs);
-        const parsed = extractAndParseVedicJson(contentStr, fallback);
+        const parsed = extractAndParseVedicJson(cleanContent, fallback);
+
+        const finalP1 = parsed.part1_probabilityAndScope && parsed.part1_probabilityAndScope !== fallback.part1_probabilityAndScope
+          ? parsed.part1_probabilityAndScope
+          : (cleanContent || fallback.part1_probabilityAndScope);
 
         return {
-          part1_probabilityAndScope: parsed.part1_probabilityAndScope || fallback.part1_probabilityAndScope,
+          part1_probabilityAndScope: finalP1,
           part2_financialAndResources: parsed.part2_financialAndResources || fallback.part2_financialAndResources,
           part3_microTimingWindow: parsed.part3_microTimingWindow || fallback.part3_microTimingWindow,
           summarySentence: parsed.summarySentence || fallback.summarySentence,
@@ -1700,7 +1737,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
           peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
           natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
           supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
-          rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
+          rawMarkdown: cleanContent || parsed.rawMarkdown || finalP1,
           providerUsed: 'local_qwen_14b',
           executionTimeMs: Date.now() - startMs,
           timeoutEnforced: enableTimeout,

@@ -799,7 +799,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     setIsInspectorOpen(true);
   };
 
-  const handleOpenMonthlyReport = () => {
+  const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId) => {
+    if (overrideProvider) {
+      setSelectedLlmProvider(overrideProvider);
+    }
     const signDef = SOUTH_INDIAN_SIGNS.find(s => s.index === natalLagnaIdx) || SOUTH_INDIAN_SIGNS[0];
 
     const flattenedD1 = activeRecord.placements
@@ -1114,9 +1117,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
               <Bot className="w-3.5 h-3.5 text-amber-400" />
               <select
                 value={selectedLlmProvider}
-                onChange={(e) => setSelectedLlmProvider(e.target.value as LLMProviderId)}
+                onChange={(e) => {
+                  const newProv = e.target.value as LLMProviderId;
+                  setSelectedLlmProvider(newProv);
+                  handleOpenMonthlyReport(newProv);
+                }}
                 className="bg-transparent text-[11px] font-semibold text-slate-200 focus:outline-none cursor-pointer pr-1"
-                title="Select Multi-LLM Reasoning Engine Provider"
+                title="Select Multi-LLM Reasoning Engine Provider (immediately runs reasoning for selected model)"
               >
                 <option value="local_qwen" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.local_qwen.badgeLabel}
@@ -1135,17 +1142,21 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
 
             {/* Monthly Vedic Report Button */}
             <button
-              onClick={handleOpenMonthlyReport}
+              onClick={() => handleOpenMonthlyReport()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
               title={`Open Multi-LLM Reasoning Engine for Comprehensive Monthly Report (${MONTH_NAMES[selectedMonth]} ${selectedYear})`}
             >
               <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>Monthly Report Prompt</span>
+              <span>
+                {selectedLlmProvider === 'local_qwen_14b' ? '⚡ Run 14B Report (Bionic)' :
+                 selectedLlmProvider === 'local_qwen' ? '🖥️ Run 7B Report (Ollama)' :
+                 selectedLlmProvider === 'gemini_pro' ? '♊ Run Gemini Report' : '🧠 Run Claude Report'}
+              </span>
             </button>
 
             {/* Quick Open Audio Voice Inspector Button */}
             <button
-              onClick={handleOpenMonthlyReport}
+              onClick={() => handleOpenMonthlyReport()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 transition shadow-sm font-bold text-xs cursor-pointer"
               title={`Open Multi-LLM Audio Voice Inspector for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
             >

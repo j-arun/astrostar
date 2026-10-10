@@ -1896,22 +1896,90 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
             </div>
           ) : narrative ? (
             <div className="space-y-3.5">
-              {/* TIMEOUT WARNING BANNER (IF CUT OFF DUE TO TIMEOUT) */}
-              {narrative.connectionError && (narrative.connectionError.includes('timed out') || narrative.connectionError.includes('limit')) && (
-                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <span className="font-bold text-rose-300 block">
-                      Local LLM Timed Out ({narrative.configuredTimeoutSeconds ? `${narrative.configuredTimeoutSeconds}s limit` : 'timeout'} exceeded):
-                    </span>
-                    <p className="leading-relaxed text-slate-300 text-[11px]">
-                      {narrative.connectionError}
-                    </p>
-                    <p className="text-[11px] text-amber-300 mt-1">
-                      💡 <strong>Tip:</strong> Click <button type="button" onClick={() => { setEnableTimeout(false); localStorage.setItem('astro_ollama_enable_timeout', 'false'); }} className="underline font-bold text-white hover:text-amber-200 cursor-pointer">⚡ Full Throttle</button> in the inspector header above to run without any timeout limits.
-                    </p>
-                  </div>
-                </div>
+              {/* CONTEXTUAL ERROR & QUOTA BANNERS */}
+              {narrative.connectionError && (
+                <>
+                  {/* 1. GEMINI QUOTA / RATE LIMIT / PAID TIER NOTICE */}
+                  {narrative.providerUsed === 'gemini_pro' && (narrative.connectionError.includes('RESOURCE_EXHAUSTED') || narrative.connectionError.includes('quota') || narrative.connectionError.includes('429') || narrative.connectionError.includes('limit')) ? (
+                    <div className="p-4 rounded-xl bg-purple-950/40 border border-purple-500/50 text-purple-200 text-xs space-y-2.5 shadow-md animate-fadeIn">
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                              <span>♊ Gemini Quota / Rate Limit Alert</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">429 RESOURCE_EXHAUSTED</span>
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-xs leading-relaxed">
+                            {narrative.connectionError}
+                          </p>
+                          <div className="p-2.5 rounded-lg bg-slate-900/90 border border-purple-500/30 text-[11px] text-slate-300 space-y-1.5">
+                            <p className="font-bold text-purple-300">💡 Why am I hitting quota even though I am on a Paid Tier with a Paid API Key?</p>
+                            <ul className="list-disc list-inside space-y-1 text-slate-300/90 pl-1">
+                              <li><strong>GCP Project Mismatch:</strong> In <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-amber-400 underline hover:text-white inline-flex items-center gap-0.5">Google AI Studio <ExternalLink className="w-2.5 h-2.5" /></a>, API keys are tied to a specific project. If your key was generated under the default project, it remains on the <em>Free Tier</em> even if billing is activated on another project. Create a new key selecting your billed GCP project.</li>
+                              <li><strong>Per-Minute Burst Rate Limits (RPM):</strong> Even Paid Tier 1 enforces strict requests-per-minute (RPM) and token-per-minute limits. Rapid repeated requests trigger temporary 429 throttling.</li>
+                              <li><strong>Billing Budget / Safety Cap:</strong> Check Google Cloud Console &gt; Billing &gt; Budgets &amp; alerts to confirm no hard spend limits were reached.</li>
+                            </ul>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-[11px] text-slate-400 font-semibold">Immediate unlimited solution:</span>
+                            <button
+                              type="button"
+                              onClick={() => onChangeProvider('local_qwen_14b')}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
+                            >
+                              <span>⚡ Switch to Local 14B (LM Studio / Bionic)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onChangeProvider('local_qwen')}
+                              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
+                            >
+                              <span>🖥️ Switch to Local 7B (Ollama)</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : narrative.providerUsed === 'gemini_pro' && (narrative.connectionError.includes('API Key Invalid') || narrative.connectionError.includes('INVALID_ARGUMENT')) ? (
+                    /* 2. GEMINI INVALID KEY */
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <span className="font-bold text-rose-300 block">Invalid Gemini API Key</span>
+                        <p className="leading-relaxed text-slate-300 text-[11px]">
+                          {narrative.connectionError}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (narrative.providerUsed === 'local_qwen' || narrative.providerUsed === 'local_qwen_14b') && narrative.connectionError.includes('timed out') ? (
+                    /* 3. LOCAL LLM TIMEOUT */
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <span className="font-bold text-rose-300 block">
+                          Local LLM Timed Out ({narrative.configuredTimeoutSeconds ? `${narrative.configuredTimeoutSeconds}s limit` : 'timeout'} exceeded):
+                        </span>
+                        <p className="leading-relaxed text-slate-300 text-[11px]">
+                          {narrative.connectionError}
+                        </p>
+                        <p className="text-[11px] text-amber-300 mt-1">
+                          💡 <strong>Tip:</strong> Click <button type="button" onClick={() => { setEnableTimeout(false); localStorage.setItem('astro_ollama_enable_timeout', 'false'); }} className="underline font-bold text-white hover:text-amber-200 cursor-pointer">⚡ Full Throttle</button> in the inspector header above to run without any timeout limits.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 4. GENERAL CONNECTION FALLBACK NOTICE */
+                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 text-xs flex items-start gap-2.5 shadow-sm">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-amber-300 block">Notice: Operating on Analytical Parashara Heuristic Engine</span>
+                        <p className="text-[11px] text-slate-400">{narrative.connectionError}</p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Summary Bottom Line */}

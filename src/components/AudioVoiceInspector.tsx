@@ -223,7 +223,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Auto-scan Ollama models on open when provider is local
+  // Auto-scan Ollama / LLM Studio models on open when provider is local
   useEffect(() => {
     if (isOpen && activeProvider === 'local_qwen') {
       checkOllamaHealth().then(res => {
@@ -231,8 +231,14 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           setAvailableOllamaModels(res.models);
         }
       }).catch(() => {});
+    } else if (isOpen && activeProvider === 'local_qwen_14b') {
+      checkLmStudioHealth(lmStudioEndpoint).then(res => {
+        if (res.isOnline && res.models && res.models.length > 0) {
+          setAvailableLmStudioModels(res.models);
+        }
+      }).catch(() => {});
     }
-  }, [isOpen, activeProvider]);
+  }, [isOpen, activeProvider, lmStudioEndpoint]);
 
   // Initialize synthesis when context changes or language changes
   useEffect(() => {
@@ -241,7 +247,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     } else {
       stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
+  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, localLmStudioModel, lmStudioEndpoint, selectedLanguage, enableTimeout, timeoutSeconds]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -271,6 +277,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         userQuery: q || undefined,
         language: selectedLanguage,
         selectedLocalModel: localOllamaModel,
+        selectedLmStudioModel: localLmStudioModel,
+        lmStudioEndpoint: lmStudioEndpoint,
         customPromptOverride: promptToSend,
         enableTimeout,
         timeoutSeconds
@@ -302,13 +310,15 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     if (!narrative) return;
     setRetryingInsert(true);
     try {
-      const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
+      const engineMap: Record<LLMProviderId, 'Ollama' | 'LMStudio' | 'Gemini' | 'Claude'> = {
         local_qwen: 'Ollama',
+        local_qwen_14b: 'LMStudio',
         gemini_pro: 'Gemini',
         claude: 'Claude'
       };
       const engine = engineMap[activeProvider] || 'Gemini';
       const modelName = narrative.ollamaStats?.model || (
+        activeProvider === 'local_qwen_14b' ? localLmStudioModel :
         activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
         activeProvider === 'claude' ? 'claude-3-5-sonnet' : localOllamaModel
       );
@@ -368,6 +378,27 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         if (matchingQwen) {
           setLocalOllamaModel(matchingQwen);
           localStorage.setItem('astro_ollama_model', matchingQwen);
+        }
+      }
+    }
+  };
+
+  const handleTestLmStudioConnection = async () => {
+    setLmStudioPingResult({ checking: true });
+    const res = await checkLmStudioHealth(lmStudioEndpoint);
+    setLmStudioPingResult({
+      checking: false,
+      isOnline: res.isOnline,
+      models: res.models,
+      error: res.error
+    });
+    if (res.models && res.models.length > 0) {
+      setAvailableLmStudioModels(res.models);
+      if (!res.models.includes(localLmStudioModel)) {
+        const matching14b = res.models.find(m => m.toLowerCase().includes('14b') || m.toLowerCase().includes('qwen'));
+        if (matching14b) {
+          setLocalLmStudioModel(matching14b);
+          localStorage.setItem('astro_lmstudio_model', matching14b);
         }
       }
     }

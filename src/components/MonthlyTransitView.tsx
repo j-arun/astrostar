@@ -240,21 +240,18 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     return `vedic_transit_override_${personId}_${selectedYear}_${selectedMonth}`;
   }, [personId, selectedYear, selectedMonth]);
 
-  // Collapsible section toggles for Monthly View (3 Sections)
+  // Collapsible section toggles for Monthly View
   const [expandTimelineControls, setExpandTimelineControls] = useState<boolean>(true);
   const [expandTransitChart, setExpandTransitChart] = useState<boolean>(true);
-  const [expandRuleEngine, setExpandRuleEngine] = useState<boolean>(true);
 
   const handleExpandAll = () => {
     setExpandTimelineControls(true);
     setExpandTransitChart(true);
-    setExpandRuleEngine(true);
   };
 
   const handleCollapseAll = () => {
     setExpandTimelineControls(false);
     setExpandTransitChart(false);
-    setExpandRuleEngine(false);
   };
 
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>(() => {
@@ -500,8 +497,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
   const [isMicroPdFocus, setIsMicroPdFocus] = useState<boolean>(false);
 
   // Astrological Rule Engine configuration state
-  const [rules, setRules] = useState<AstroRule[]>(DEFAULT_RULES);
-  const [showRuleConfig, setShowRuleConfig] = useState<boolean>(true);
+  const [rules] = useState<AstroRule[]>(DEFAULT_RULES);
 
   // Compute House Activation Scores across the 12 houses
   const houseActivations = useMemo(() => {
@@ -534,17 +530,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     });
   }, [rules, transitPlacements, natalD1Placements, activeDashaHierarchy, pdLordOwnedSigns]);
 
-  const handleToggleRule = (ruleId: string) => {
-    setRules(prev => prev.map(r => r.id === ruleId ? { ...r, isEnabled: !r.isEnabled } : r));
-  };
 
-  const handleWeightChange = (ruleId: string, newWeight: number) => {
-    setRules(prev => prev.map(r => r.id === ruleId ? { ...r, weight: newWeight } : r));
-  };
-
-  const handleResetRules = () => {
-    setRules(DEFAULT_RULES);
-  };
 
   // Milestone M4: Multi-LLM Provider & Audio Voice Inspector States
   const [selectedLlmProvider, setSelectedLlmProvider] = useState<LLMProviderId>('local_qwen');
@@ -1054,31 +1040,20 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             <span>2. 4x4 Transit Chart</span>
             {expandTransitChart ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
-          <button
-            onClick={() => setExpandRuleEngine(!expandRuleEngine)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-              expandRuleEngine
-                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>3. Rule Engine &amp; Scores</span>
-            {expandRuleEngine ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleExpandAll}
             className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Expand all 3 sections"
+            title="Expand all sections"
           >
             Expand All
           </button>
           <button
             onClick={handleCollapseAll}
             className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Collapse all 3 sections"
+            title="Collapse all sections"
           >
             Collapse All
           </button>
@@ -2115,168 +2090,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* SECTION 3: PERSISTED ASTROLOGICAL RULE ENGINE CONFIGURATOR (MILESTONE 3) */}
-      {/* ========================================================================= */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
-        <div
-          onClick={() => setExpandRuleEngine(!expandRuleEngine)}
-          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shadow-inner">
-              <Sliders className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white tracking-tight">
-                  3. Astrological Rule Engine &amp; Event Emission Weights
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  Milestone 3 Live
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30">
-                  {houseActivations.filter(h => h.isEventActive).length} Active Houses
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Declarative Vedic rules scoring monthly house activation. Houses reaching score &ge; 0.55 pulse with life-event indicators.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={handleResetRules}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
-              title="Reset weights and toggles to standard defaults"
-            >
-              Reset to Defaults
-            </button>
-            <button
-              onClick={() => setExpandRuleEngine(!expandRuleEngine)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-              title={expandRuleEngine ? "Minimize Section 3" : "Expand Section 3"}
-            >
-              {expandRuleEngine ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
-
-        {expandRuleEngine && (
-          <div className="p-4 sm:p-5 space-y-4">
-            {/* Live Activated Houses Summary Pill Strip */}
-        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span className="font-semibold text-slate-200">
-              Active Event Houses for {MONTH_NAMES[selectedMonth]} {selectedYear}:
-            </span>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-950/60 border border-indigo-700/50 text-[11px] font-mono">
-              <span className="text-slate-400">Rule 5 Delivery:</span>
-              <span className={`font-bold ${
-                dashaDeliveryReport.status === 'High Fruition'
-                  ? 'text-emerald-400'
-                  : dashaDeliveryReport.status === 'Moderate Manifestation'
-                  ? 'text-amber-400'
-                  : 'text-rose-400'
-              }`}>
-                {(dashaDeliveryReport.overallIndex * 100).toFixed(0)}% ({dashaDeliveryReport.status})
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {houseActivations.filter(h => h.isEventActive).length > 0 ? (
-              houseActivations
-                .filter(h => h.isEventActive)
-                .map(act => {
-                  const sDef = SOUTH_INDIAN_SIGNS.find(s => s.index === act.signIndex);
-                  return (
-                    <span
-                      key={act.signIndex}
-                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold flex items-center gap-1.5"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                      <span>House {act.houseNumber} ({sDef?.tamil} - {sDef?.eng.split(' ')[0]})</span>
-                      <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-extrabold text-[10px]">
-                        {act.totalScore}
-                      </span>
-                    </span>
-                  );
-                })
-            ) : (
-              <span className="text-slate-400 italic text-[11px]">
-                No houses currently reach the &ge; 0.55 activation threshold. Increase weights below to test sensitive triggers.
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Expandable Rules Grid */}
-        {showRuleConfig && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            {rules.map(rule => (
-              <div
-                key={rule.id}
-                className={`p-3.5 rounded-xl border transition ${
-                  rule.isEnabled
-                    ? 'bg-slate-950 border-slate-800'
-                    : 'bg-slate-950/40 border-slate-900 opacity-60'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-200">{rule.name}</span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] uppercase font-bold bg-slate-800 text-slate-400">
-                        {rule.category}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 leading-snug">
-                      {rule.description}
-                    </p>
-                  </div>
-
-                  {/* Toggle */}
-                  <button
-                    onClick={() => handleToggleRule(rule.id)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      rule.isEnabled ? 'bg-amber-500' : 'bg-slate-800'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-950 shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        rule.isEnabled ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Weight Slider */}
-                <div className="flex items-center gap-3 pt-2 border-t border-slate-800/60 text-xs">
-                  <span className="text-slate-400 text-[11px]">Influence Weight:</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    disabled={!rule.isEnabled}
-                    value={rule.weight}
-                    onChange={e => handleWeightChange(rule.id, parseFloat(e.target.value))}
-                    className="flex-1 accent-amber-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-                  />
-                  <span className="font-mono text-xs font-bold text-amber-400 w-10 text-right">
-                    {rule.weight.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-          </div>
-        )}
-      </div>
 
       {/* Audio Voice Inspector Modal / Drawer (Milestone M4) */}
       <AudioVoiceInspector

@@ -1696,7 +1696,17 @@ export interface LLMPromptLogPayload {
  * Persists LLM prompt & response audit log entry into PostgreSQL table llm_prompt_logs
  * and local fallback storage.
  */
-export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{ success: boolean; log_id?: string; running_number?: number }> {
+export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{
+  success: boolean;
+  log_id?: string;
+  running_number?: number;
+  sql_insert?: string;
+  persisted_in?: string;
+  pg_persisted?: boolean;
+}> {
+  let result: any = null;
+
+  // 1. Post to local Vite dev server endpoint (/api/llm/log)
   try {
     const res = await fetch('/api/llm/log', {
       method: 'POST',
@@ -1704,12 +1714,47 @@ export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{
       body: JSON.stringify(entry)
     });
     if (res.ok) {
-      return await res.json();
+      result = await res.json();
     }
   } catch (e) {
     console.warn('Could not post to /api/llm/log:', e);
   }
-  return { success: false };
+
+  // 2. Also try direct client-side post to Python REST API (port 5000) if active on user machine
+  try {
+    const pythonApiUrl = (typeof window !== 'undefined' && localStorage.getItem('astro_api_base_url'))
+      || 'http://localhost:5000';
+    const pyRes = await fetch(`${pythonApiUrl}/api/llm/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+      signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(1500) : undefined
+    }).catch(() => null);
+
+    if (pyRes && pyRes.ok) {
+      const pyJson = await pyRes.json().catch(() => null);
+      if (pyJson) {
+        if (!result) result = pyJson;
+        result.pg_persisted = true;
+        result.persisted_in = 'postgresql.llm_prompt_logs (via Python :5000)';
+      }
+    }
+  } catch {}
+
+  // 3. Fallback SQL format if offline
+  if (!result) {
+    const escapeSql = (s: string) => "'" + (s || '').replace(/'/g, "''") + "'";
+    const fallbackLogId = `LOG-${entry.engine.toUpperCase()}-001-${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+    return {
+      success: true,
+      log_id: fallbackLogId,
+      running_number: 1,
+      persisted_in: 'client-memory',
+      sql_insert: `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES (${escapeSql(fallbackLogId)}, 1, ${escapeSql(entry.engine)}, ${escapeSql(entry.model_name || '')}, ${escapeSql(entry.fired_at)}, ${escapeSql(entry.prompt_text)}, ${escapeSql(entry.response_text)}, ${entry.time_taken_ms}, ${escapeSql(entry.status)});`
+    };
+  }
+
+  return result;
 }
 
 /**
@@ -1782,6 +1827,9 @@ export class LLMReasoningService {
       if (logRes?.log_id) {
         result.logId = logRes.log_id;
         result.runningNumber = logRes.running_number;
+        result.sqlInsert = logRes.sql_insert;
+        result.persistedIn = logRes.persisted_in;
+        result.pgPersisted = logRes.pg_persisted;
       }
     } catch (logErr) {
       console.warn('Error firing LLM prompt log write:', logErr);

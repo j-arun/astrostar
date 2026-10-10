@@ -37,7 +37,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog } from '../services/llm/adapters';
 import { generateVedicPdfReport } from '../services/pdfReportGenerator';
 
 const MONTH_NAMES = [
@@ -278,6 +278,50 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       console.error('Failed to load DB logs:', e);
     } finally {
       setLoadingDbLogs(false);
+    }
+  };
+
+  const [retryingInsert, setRetryingInsert] = useState<boolean>(false);
+
+  const handleRetryDbInsert = async () => {
+    if (!narrative) return;
+    setRetryingInsert(true);
+    try {
+      const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
+        local_qwen: 'Ollama',
+        gemini_pro: 'Gemini',
+        claude: 'Claude'
+      };
+      const engine = engineMap[activeProvider] || 'Gemini';
+      const modelName = narrative.ollamaStats?.model || (
+        activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
+        activeProvider === 'claude' ? 'claude-3-5-sonnet' : localOllamaModel
+      );
+      const res = await persistLLMPromptLog({
+        engine,
+        model_name: modelName,
+        fired_at: new Date().toISOString(),
+        prompt_text: narrative.promptSent || '',
+        response_text: narrative.part1_probabilityAndScope || narrative.rawMarkdown || '',
+        time_taken_ms: narrative.executionTimeMs || 0,
+        status: narrative.connectionStatus === 'connected_live' ? 'SUCCESS' : 'FALLBACK',
+        response_json: narrative.rawResponseBody
+      });
+      if (res?.log_id) {
+        setNarrative(prev => prev ? {
+          ...prev,
+          logId: res.log_id,
+          runningNumber: res.running_number,
+          sqlInsert: res.sql_insert,
+          persistedIn: res.persisted_in,
+          pgPersisted: res.pg_persisted
+        } : null);
+      }
+      await loadDbLogs();
+    } catch (e) {
+      console.error('Error retrying DB log insert:', e);
+    } finally {
+      setRetryingInsert(false);
     }
   };
 
@@ -1093,22 +1137,78 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
 
                 {/* Current Active Run Card */}
                 {narrative?.logId ? (
-                  <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/30 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] font-mono">
-                    <div>
-                      <span className="text-slate-500 block">Current Log ID</span>
-                      <span className="text-emerald-300 font-bold">{narrative.logId}</span>
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/30 grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px] font-mono">
+                      <div>
+                        <span className="text-slate-500 block">Current Log ID</span>
+                        <span className="text-emerald-300 font-bold">{narrative.logId}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Running Seq #</span>
+                        <span className="text-white font-bold">#{narrative.runningNumber || '1'} (Cycle 1..100)</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Engine &amp; Model</span>
+                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'} ({narrative.ollamaStats?.model || 'gemini-3.8-flash'})</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Time Taken</span>
+                        <span className="text-cyan-300 font-bold">{narrative.executionTimeMs} ms</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Persistence Target</span>
+                        <span className={`font-bold truncate block ${narrative.pgPersisted ? 'text-emerald-400' : 'text-slate-300'}`}>
+                          {narrative.persistedIn || 'stored_prompt_logs.json'}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-slate-500 block">Running Seq #</span>
-                      <span className="text-white font-bold">#{narrative.runningNumber || '1'} (Cycle 1..100)</span>
+
+                    {/* Exact SQL Insert Statement with 1-Click Copy */}
+                    <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                          <Database className="w-3.5 h-3.5" />
+                          <span>Exact SQL Insert Statement for <code className="font-mono text-white">llm_prompt_logs</code>:</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleRetryDbInsert}
+                            disabled={retryingInsert}
+                            className="px-2.5 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-[11px] font-mono flex items-center gap-1 border border-indigo-500/40 transition cursor-pointer"
+                            title="Trigger database insertion again"
+                          >
+                            <RotateCcw className={`w-3 h-3 ${retryingInsert ? 'animate-spin text-amber-400' : ''}`} />
+                            <span>{retryingInsert ? 'Sending...' : 'Retry DB Insert'}</span>
+                          </button>
+                          <button
+                            onClick={() => handleCopy(
+                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'}', '${narrative.ollamaStats?.model || 'gemini-3.8-flash'}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
+                              'manual_sql_insert'
+                            )}
+                            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[11px] font-mono flex items-center gap-1 transition cursor-pointer shadow-sm"
+                          >
+                            {copied === 'manual_sql_insert' ? <Check className="w-3.5 h-3.5 text-slate-950" /> : <Copy className="w-3.5 h-3.5 text-slate-950" />}
+                            <span>{copied === 'manual_sql_insert' ? 'Copied Insert SQL!' : 'Copy Exact Insert SQL'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <pre className="p-2 bg-slate-900 rounded border border-slate-800 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-24 overflow-y-auto select-all">
+                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'}', '${narrative.ollamaStats?.model || 'gemini-3.8-flash'}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
+                      </pre>
                     </div>
-                    <div>
-                      <span className="text-slate-500 block">Engine &amp; Model</span>
-                      <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'} ({narrative.ollamaStats?.model || 'gemini-3.8-flash'})</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block">Time Taken</span>
-                      <span className="text-cyan-300 font-bold">{narrative.executionTimeMs} ms</span>
+
+                    {/* Explanation Callout for PostgreSQL Connectivity */}
+                    <div className="p-2.5 bg-slate-950/70 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
+                      <span className="font-semibold text-slate-300 block">💡 Why PostgreSQL table might need the bridge or manual copy:</span>
+                      <p className="text-slate-400 leading-relaxed">
+                        • In this sandbox environment, the web frontend runs in the cloud container, while your local PostgreSQL database is on your computer (<code className="text-slate-200">localhost:5432</code>).
+                      </p>
+                      <p className="text-slate-400 leading-relaxed">
+                        • <strong>Option A (Automatic Bridge):</strong> Run <code className="text-amber-300 bg-slate-900 px-1 py-0.2 rounded font-mono">python run_api_server.py</code> on your computer. The UI will automatically forward every inference prompt to port 5000 and insert it into your PostgreSQL database.
+                      </p>
+                      <p className="text-slate-400 leading-relaxed">
+                        • <strong>Option B (Manual 1-Click):</strong> Click <strong className="text-emerald-400">"Copy Exact Insert SQL"</strong> above to paste and execute the insert directly in pgAdmin, DBeaver, or psql!
+                      </p>
                     </div>
                   </div>
                 ) : (

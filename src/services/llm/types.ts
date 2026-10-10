@@ -326,6 +326,9 @@ export interface LLMThreePartNarrative {
   };
   logId?: string;
   runningNumber?: number;
+  sqlInsert?: string;
+  persistedIn?: string;
+  pgPersisted?: boolean;
 }
 
 export interface ILLMAdapter {

@@ -1,5 +1,44 @@
 [
   {
+    "log_id": "LOG-GEMINI-001-20261010153731",
+    "running_number": 1,
+    "engine": "Gemini",
+    "model_name": "gemini-3.8-flash",
+    "fired_at": "2026-10-10T15:37:31.594Z",
+    "prompt_text": "Audit prompt check for October 2026",
+    "response_text": "Sample Vedic astrological narrative",
+    "time_taken_ms": 850,
+    "status": "SUCCESS",
+    "response_json": null,
+    "created_at": "2026-10-10T15:37:31.594Z"
+  },
+  {
+    "log_id": "LOG-GEMINI-002-20261010153723",
+    "running_number": 2,
+    "engine": "Gemini",
+    "model_name": "gemini-3.8-flash",
+    "fired_at": "2026-10-10T15:37:23.197Z",
+    "prompt_text": "Audit prompt check for October 2026",
+    "response_text": "Sample Vedic astrological narrative",
+    "time_taken_ms": 850,
+    "status": "SUCCESS",
+    "response_json": null,
+    "created_at": "2026-10-10T15:37:23.197Z"
+  },
+  {
+    "log_id": "LOG-GEMINI-001-20261010153200",
+    "running_number": 1,
+    "engine": "Gemini",
+    "model_name": "gemini-3.8-flash",
+    "fired_at": "2026-10-10T15:32:00.277Z",
+    "prompt_text": "Test prompt from agent",
+    "response_text": "Test response from agent",
+    "time_taken_ms": 100,
+    "status": "SUCCESS",
+    "response_json": null,
+    "created_at": "2026-10-10T15:32:00.277Z"
+  },
+  {
     "log_id": "LOG-GEMINI-001-20261009084353",
     "running_number": 1,
     "engine": "Gemini",

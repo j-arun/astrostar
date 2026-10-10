@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
+import pg from 'pg';
 import { defineConfig, loadEnv, Plugin } from 'vite';
 
 function astroApiPlugin(): Plugin {
@@ -394,7 +395,11 @@ function astroApiPlugin(): Plugin {
                 created_at: new Date().toISOString()
               };
 
-              // Persist to local JSON data store
+              // 1. Format raw SQL Insert script for user manual / audit execution
+              const escapeSql = (s: string) => "'" + (s || '').replace(/'/g, "''") + "'";
+              const sqlInsert = `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status, response_json) VALUES (${escapeSql(logEntry.log_id)}, ${logEntry.running_number}, ${escapeSql(logEntry.engine)}, ${escapeSql(logEntry.model_name)}, ${escapeSql(logEntry.fired_at)}, ${escapeSql(logEntry.prompt_text)}, ${escapeSql(logEntry.response_text)}, ${logEntry.time_taken_ms}, ${escapeSql(logEntry.status)}, ${logEntry.response_json ? escapeSql(JSON.stringify(logEntry.response_json)) : 'NULL'});`;
+
+              // 2. Persist to local JSON data store (always succeeds)
               const dataPath = path.resolve(__dirname, 'src/data/stored_prompt_logs.json');
               let existingLogs: any[] = [];
               if (fs.existsSync(dataPath)) {
@@ -408,7 +413,87 @@ function astroApiPlugin(): Plugin {
               }
               fs.writeFileSync(dataPath, JSON.stringify(existingLogs, null, 2), 'utf-8');
 
-              // Asynchronously forward to Python Postgres API server (port 5000) if active
+              // 3. Attempt direct PostgreSQL insertion via node-pg
+              let pgSuccess = false;
+              let pgError: string | null = null;
+              try {
+                const getPgConfig = () => {
+                  if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL };
+                  try {
+                    const cp = path.resolve(__dirname, 'config.ini');
+                    if (fs.existsSync(cp)) {
+                      const t = fs.readFileSync(cp, 'utf-8');
+                      const gv = (k: string) => {
+                        const m = t.match(new RegExp(`^${k}\\s*=\\s*(.+)$`, 'm'));
+                        return m ? m[1].trim() : undefined;
+                      };
+                      return {
+                        host: gv('host') || 'localhost',
+                        port: parseInt(gv('port') || '5432', 10),
+                        database: gv('dbname') || 'astro',
+                        user: gv('user') || 'postgres',
+                        password: gv('password') || 'postgres'
+                      };
+                    }
+                  } catch {}
+                  return {
+                    host: process.env.PGHOST || 'localhost',
+                    port: parseInt(process.env.PGPORT || '5432', 10),
+                    database: process.env.PGDATABASE || 'astro',
+                    user: process.env.PGUSER || 'postgres',
+                    password: process.env.PGPASSWORD || 'postgres'
+                  };
+                };
+
+                const pgClient = new pg.Client({ ...getPgConfig(), connectionTimeoutMillis: 1500 });
+                await pgClient.connect();
+                try {
+                  await pgClient.query(`
+                    CREATE SEQUENCE IF NOT EXISTS llm_prompt_log_seq MINVALUE 1 MAXVALUE 100 START WITH 1 INCREMENT BY 1 CYCLE;
+                    CREATE TABLE IF NOT EXISTS llm_prompt_logs (
+                      id SERIAL PRIMARY KEY,
+                      log_id VARCHAR(64) UNIQUE NOT NULL,
+                      running_number INTEGER NOT NULL,
+                      engine VARCHAR(50) NOT NULL,
+                      model_name VARCHAR(100),
+                      fired_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                      prompt_text TEXT NOT NULL,
+                      response_text TEXT NOT NULL,
+                      time_taken_ms INTEGER NOT NULL,
+                      status VARCHAR(30) DEFAULT 'SUCCESS',
+                      response_json JSONB,
+                      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                  `);
+                  await pgClient.query(`
+                    INSERT INTO llm_prompt_logs (
+                      log_id, running_number, engine, model_name, fired_at,
+                      prompt_text, response_text, time_taken_ms, status, response_json
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    ON CONFLICT (log_id) DO NOTHING;
+                  `, [
+                    logEntry.log_id,
+                    logEntry.running_number,
+                    logEntry.engine,
+                    logEntry.model_name,
+                    logEntry.fired_at,
+                    logEntry.prompt_text,
+                    logEntry.response_text,
+                    logEntry.time_taken_ms,
+                    logEntry.status,
+                    logEntry.response_json ? JSON.stringify(logEntry.response_json) : null
+                  ]);
+                  pgSuccess = true;
+                } catch (pgInner: any) {
+                  pgError = pgInner.message;
+                } finally {
+                  await pgClient.end().catch(() => {});
+                }
+              } catch (connErr: any) {
+                pgError = connErr.message;
+              }
+
+              // 4. Asynchronously forward to Python Postgres API server (port 5000) if active
               try {
                 fetch('http://127.0.0.1:5000/api/llm/log', {
                   method: 'POST',
@@ -422,7 +507,12 @@ function astroApiPlugin(): Plugin {
                 success: true,
                 log_id: logId,
                 running_number: runningNum,
-                persisted_in: 'stored_prompt_logs.json & postgresql (if active)'
+                pg_persisted: pgSuccess,
+                pg_error: pgError,
+                persisted_in: pgSuccess
+                  ? 'postgresql.llm_prompt_logs & stored_prompt_logs.json'
+                  : 'stored_prompt_logs.json',
+                sql_insert: sqlInsert
               }));
             } catch (err: any) {
               res.statusCode = 500;
@@ -435,6 +525,30 @@ function astroApiPlugin(): Plugin {
         // 8. GET /api/llm/logs - Retrieve LLM prompt logs
         if (url.startsWith('/api/llm/logs') && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
+          // Try fetching directly from PostgreSQL first
+          try {
+            const getPgConfig = () => {
+              if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL };
+              return {
+                host: process.env.PGHOST || 'localhost',
+                port: parseInt(process.env.PGPORT || '5432', 10),
+                database: process.env.PGDATABASE || 'astro',
+                user: process.env.PGUSER || 'postgres',
+                password: process.env.PGPASSWORD || 'postgres'
+              };
+            };
+            const client = new pg.Client({ ...getPgConfig(), connectionTimeoutMillis: 1200 });
+            await client.connect();
+            const queryRes = await client.query('SELECT * FROM llm_prompt_logs ORDER BY id DESC LIMIT 50;');
+            await client.end();
+            if (queryRes.rows && queryRes.rows.length > 0) {
+              res.statusCode = 200;
+              res.end(JSON.stringify({ logs: queryRes.rows, source: 'postgresql' }));
+              return;
+            }
+          } catch {}
+
+          // Fallback to local stored_prompt_logs.json
           const dataPath = path.resolve(__dirname, 'src/data/stored_prompt_logs.json');
           let logs: any[] = [];
           if (fs.existsSync(dataPath)) {
@@ -443,7 +557,7 @@ function astroApiPlugin(): Plugin {
             } catch {}
           }
           res.statusCode = 200;
-          res.end(JSON.stringify({ logs }));
+          res.end(JSON.stringify({ logs, source: 'stored_prompt_logs.json' }));
           return;
         }
 

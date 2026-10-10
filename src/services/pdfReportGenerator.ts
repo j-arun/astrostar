@@ -808,16 +808,18 @@ export function generateVedicPdfReport(
     );
   }
 
-  // Determine provider label for filename: Gemini | Ollama | Claude
+  // Determine provider label for filename: Gemini | Ollama | LMStudio | Claude
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
-    providerTag = 'Ollama';
+    providerTag = 'Ollama-7B';
+  } else if (narrative.providerUsed === 'local_qwen_14b') {
+    providerTag = 'LMStudio-14B';
   } else if (narrative.providerUsed === 'claude') {
     providerTag = 'Claude';
   } else if (narrative.providerUsed === 'gemini_pro') {
     providerTag = 'Gemini';
   } else {
-    providerTag = narrative.isPrivateLocal ? 'Ollama' : 'Gemini';
+    providerTag = narrative.isPrivateLocal ? 'LocalLLM' : 'Gemini';
   }
 
   const monthName = MONTH_NAMES[context.selectedMonth] || `Month${context.selectedMonth + 1}`;

@@ -1121,6 +1121,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
                 <option value="local_qwen" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.local_qwen.badgeLabel}
                 </option>
+                <option value="local_qwen_14b" className="bg-slate-900 text-white">
+                  {LLM_PROVIDERS.local_qwen_14b.badgeLabel}
+                </option>
                 <option value="gemini_pro" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.gemini_pro.badgeLabel}
                 </option>

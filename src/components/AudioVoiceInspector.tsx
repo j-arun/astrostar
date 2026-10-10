@@ -37,7 +37,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog, checkLmStudioHealth } from '../services/llm/adapters';
 import { generateVedicPdfReport } from '../services/pdfReportGenerator';
 
 const MONTH_NAMES = [
@@ -137,6 +137,21 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   });
 
   const [ollamaPingResult, setOllamaPingResult] = useState<{
+    checking: boolean;
+    isOnline?: boolean;
+    models?: string[];
+    error?: string;
+  } | null>(null);
+
+  // LLM Studio / Bionic (14B) State
+  const [localLmStudioModel, setLocalLmStudioModel] = useState<string>(() => {
+    return localStorage.getItem('astro_lmstudio_model') || 'qwen2.5-14b-instruct';
+  });
+  const [lmStudioEndpoint, setLmStudioEndpoint] = useState<string>(() => {
+    return localStorage.getItem('astro_lmstudio_endpoint') || 'http://localhost:1234/v1/chat/completions';
+  });
+  const [availableLmStudioModels, setAvailableLmStudioModels] = useState<string[]>([]);
+  const [lmStudioPingResult, setLmStudioPingResult] = useState<{
     checking: boolean;
     isOnline?: boolean;
     models?: string[];

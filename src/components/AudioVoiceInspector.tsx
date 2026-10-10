@@ -721,6 +721,26 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </div>
             )}
 
+            {/* LM Studio Endpoint / Port Config */}
+            {activeProvider === 'local_qwen_14b' && (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
+                <span className="text-[10px] text-slate-400 font-mono">Port:</span>
+                <input
+                  type="text"
+                  value={lmStudioEndpoint.replace('/v1/chat/completions', '')}
+                  onChange={(e) => {
+                    const base = e.target.value.trim();
+                    const full = base.includes('/chat/completions') ? base : `${base.replace(/\/+$/, '')}/v1/chat/completions`;
+                    setLmStudioEndpoint(full);
+                    localStorage.setItem('astro_lmstudio_endpoint', full);
+                  }}
+                  className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold w-36 focus:outline-none"
+                  placeholder="http://localhost:1234"
+                  title="LM Studio server URL (default: http://localhost:1234 or http://127.0.0.1:1234)"
+                />
+              </div>
+            )}
+
             {/* Local LLM (7B & 14B) Timeout & Throttle Configuration */}
             {(activeProvider === 'local_qwen' || activeProvider === 'local_qwen_14b') && (
               <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">

@@ -1571,11 +1571,17 @@ export async function checkLmStudioHealth(endpointUrl = 'http://localhost:1234')
   error?: string;
 }> {
   const cleanBase = endpointUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
-  const testUrls = [
-    `${cleanBase}/v1/models`,
-    `${cleanBase}/models`,
-    `${cleanBase}/v1`
-  ];
+  const bases = [cleanBase];
+  if (cleanBase.includes('localhost')) {
+    bases.push(cleanBase.replace('localhost', '127.0.0.1'));
+  } else if (cleanBase.includes('127.0.0.1')) {
+    bases.push(cleanBase.replace('127.0.0.1', 'localhost'));
+  }
+
+  const testUrls: string[] = [];
+  for (const b of bases) {
+    testUrls.push(`${b}/v1/models`, `${b}/models`, `${b}/v1`);
+  }
 
   for (const url of testUrls) {
     try {
@@ -1599,7 +1605,7 @@ export async function checkLmStudioHealth(endpointUrl = 'http://localhost:1234')
 
   return {
     isOnline: false,
-    error: `Could not connect to LLM Studio / Bionic at ${cleanBase}. Make sure LLM Studio local server is started (port 1234 or configured port) with CORS enabled.`
+    error: `Could not connect to LM Studio / Bionic at ${cleanBase}. Ensure LM Studio local server is started on port 1234 with 'Enable CORS' turned ON.`
   };
 }
 
@@ -1683,25 +1689,49 @@ You MUST respond strictly with a valid JSON object matching this schema:
       }, configuredTimeoutSec * 1000);
     }
 
+    const candidateEndpoints = [configuredEndpoint];
+    if (configuredEndpoint.includes('localhost')) {
+      candidateEndpoints.push(configuredEndpoint.replace('localhost', '127.0.0.1'));
+    } else if (configuredEndpoint.includes('127.0.0.1')) {
+      candidateEndpoints.push(configuredEndpoint.replace('127.0.0.1', 'localhost'));
+    }
+
+    let actualEndpointUsed = configuredEndpoint;
+    let res: Response | null = null;
+    let lastFetchErr: any = null;
+
     try {
-      let res = await fetch(configuredEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
+      for (const ep of candidateEndpoints) {
+        try {
+          res = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          });
+          actualEndpointUsed = ep;
+          break;
+        } catch (fErr: any) {
+          lastFetchErr = fErr;
+          if (fErr.name === 'AbortError') break;
+        }
+      }
+
+      if (!res && lastFetchErr) {
+        throw lastFetchErr;
+      }
 
       // If server returned 404 (Model not found) or 400 (Model not loaded), retry with discovered loaded model
-      if (!res.ok && (res.status === 404 || res.status === 400)) {
+      if (res && !res.ok && (res.status === 404 || res.status === 400)) {
         try {
-          const cleanBase = configuredEndpoint.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
+          const cleanBase = actualEndpointUsed.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
           const modelsRes = await fetch(`${cleanBase}/v1/models`).catch(() => null);
           if (modelsRes && modelsRes.ok) {
             const mData = await modelsRes.json().catch(() => null);
             if (mData?.data?.[0]?.id) {
               requestBody.model = mData.data[0].id;
               targetModel = mData.data[0].id;
-              res = await fetch(configuredEndpoint, {
+              res = await fetch(actualEndpointUsed, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
@@ -1716,7 +1746,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
         clearTimeout(timeoutTimer);
       }
 
-      if (res.ok) {
+      if (res && res.ok) {
         const json = await res.json();
         const contentStr = json.choices?.[0]?.message?.content || json.choices?.[0]?.text || '';
         const cleanContent = (contentStr || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
@@ -1742,7 +1772,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
           executionTimeMs: Date.now() - startMs,
           timeoutEnforced: enableTimeout,
           configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
-          endpointUsed: `LLM Studio / Bionic (${configuredEndpoint})`,
+          endpointUsed: `LLM Studio / Bionic (${actualEndpointUsed})`,
           connectionStatus: 'connected_live',
           isPrivateLocal: true,
           promptSent: prompt,
@@ -1756,7 +1786,7 @@ You MUST respond strictly with a valid JSON object matching this schema:
             evalCount: json.usage?.completion_tokens
           }
         };
-      } else {
+      } else if (res) {
         const errJson = await res.json().catch(() => null);
         const detailedErr = errJson?.error?.message || errJson?.error || res.statusText;
         connectionError = `LLM Studio / Bionic HTTP ${res.status}: ${detailedErr}`;
@@ -1769,14 +1799,14 @@ You MUST respond strictly with a valid JSON object matching this schema:
       if (err.name === 'AbortError' || controller.signal.aborted) {
         connectionError = `Local 14B LLM timed out after ${elapsedSec}s (enforced limit: ${configuredTimeoutSec}s). Reverted to Parashara analytical synthesis. Turn off timeout in the header to run full throttle.`;
       } else {
-        connectionError = err.message || `Failed to connect to LLM Studio / Bionic at ${configuredEndpoint}. Ensure LLM Studio local server is running on port 1234 with CORS enabled.`;
+        connectionError = `Failed to fetch from LM Studio / Bionic (${candidateEndpoints.join(' / ')}). Check that: 1) Local Server is STARTED on port 1234 in LM Studio, and 2) 'Enable CORS' is checked ON in LM Studio Local Server settings.`;
       }
     }
 
     const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen_14b', startMs);
     return {
       ...fallback,
-      endpointUsed: `LLM Studio / Bionic (${configuredEndpoint})`,
+      endpointUsed: `LLM Studio / Bionic (${actualEndpointUsed})`,
       connectionStatus: 'connection_failed_fallback',
       connectionError,
       isPrivateLocal: true,
@@ -1788,8 +1818,9 @@ You MUST respond strictly with a valid JSON object matching this schema:
       rawResponseBody: {
         fallback_reason: connectionError,
         requested_model: targetModel,
-        suggestion: `To use Qwen 2.5 14B Instruct: In LLM Studio / Bionic, load the 14B model and start the local server (default port 1234, e.g. http://localhost:1234). Make sure CORS is enabled in the server settings tab.`,
-        note: 'Executed deterministic Parashara heuristic engine because LLM Studio / Bionic returned an error or was unreachable.'
+        endpoints_tested: candidateEndpoints,
+        suggestion: `How to enable LM Studio / Bionic for your Browser:\n1. Open LM Studio on your computer.\n2. Click the 'Local Server' tab (↔ icon on the left navigation bar).\n3. In the top dropdown, select your Qwen 2.5 14B Instruct model to load it into memory.\n4. Under Server Settings on the right, make sure 'Enable CORS' is toggled ON.\n5. Click the green 'Start Server' button (default port 1234).\n6. Return to this screen and click 'Test LM Studio' or 'Generate Astrological Reasoning'.`,
+        note: 'Executed deterministic Parashara heuristic engine because LM Studio / Bionic local server was unreachable or CORS was not enabled.'
       }
     };
   }

@@ -294,14 +294,14 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     return context.customPromptOverride;
   }
 
-  const bhavaInfo = BHAVA_NAMES[context.houseNumber] || {
+  const bhavaInfo = context.houseNumber ? (BHAVA_NAMES[context.houseNumber] || {
     title: `House ${context.houseNumber}`,
     karakas: 'Planetary lords',
     financialRole: 'General financial domain'
-  };
+  }) : null;
 
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
-  const cleanTargetSign = toCleanEnglishSign(context.rashiName) || `House ${context.houseNumber}`;
+  const cleanTargetSign = context.rashiName ? toCleanEnglishSign(context.rashiName) : '';
 
   // Compact formatting helpers
   const formatDegreeCompact = (deg?: string): string => {
@@ -323,7 +323,7 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
         `  ${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} H${p.house_number || '?'} — ${formatDegreeCompact(p.degree_sputa)} — ${formatNakshatraCompact(p.nakshatra_name, p.pada)}${p.is_retrograde ? ' [R]' : ''}`
       ).join('\n')
     : (context.natalOccupants.length > 0
-        ? context.natalOccupants.map(o => `  ${toCleanEnglishPlanet(o.body_name)} — ${cleanTargetSign} — ${formatDegreeCompact(o.degree_sputa)} — ${formatNakshatraCompact(o.nakshatra_name)}`).join('\n')
+        ? context.natalOccupants.map(o => `  ${toCleanEnglishPlanet(o.body_name)} — ${cleanTargetSign || 'Natal Sign'} — ${formatDegreeCompact(o.degree_sputa)} — ${formatNakshatraCompact(o.nakshatra_name)}`).join('\n')
         : '  None (Empty Bhava)');
 
   // 2. Flattened Natal D9 Navamsha (Compact)
@@ -340,14 +340,16 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
         return `  ${toCleanEnglishPlanet(t.graha_key)} — ${toCleanEnglishSign(t.transit_rashi_name)} H${t.house_from_lagna} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}${t.is_retrograde ? ' [R]' : ''}${t.is_custom ? ' [Override]' : ''}${aspectNote}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
-        ? context.transitOccupants.map(t => `  ${toCleanEnglishPlanet(t.graha_key)} — ${cleanTargetSign} H${context.houseNumber} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
+        ? context.transitOccupants.map(t => `  ${toCleanEnglishPlanet(t.graha_key)} — ${cleanTargetSign} ${context.houseNumber ? `H${context.houseNumber}` : ''} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
         : '  Full planetary Gochara transits computed per ephemeris.');
 
   // 4. Moon 2.25-day Sign Progression Timeline
   const moonSpansTable = (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0)
-    ? context.monthlyMoonSpans.map(m => 
-        `  • Day ${m.startDay}–${m.endDay}: Moon in ${toCleanEnglishSign(m.signName)} (House ${m.houseNumber}) ${m.houseNumber === context.houseNumber ? '===> [DIRECT TRANSIT OVER TARGET HOUSE] <===' : [1, 4, 5, 7, 9, 10, 11].includes(m.houseNumber) ? '[Angular/Trinal House]' : ''}`
-      ).join('\n')
+    ? context.monthlyMoonSpans.map(m => {
+        const isTargetMatch = !context.isComprehensiveMonthly && context.houseNumber && m.houseNumber === context.houseNumber;
+        const targetNote = isTargetMatch ? '===> [DIRECT TRANSIT OVER TARGET HOUSE] <===' : [1, 4, 5, 7, 9, 10, 11].includes(m.houseNumber) ? '[Angular/Trinal House]' : '';
+        return `  • Day ${m.startDay}–${m.endDay}: Moon in ${toCleanEnglishSign(m.signName)} (House ${m.houseNumber}) ${targetNote}`;
+      }).join('\n')
     : '  • Moon completes one 360-degree zodiacal circuit through 12 signs (~2.25 days per sign)';
 
   // 5. Fast Planet Ingress Events
@@ -385,31 +387,43 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
       ).join('\n')
     : '  Full Chandra Bala computed across 2.25-day sign progression.';
 
-  const ashtakavargaStr = context.ashtakavargaPayload
-    ? `Target House ${context.houseNumber}: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]\n  Spread: ${context.ashtakavargaPayload.savPointsDistribution.map(s => `H${s.houseNumber}:${s.points}`).join(' | ')}`
-    : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`;
+  const ashtakavargaStr = context.isComprehensiveMonthly || !context.houseNumber
+    ? (context.ashtakavargaPayload
+        ? `12-House Sarvashtakavarga (SAV) Distribution:\n  Spread: ${context.ashtakavargaPayload.savPointsDistribution.map(s => `H${s.houseNumber}:${s.points} [${s.status}]`).join(' | ')}`
+        : 'Full 12-house Sarvashtakavarga computed with baseline Parashara balance.')
+    : (context.ashtakavargaPayload
+        ? `Target House ${context.houseNumber}: ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]\n  Spread: ${context.ashtakavargaPayload.savPointsDistribution.map(s => `H${s.houseNumber}:${s.points}`).join(' | ')}`
+        : `Target House ${context.houseNumber} Sarvashtakavarga points computed with baseline Parashara strength.`);
 
   const dashaDossierStr = (context.dashaLordsDossier && context.dashaLordsDossier.length > 0)
     ? context.dashaLordsDossier.map(d => 
         `  ${d.role} [${toCleanEnglishPlanet(d.lordName)}]: Lords ${d.ownedHousesTitle} (${d.functionalNature}) | Occupies House ${d.natalHouseOccupied} (${d.natalDignity}) | ${d.connectsToTargetHouse ? `Connects: ${d.targetConnectionReason}` : d.targetConnectionReason}`
       ).join('\n')
-    : '  MD, AD, and PD lords evaluated against natal houses and target bhava.';
+    : '  MD, AD, and PD lords evaluated against natal houses and Gochara transits.';
 
-  const karakaInfoStr = context.bhavaKarakaInfo
-    ? `Primary Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
+  const karakaInfoStr = context.isComprehensiveMonthly || !context.houseNumber
+    ? `Comprehensive Multi-Domain Sthira Karakas:
+  - Career & Authority: 10th House, Sun, Mercury & Mars
+  - Wealth & Liquidity: 2nd House (Dhana), 11th House (Labha) & Jupiter
+  - Real Estate & Domestic Peace: 4th House (Sukha) & Moon
+  - Love, Romance & Progeny: 5th House, 7th House (Kalatra) & Venus
+  - Health & Vitality: 1st House (Lagna), 6th House (Roga) & Saturn`
+    : (context.bhavaKarakaInfo
+        ? `Primary Karaka: ${context.bhavaKarakaInfo.primaryKaraka} | Secondary: ${context.bhavaKarakaInfo.secondaryKarakas.join(', ')}
   Significations: ${context.bhavaKarakaInfo.significations}
   Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
-    : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`;
+        : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`);
 
   const horizonSection = context.isComprehensiveMonthly
     ? `### Monthly Scope & Horizon — ${monthName} ${context.selectedYear}
-- Focus: Comprehensive Full-Month Vedic Synthesis across Core Life Domains
+- Focus: Comprehensive Full-Month Vedic Synthesis across All 12 Houses and Core Life Domains
+- Scope: Objective analysis of all current planetary transits across the entire zodiac (no default house prioritized)
 - Domain Focus Filter: ${context.activeDomainFilter && context.activeDomainFilter !== 'all' ? `Focused on ${context.activeDomainFilter.toUpperCase()}` : 'All Core Life Domains (Career, Finance, Love, Health, Family)'}
 - Key Anchors: Double Transit Sanction (Saturn & Jupiter), Ingress Milestones, and Vimshottari Dasha Triad`
     : `### Target Horizon
-- House: House ${context.houseNumber} (${bhavaInfo.title}) — Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna]' : ''}
+- House: House ${context.houseNumber} (${bhavaInfo?.title || `House ${context.houseNumber}`}) — Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna]' : ''}
 - Month: ${monthName} ${context.selectedYear}
-- Activation: ${context.activationScore.toFixed(2)} / 1.00 (${context.isEventActive ? 'Event Activated' : 'Standard Baseline'})
+- Activation: ${(context.activationScore ?? 0).toFixed(2)} / 1.00 (${context.isEventActive ? 'Event Activated' : 'Standard Baseline'})
 ${rulesStr}`;
 
   return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
@@ -470,8 +484,12 @@ REASONING DIRECTIVES:
 1. TRANSIT GRAHA PADA & DEGREES: Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon. Account for tight aspect orbs (< 5°-7°).
 2. TARA BALA: Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
 3. CHANDRA BALA: Flag 8th house Moon transits from Janma Rashi with clear cautions.
-4. SAV BINDUS: Reference target house bindus (>=28-32 strong stamina, <25 cautious conservation).
-5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and direct connections to House ${context.houseNumber}.
+${context.isComprehensiveMonthly || !context.houseNumber
+  ? `4. SAV BINDUS: Reference 12-house SAV distribution (>=28-32 strong stamina, <25 cautious conservation).
+5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and their overall Gochara activations across life domains.`
+  : `4. SAV BINDUS: Reference target house bindus (>=28-32 strong stamina, <25 cautious conservation).
+5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and direct connections to House ${context.houseNumber}.`
+}
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
@@ -603,29 +621,34 @@ function synthesizeAnalyticalVedicNarrative(
   provider: LLMProviderId,
   startMs: number
 ): LLMThreePartNarrative {
-  const bhava = BHAVA_NAMES[context.houseNumber] || {
+  const isMonthly = !!context.isComprehensiveMonthly || !context.houseNumber;
+  const bhava = context.houseNumber ? (BHAVA_NAMES[context.houseNumber] || {
     title: `House ${context.houseNumber}`,
     karakas: 'Jupiter',
     financialRole: 'General Wealth'
+  }) : {
+    title: 'All Houses Overview',
+    karakas: 'Planetary Lords',
+    financialRole: 'Comprehensive Financial Domain'
   };
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
   const pdLord = context.activeDasha.pratyantardasha.split(' ')[0];
-  const score = context.activationScore;
+  const score = context.activationScore ?? 0;
   const isHigh = context.isEventActive || score >= 0.55;
 
   // Derive micro-timing window dynamically from actual Moon transit spans if available!
   let peakDateRange = '';
   if (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0) {
-    const directMoonSpan = context.monthlyMoonSpans.find(m => m.houseNumber === context.houseNumber);
-    const aspectingMoonSpan = context.monthlyMoonSpans.find(m => 
+    const directMoonSpan = !isMonthly ? context.monthlyMoonSpans.find(m => m.houseNumber === context.houseNumber) : undefined;
+    const aspectingMoonSpan = !isMonthly ? context.monthlyMoonSpans.find(m => 
       ((m.houseNumber + 6 - 1) % 12) + 1 === context.houseNumber || // 7th aspect
       ((m.houseNumber + 4 - 1) % 12) + 1 === context.houseNumber || // 5th aspect
       ((m.houseNumber + 8 - 1) % 12) + 1 === context.houseNumber    // 9th aspect
-    );
+    ) : undefined;
     const chosenSpan = directMoonSpan || aspectingMoonSpan || context.monthlyMoonSpans[0];
     peakDateRange = `${monthName} ${chosenSpan.startDay} – ${chosenSpan.endDay}, ${context.selectedYear}`;
   } else {
-    const startDay = ((context.houseNumber * 2 + context.selectedMonth * 3) % 20) + 5;
+    const startDay = (((context.houseNumber || 1) * 2 + context.selectedMonth * 3) % 20) + 5;
     const endDay = Math.min(startDay + 4, 28);
     peakDateRange = `${monthName} ${startDay} – ${endDay}, ${context.selectedYear}`;
   }
@@ -636,15 +659,23 @@ function synthesizeAnalyticalVedicNarrative(
 
   const isTamil = context.language === 'ta';
 
-  const summary = isTamil
+  const summary = isMonthly
+    ? isTamil
+      ? `${monthName} ${context.selectedYear}-க்கான விரிவான மாதாந்திர வேத ஜோதிட மதிப்பீடு: 12 பாவங்களின் கோச்சார கிரக நிலைகள் மற்றும் விம்சோத்தரி தசா புத்தி அமைப்பின் நேரடி பலன்கள்.`
+      : `Comprehensive Vedic monthly synthesis for ${monthName} ${context.selectedYear} evaluating overarching Gochara transits across all 12 houses and Vimshottari Dasha Triad delivery capacity.`
+    : isTamil
     ? isHigh
-      ? `4-ஆம் வீடான ${context.tamilName} ராசி (${context.rashiName}), தசா புத்தி நாதரான ${pdLord}-ன் ஆதிக்கத்தால் இந்த மாதம் தீவிர கோச்சார ஆற்றலைப் பெறுகிறது.`
-      : `4-ஆம் வீடான ${context.tamilName} ராசி (${context.rashiName}) அடிப்படை சுப பலங்களுடன் அடுத்த கட்ட இயக்கத்திற்கான தயாரிப்பு நிலையில் உள்ளது.`
+      ? `4-ஆம் வீடான ${context.tamilName || 'ராசி'} ராசி (${context.rashiName || ''}), தசா புத்தி நாதரான ${pdLord}-ன் ஆதிக்கத்தால் இந்த மாதம் தீவிர கோச்சார ஆற்றலைப் பெறுகிறது.`
+      : `4-ஆம் வீடான ${context.tamilName || 'ராசி'} ராசி (${context.rashiName || ''}) அடிப்படை சுப பலங்களுடன் அடுத்த கட்ட இயக்கத்திற்கான தயாரிப்பு நிலையில் உள்ளது.`
     : isHigh
       ? `House ${context.houseNumber} (${context.rashiName}) experiences peak Gochara activation under the command of PD Lord ${pdLord}, unlocking high event manifestation.`
       : `House ${context.houseNumber} remains in an incubating preparatory phase with baseline activation score (${score.toFixed(2)}).`;
 
-  const part1 = isTamil
+  const part1 = isMonthly
+    ? isTamil
+      ? `மாதாந்திர நிகழ்வு சாத்தியக்கூறு மற்றும் போக்கு: ${monthName} ${context.selectedYear} மாதத்தில் தசா புத்தி நாதர்களான ${context.activeDasha.mahadasha} மற்றும் ${context.activeDasha.pratyantardasha} ஆகியவற்றின் ஆதிக்கத்தில் அனைத்து 12 பாவங்களும் முறையான இயக்கத்தைப் பெறுகின்றன. தொழில், நிதி, குடும்பம் மற்றும் ஆரோக்கியம் ஆகிய முக்கிய துறைகளில் கோச்சார கிரக சேர்க்கைகள் புதிய வாய்ப்புகளையும் பொறுப்புகளையும் உருவாக்குகின்றன.`
+      : `Comprehensive Monthly Event Probability & Trajectory: The overarching Gochara transit climate for ${monthName} ${context.selectedYear} is directed by active Vimshottari Pratyantardasha Lord ${context.activeDasha.pratyantardasha} and the double transit sanction of Jupiter and Saturn across the 12-house zodiac. Planetary shifts generate measurable momentum across professional pursuits, financial accumulation, interpersonal relationships, health vitality, and domestic stability without artificial house bias.`
+    : isTamil
     ? isHigh
       ? `நிகழ்வு சாத்தியக்கூறு ${(computedConfidence * 100).toFixed(0)}% (உயர் சாத்தியம்). தற்போதைய பிரத்யந்தர தசா நாதர் ${context.activeDasha.pratyantardasha} இந்த ${context.tamilName} பாவத்தின் மீது நேரடி ஆதிக்கத்தை செலுத்துகிறார். பிறப்பு ஜாதக தகுதியும் கோச்சார கிரக சேர்க்கையும் சாதகமாக இருப்பதால், மன விருப்பங்கள் எதார்த்தமான நடைமுறை நிகழ்வுகளாக மாறும் வாய்ப்பு அதிகம்.`
       : `நிகழ்வு சாத்தியக்கூறு மிதமானது (${(computedConfidence * 100).toFixed(0)}%). பிறப்பு ஜாதகத்தில் சாத்தியக்கூறுகள் இருந்தாலும், நடப்பு மாத கோச்சார கிரக அமைப்புகள் சற்று பொறுமையை வலியுறுத்துகின்றன.`
@@ -652,7 +683,11 @@ function synthesizeAnalyticalVedicNarrative(
       ? `Event Probability is assessed at ${(computedConfidence * 100).toFixed(0)}% (High Probability). The operational Pratyantar Dasha (PD) lord ${context.activeDasha.pratyantardasha} establishes direct governance over this Bhava (${bhava.title}). Because ${context.matchedRules.map(r => r.ruleName).join(' and ')} are actively aligned, the significations of ${context.rashiName} (${context.tamilName}) will materialize with tangible real-world outcomes rather than mere psychological desire.`
       : `Event Probability is moderate-to-low (${(computedConfidence * 100).toFixed(0)}%). While the natal foundation retains latent potential in ${context.rashiName}, the current Gochara transits provide insufficient trigger energy this month. Manifestation is delayed until the PD lord transitions into an aspecting trinal angle.`;
 
-  const part2 = isTamil
+  const part2 = isMonthly
+    ? isTamil
+      ? `நிதி மற்றும் மூலதன ஆதாரங்கள்: தன ஸ்தானம் (2-ஆம் இடம்) மற்றும் லாப ஸ்தானம் (11-ஆம் இடம்) வழியாக பணப்புழக்கம் சீராக பராமரிக்கப்படுகிறது. தொழில் மற்றும் முதலீட்டு வரவுகள் சமநிலையான நிதி நிலைத்தன்மையை வழங்குகின்றன.`
+      : `Comprehensive Monthly Capital & Wealth Trajectory: Liquid wealth from the 2nd house (Dhana Bhava) and gains from the 11th house (Labha Bhava) establish the monetary baseline for ${monthName} ${context.selectedYear}. Capital inflows remain anchored in regular earnings and strategic long-term allocations across asset classes.`
+    : isTamil
     ? `நிதி மற்றும் மூலதன ஆதாரங்கள்: தன ஸ்தானம் (2-ஆம் இடம்) மற்றும் லாப ஸ்தானம் (11-ஆம் இடம்) வழியாக பணப்புழக்கம் சீராக உள்ளது. 4-ஆம் வீடு சொத்துக்கள், வீடு அல்லது வாகன முதலீடுகளைக் குறிப்பதால், சொந்த சேமிப்பு மற்றும் வங்கி கடன் வசதிகள் மூலம் மூலதனம் எளிதில் திரட்டப்படும்.`
     : context.houseNumber === 2 || context.houseNumber === 11
     ? `Financial inflows originate directly from Dhana (2nd) liquid reserves and Labha (11th) milestone profits. PD Lord ${pdLord} stimulates immediate liquidity, enabling capital accumulation and dividend yields.`
@@ -662,11 +697,32 @@ function synthesizeAnalyticalVedicNarrative(
     ? `Funding draws upon Bhagya (9th) ancestral fortune and Randhra (8th) joint-venture spousal or unearned windfalls. Unexpected financial relief occurs through legacy settlements or insurance maturity.`
     : `Financial dynamics for House ${context.houseNumber} rely on ${bhava.financialRole}. Capital liquidity from the 2nd house and 11th house gains provides the necessary balance sheet strength.`;
 
-  const part3 = isTamil
+  const part3 = isMonthly
+    ? isTamil
+      ? `முக்கிய காலகட்டம் (Micro-Timing Window): ${peakDateRange}. சந்திரன் சுப ஸ்தானங்களைக் கடக்கும் நாட்களில் முக்கிய முயற்சிகளைத் தொடங்கவும், சந்திராஷ்டம நாட்களில் எச்சரிக்கையுடன் செயல்படவும் அறிவுறுத்தப்படுகிறது.`
+      : `Comprehensive Monthly Micro-Timing Windows: Key favorable trigger intervals peak between ${peakDateRange}. During these days, the transiting Moon synchronizes with auspicious natal houses and benefic Gochara points, marking the ideal windows for decisive actions, contracts, and new initiatives.`
+    : isTamil
     ? `முக்கிய காலகட்டம் (Micro-Timing Window): ${peakDateRange}. இந்த நாட்களில் சந்திரன் இந்த பாவத்தை நேரடியாக அல்லது பார்வையின் மூலம் கடக்கும்போது நிகழ்வுகள் தீவிரமடையும். முடிவெடுக்கவும் செயலில் இறங்கவும் இதுவே உகந்த காலகட்டம்.`
     : `The micro-timing window peaks between ${peakDateRange}. During this interval, transiting Moon traverses the key trigger degree arc relative to ${context.rashiName}, while transiting ${context.transitOccupants[0]?.graha_key || 'planets'} synchronize with the natal degree grid. This represents the primary action window for concrete progress.`;
 
-  const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (${provider.toUpperCase()})
+  const rawMarkdown = isMonthly
+    ? `### Astrological Reasoning & Micro-Timing Report (${provider.toUpperCase()})
+**Scope:** Comprehensive Full-Month Vedic Synthesis (${monthName} ${context.selectedYear})  
+**Timeline:** ${monthName} ${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
+**Dasha Triad Delivery Capacity:** ${((deliveryIndex) * 100).toFixed(0)}%  
+**Primary Favorable Window:** ${peakDateRange}  
+
+---
+#### 1. Event Probability & Scope
+${part1}
+
+#### 2. Financial & Resource Sources
+${part2}
+
+#### 3. Micro-Timing Window
+${part3}
+`
+    : `### Astrological Reasoning & Micro-Timing Report (${provider.toUpperCase()})
 **Target:** House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})  
 **Timeline:** ${monthName} ${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
 **Activation Score:** ${score.toFixed(2)} / 1.00 | **Delivery Capacity:** ${((deliveryIndex) * 100).toFixed(0)}%  
@@ -685,7 +741,11 @@ ${part3}
 
   // Construct Dual Evaluation: Natal Promise vs. Transit Strength
   const natalPromiseScore = context.natalOccupants.length > 0 ? 0.88 : 0.72;
-  const natalPromiseVerdict = isTamil
+  const natalPromiseVerdict = isMonthly
+    ? (isTamil
+        ? 'பிறப்பு ஜாதகத்தின் லக்னம் மற்றும் நவாம்ச அமைப்பு அடிப்படை ஆற்றலை உறுதியாக நிலைநிறுத்துகிறது.'
+        : `Comprehensive Natal Foundation: The natal D1 chart structure and D9 Navamsha harmonics provide overall stability, with active Dasha lords delivering results across life sectors in ${monthName} ${context.selectedYear}.`)
+    : isTamil
     ? `பிறப்பு ஜாதகத்தில் ${context.tamilName} ராசியில் குரு போன்ற சுப கிரகங்கள் அமைந்திருப்பது உறுதியான பாக்கிய அமைப்பைத் தருகிறது.`
     : context.natalOccupants.length > 0
     ? `Strong natal karmic sanction in ${context.rashiName}. Resident placement (${context.natalOccupants.map(o => o.body_name.split(' ')[0]).join(', ')}) establishes high baseline manifestation capacity in the native's D1/D9 grid.`
@@ -990,7 +1050,7 @@ ${part3}
     rawRequestBody: {
       provider,
       mode: 'deterministic_analytical_engine',
-      houseNumber: context.houseNumber,
+      houseNumber: context.houseNumber || 'All Houses',
       activeDasha: context.activeDasha
     },
     rawResponseBody: {
@@ -1532,7 +1592,7 @@ export class GeminiStudioAdapter implements ILLMAdapter {
         const parsed = extractAndParseVedicJson(json.text || '', fallback);
 
         const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (GOOGLE GEMINI)
-**Target:** House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})  
+**Target:** ${context.isComprehensiveMonthly || !context.houseNumber ? `Comprehensive Full-Month Synthesis (${MONTH_NAMES[context.selectedMonth]} ${context.selectedYear})` : `House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})`}  
 **Timeline:** Month ${context.selectedMonth + 1}/${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
 **Model:** ${json.model || 'gemini-3.8-flash'}  
 

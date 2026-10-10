@@ -192,7 +192,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       setEditablePrompt(generated);
       setIsPromptCustomized(false);
     }
-  }, [context?.houseNumber, context?.selectedMonth, context?.selectedYear, context?.activationScore, activeProvider]);
+  }, [context?.houseNumber, context?.isComprehensiveMonthly, context?.selectedMonth, context?.selectedYear, context?.activationScore, activeProvider]);
 
   // Timer for generation
   useEffect(() => {
@@ -226,7 +226,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     } else {
       stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
+  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -437,8 +437,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `Vedic_Report_H${context.houseNumber}_${context.rashiName}.json`;
+    a.download = context.isComprehensiveMonthly
+      ? `Vedic_Report_Monthly_${MONTH_NAMES[context.selectedMonth]}_${context.selectedYear}.json`
+      : `Vedic_Report_H${context.houseNumber || 'Bhava'}_${context.rashiName || 'Transit'}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -482,11 +483,11 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 ) : context.isEventActive ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1 animate-pulse">
                     <Zap className="w-3 h-3 fill-current" />
-                    Event Active ({context.activationScore.toFixed(2)})
+                    Event Active ({(context.activationScore ?? 0).toFixed(2)})
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                    Score: {context.activationScore.toFixed(2)}
+                    Score: {(context.activationScore ?? 0).toFixed(2)}
                   </span>
                 )}
                 {context.transitOccupants.some(t => t.is_custom) && (
@@ -1543,7 +1544,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
                           <span className="font-bold text-emerald-400 flex items-center gap-1.5">
                             <span>📊</span>
-                            <span>3. Sarvashtakavarga (SAV) Bindus: Target House {context.houseNumber} = {context.ashtakavargaPayload.targetHousePoints} Bindus [{context.ashtakavargaPayload.targetHouseStrength}]</span>
+                            <span>3. Sarvashtakavarga (SAV) Bindus: {context.isComprehensiveMonthly || !context.houseNumber ? '12-House Distribution Overview' : `Target House ${context.houseNumber} = ${context.ashtakavargaPayload.targetHousePoints} Bindus [${context.ashtakavargaPayload.targetHouseStrength}]`}</span>
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             Parashara 337 Baseline
@@ -1555,7 +1556,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             <div
                               key={idx}
                               className={`p-1.5 rounded border text-center ${
-                                item.houseNumber === context.houseNumber
+                                item.houseNumber === context.houseNumber && !context.isComprehensiveMonthly
                                   ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
                                   : 'bg-slate-950 border-slate-800 text-slate-300'
                               }`}
@@ -1577,7 +1578,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-800 pb-1.5">
                           <span className="font-bold text-indigo-400 flex items-center gap-1.5">
                             <span>👑</span>
-                            <span>4. Dasha Lords Karmic Dossier (MD, AD, PD vs House {context.houseNumber})</span>
+                            <span>4. Dasha Lords Karmic Dossier {context.isComprehensiveMonthly || !context.houseNumber ? '(Vimshottari Triad Delivery)' : `(MD, AD, PD vs House ${context.houseNumber})`}</span>
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             Rule 5 Triad Delivery
@@ -1617,7 +1618,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                           <span className="font-bold text-rose-400 flex items-center gap-1.5">
                             <span>🎯</span>
-                            <span>5. Bhava Sthira Karakas &amp; Real-World Outlet Impacts (House {context.houseNumber})</span>
+                            <span>5. Bhava Sthira Karakas &amp; Real-World Outlet Impacts {context.isComprehensiveMonthly || !context.houseNumber ? '(Core Life Domains)' : `(House ${context.houseNumber})`}</span>
                           </span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
@@ -1662,7 +1663,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               </span>
             </div>
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
-              <span className="text-[10px] text-slate-500 uppercase block font-semibold">Transit Grahas (House {context.houseNumber})</span>
+              <span className="text-[10px] text-slate-500 uppercase block font-semibold">{context.isComprehensiveMonthly || !context.houseNumber ? 'Transit Grahas (Ephemeris)' : `Transit Grahas (House ${context.houseNumber})`}</span>
               <div className="text-[11px] truncate">
                 {context.transitOccupants.length > 0 ? (
                   <div className="flex flex-col gap-0.5">

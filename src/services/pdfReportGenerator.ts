@@ -93,7 +93,9 @@ export function generateVedicPdfReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.text(
-    `Target: House ${context.houseNumber} (${context.rashiName} / ${context.tamilName}) • Period: ${timePeriodText}`,
+    context.isComprehensiveMonthly || !context.houseNumber
+      ? `Scope: Full-Month Vedic Synthesis (All 12 Houses) • Period: ${timePeriodText}`
+      : `Target: House ${context.houseNumber} (${context.rashiName} / ${context.tamilName}) • Period: ${timePeriodText}`,
     margin + 5,
     30.5
   );
@@ -139,7 +141,13 @@ export function generateVedicPdfReport(
   doc.text('EVALUATION TARGET', margin + 3, 40);
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  doc.text(`House ${context.houseNumber} (${context.rashiName})`, margin + 3, 44.5);
+  doc.text(
+    context.isComprehensiveMonthly || !context.houseNumber
+      ? 'Comprehensive Monthly'
+      : `House ${context.houseNumber} (${context.rashiName || ''})`,
+    margin + 3,
+    44.5
+  );
 
   // Col 2
   doc.setTextColor(100, 116, 139);
@@ -297,7 +305,9 @@ export function generateVedicPdfReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.text(
-    `House ${context.houseNumber} (${context.rashiName}) • Period: ${timePeriodText} • Engine: ${providerName}`,
+    context.isComprehensiveMonthly || !context.houseNumber
+      ? `Comprehensive Monthly (All Houses) • Period: ${timePeriodText} • Engine: ${providerName}`
+      : `House ${context.houseNumber} (${context.rashiName || ''}) • Period: ${timePeriodText} • Engine: ${providerName}`,
     margin + 5,
     29.5
   );
@@ -317,7 +327,7 @@ export function generateVedicPdfReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.text(
-    `Activation Score: ${context.activationScore.toFixed(2)} | Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`,
+    `Activation Score: ${(context.activationScore ?? 0).toFixed(2)} | Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`,
     pageWidth - margin - 5,
     25.5,
     { align: 'right' }
@@ -552,7 +562,9 @@ export function generateVedicPdfReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.text(
-    `Bhavat Bhavam & Drishti Matrix • House ${context.houseNumber} (${context.rashiName}) • Period: ${timePeriodText}`,
+    context.isComprehensiveMonthly || !context.houseNumber
+      ? `Bhavat Bhavam & Drishti Matrix • Comprehensive Monthly • Period: ${timePeriodText}`
+      : `Bhavat Bhavam & Drishti Matrix • House ${context.houseNumber} (${context.rashiName || ''}) • Period: ${timePeriodText}`,
     margin + 5,
     29.5
   );
@@ -717,7 +729,7 @@ export function generateVedicPdfReport(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.text(
-    `Audit Hash: SHA-256-${Math.abs(promptCharCount * 1337 + context.houseNumber).toString(16).toUpperCase()}`,
+    `Audit Hash: SHA-256-${Math.abs(promptCharCount * 1337 + (context.houseNumber || 108)).toString(16).toUpperCase()}`,
     pageWidth - margin - 4,
     y3 + 5.5,
     { align: 'right' }

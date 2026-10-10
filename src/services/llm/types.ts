@@ -39,13 +39,13 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
 };
 
 export interface VedicHouseContext {
-  houseNumber: number;
-  rashiIndex: number;
-  rashiName: string;
-  tamilName: string;
-  isLagna: boolean;
-  activationScore: number;
-  isEventActive: boolean;
+  houseNumber?: number;
+  rashiIndex?: number;
+  rashiName?: string;
+  tamilName?: string;
+  isLagna?: boolean;
+  activationScore?: number;
+  isEventActive?: boolean;
   matchedRules: Array<{
     ruleId: string;
     ruleName: string;

@@ -213,7 +213,7 @@ export interface AshtakavargaReport {
 
 export function computeSarvashtakavarga(
   natalLagnaIdx: number,
-  targetHouseNumber: number,
+  targetHouseNumber?: number,
   natalD1Placements?: Array<{ body_name: string; rashi_name: string; house_number?: number }>
 ): AshtakavargaReport {
   // Classical Sarvashtakavarga baseline points for standard zodiac balance (sums to 337 points)
@@ -242,14 +242,17 @@ export function computeSarvashtakavarga(
     savPoints[s] = Math.max(20, Math.min(42, pts));
   }
 
-  const targetSignIdx = ((natalLagnaIdx + targetHouseNumber - 2) % 12) + 1;
-  const targetPts = savPoints[targetSignIdx] || 28;
+  let targetPts = 0;
+  let strength: string = 'All-House Distribution';
 
-  let strength: 'Very Strong (>32)' | 'Strong (28-32)' | 'Moderate (25-27)' | 'Deficient (<25)' = 'Strong (28-32)';
-  if (targetPts > 32) strength = 'Very Strong (>32)';
-  else if (targetPts >= 28) strength = 'Strong (28-32)';
-  else if (targetPts >= 25) strength = 'Moderate (25-27)';
-  else strength = 'Deficient (<25)';
+  if (targetHouseNumber && targetHouseNumber >= 1 && targetHouseNumber <= 12) {
+    const targetSignIdx = ((natalLagnaIdx + targetHouseNumber - 2) % 12) + 1;
+    targetPts = savPoints[targetSignIdx] || 28;
+    if (targetPts > 32) strength = 'Very Strong (>32)';
+    else if (targetPts >= 28) strength = 'Strong (28-32)';
+    else if (targetPts >= 25) strength = 'Moderate (25-27)';
+    else strength = 'Deficient (<25)';
+  }
 
   const SIGN_NAMES = [
     'Mesham (Aries)', 'Rishabam (Taurus)', 'Mithunam (Gemini)', 'Katakam (Cancer)',
@@ -273,7 +276,7 @@ export function computeSarvashtakavarga(
   return {
     savTotalPoints: savPoints,
     targetHousePoints: targetPts,
-    targetHouseStrength: strength,
+    targetHouseStrength: strength as any,
     allHousesOverview
   };
 }
@@ -301,8 +304,8 @@ export function generateDashaLordDossier(
   role: 'Mahadasha (MD)' | 'Antardasha (AD)' | 'Pratyantardasha (PD)',
   lordFullName: string,
   natalLagnaIdx: number,
-  targetHouseNumber: number,
-  natalPlacements: Array<{ body_name: string; rashi_name: string; house_number?: number; degree_sputa?: string; is_retrograde?: boolean }>
+  targetHouseNumber?: number,
+  natalPlacements: Array<{ body_name: string; rashi_name: string; house_number?: number; degree_sputa?: string; is_retrograde?: boolean }> = []
 ): DashaLordDossier {
   const shortName = (lordFullName || '').split(' ')[0];
   const grahaKey = shortName;
@@ -359,9 +362,11 @@ export function generateDashaLordDossier(
 
   // Connection to target house
   let connectsToTargetHouse = false;
-  let targetConnectionReason = `No direct ownership or natal occupation of House ${targetHouseNumber}`;
+  let targetConnectionReason = '';
 
-  if (ownedHouses.includes(targetHouseNumber)) {
+  if (!targetHouseNumber) {
+    targetConnectionReason = `Primary lordship over ${ownedHousesTitle}. Gochara transits across all houses impact native life themes.`;
+  } else if (ownedHouses.includes(targetHouseNumber)) {
     connectsToTargetHouse = true;
     targetConnectionReason = `Direct House Lord: Holds primary ownership of House ${targetHouseNumber}`;
   } else if (natalHouse === targetHouseNumber) {
@@ -382,6 +387,8 @@ export function generateDashaLordDossier(
     } else if (shortName === 'Mars' && (dist === 4 || dist === 8)) {
       connectsToTargetHouse = true;
       targetConnectionReason = `Special 4th/8th Mars Drishti applying dynamic pressure on House ${targetHouseNumber}`;
+    } else {
+      targetConnectionReason = `No direct ownership or natal occupation of House ${targetHouseNumber}`;
     }
   }
 

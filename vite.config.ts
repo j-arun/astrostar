@@ -528,6 +528,8 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
 
             if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID')) {
               errorMsg = 'Invalid Gemini API Key: Google Generative AI rejected the key with 400 INVALID_ARGUMENT. Please verify your GEMINI_API_KEY in your .env file or environment variables at https://aistudio.google.com/apikey and restart the dev server.';
+            } else if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota') || errorMsg.includes('429')) {
+              errorMsg = 'Gemini Quota Exceeded (429 RESOURCE_EXHAUSTED): Your Google AI Studio / GCP project has reached its free tier rate limit or quota ceiling. If you recently paid or enabled prepaid billing credits on Google Cloud, ensure your GEMINI_API_KEY was generated from that specific billed Cloud project rather than the default free project (at https://aistudio.google.com/apikey). Alternatively, switch provider to "Local Ollama" or "Claude" in the inspector.';
             }
 
             res.end(JSON.stringify({ error: errorMsg }));

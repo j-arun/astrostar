@@ -845,15 +845,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
       }));
 
     const ctx: VedicHouseContext = {
-      houseNumber: 1,
-      rashiIndex: natalLagnaIdx,
-      rashiName: toCleanEnglishSign(signDef.eng),
-      tamilName: signDef.tamil,
-      isLagna: true,
-      activationScore: 1.0,
-      isEventActive: true,
       isComprehensiveMonthly: true,
       activeDomainFilter: 'all',
+      isEventActive: false,
+      activationScore: 0,
       matchedRules: [],
       natalOccupants: [],
       transitOccupants: [],
@@ -933,19 +928,18 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         };
       }),
       ashtakavargaPayload: (() => {
-        const sav = computeSarvashtakavarga(natalLagnaIdx, 1, flattenedD1);
+        const sav = computeSarvashtakavarga(natalLagnaIdx, undefined, flattenedD1);
         return {
-          targetHousePoints: sav.targetHousePoints,
-          targetHouseStrength: sav.targetHouseStrength,
+          targetHousePoints: 0,
+          targetHouseStrength: 'All-House Distribution',
           savPointsDistribution: sav.allHousesOverview
         };
       })(),
       dashaLordsDossier: [
-        generateDashaLordDossier('Mahadasha (MD)', activeDashaHierarchy.mahadasha, natalLagnaIdx, 1, flattenedD1),
-        generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, 1, flattenedD1),
-        generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, 1, flattenedD1)
-      ],
-      bhavaKarakaInfo: BHAVA_KARAKAS_METADATA[1]
+        generateDashaLordDossier('Mahadasha (MD)', activeDashaHierarchy.mahadasha, natalLagnaIdx, undefined, flattenedD1),
+        generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, undefined, flattenedD1),
+        generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, undefined, flattenedD1)
+      ]
     };
 
     setInspectorHouseContext(ctx);

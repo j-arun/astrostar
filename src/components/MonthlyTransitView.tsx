@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarDays,
+  LayoutGrid,
   Sparkles,
   Eye,
   Layers,
@@ -183,11 +184,24 @@ export function calculateGrahaDrishti(
 
 export interface MonthlyTransitViewProps {
   personId?: string;
+  initialViewMode?: 'grid' | 'report';
 }
 
-export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId = '001ME' }) => {
+export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
+  personId = '001ME',
+  initialViewMode = 'grid'
+}) => {
   // Current real-world date reference
   const realNow = useMemo(() => new Date(), []);
+
+  // View Mode: 'grid' (4x4 matrix) or 'report' (dedicated fitting in-app report)
+  const [viewMode, setViewMode] = useState<'grid' | 'report'>(initialViewMode);
+
+  useEffect(() => {
+    if (initialViewMode) {
+      setViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
 
   // Selected Year & Month state (Defaults to current month)
   const [selectedYear, setSelectedYear] = useState<number>(realNow.getFullYear());
@@ -932,8 +946,16 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
     };
 
     setInspectorHouseContext(ctx);
-    setIsInspectorOpen(true);
+    setViewMode('report');
+    setIsInspectorOpen(false);
   };
+
+  // Auto-build report context if user entered in report mode
+  useEffect(() => {
+    if (viewMode === 'report' && !inspectorHouseContext) {
+      handleOpenMonthlyReport();
+    }
+  }, [viewMode, inspectorHouseContext]);
 
   const handleOpenTopEventInspector = () => {
     handleOpenMonthlyReport();
@@ -1046,6 +1068,34 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Dedicated View Mode Switcher */}
+          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-amber-500 text-slate-950 shadow font-extrabold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Show 4x4 South Indian Matrix Grid"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>4x4 Grid</span>
+            </button>
+            <button
+              onClick={() => handleOpenMonthlyReport()}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'report'
+                  ? 'bg-amber-500 text-slate-950 shadow font-extrabold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Show Comprehensive Full-Page Predictions Report"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Predictions Report</span>
+            </button>
+          </div>
+
           <button
             onClick={handleExpandAll}
             className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
@@ -1128,9 +1178,6 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
                 <option value="local_qwen" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.local_qwen.badgeLabel}
                 </option>
-                <option value="local_qwen_14b" className="bg-slate-900 text-white">
-                  {LLM_PROVIDERS.local_qwen_14b.badgeLabel}
-                </option>
                 <option value="gemini_pro" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.gemini_pro.badgeLabel}
                 </option>
@@ -1148,8 +1195,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
             >
               <Sparkles className="w-3.5 h-3.5 fill-current" />
               <span>
-                {selectedLlmProvider === 'local_qwen_14b' ? '⚡ Run 14B Report (Bionic)' :
-                 selectedLlmProvider === 'local_qwen' ? '🖥️ Run 7B Report (Ollama)' :
+                {selectedLlmProvider === 'local_qwen' ? '🖥️ Run 7B Report (Ollama)' :
                  selectedLlmProvider === 'gemini_pro' ? '♊ Run Gemini Report' : '🧠 Run Claude Report'}
               </span>
             </button>
@@ -1479,8 +1525,74 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
         )}
       </div>
 
-      {/* Active Graha Drishti Raycasting Status Bar */}
-      {activeRaycast ? (
+      {/* DEDICATED INLINE REPORT VIEW VS 4x4 MATRIX GRID */}
+      {viewMode === 'report' ? (
+        <div className="space-y-4 animate-fadeIn">
+          {/* In-App Fitting Header Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setViewMode('grid')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs border border-slate-700 transition cursor-pointer shadow-sm"
+              >
+                <span>← Back to 4x4 Transit Grid</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Predictions for:</span>
+                <span className="text-xs font-bold text-amber-300 font-mono bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                  {MONTH_NAMES[selectedMonth]} {selectedYear}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  Full Application View
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 p-1">
+                <button
+                  onClick={handlePrevMonth}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  title="Previous Month"
+                >
+                  &larr; Prev
+                </button>
+                <button
+                  onClick={handleNextMonth}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  title="Next Month"
+                >
+                  Next &rarr;
+                </button>
+              </div>
+
+              <button
+                onClick={() => handleOpenMonthlyReport()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Re-Analyze</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Full Page In-App Fitting Report View (Properly fitted, natural browser scroll to end) */}
+          <AudioVoiceInspector
+            isOpen={true}
+            inlineView={true}
+            onClose={() => setViewMode('grid')}
+            context={inspectorHouseContext}
+            activeProvider={selectedLlmProvider}
+            onChangeProvider={(newProv) => {
+              setSelectedLlmProvider(newProv);
+              handleOpenMonthlyReport(newProv);
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Active Graha Drishti Raycasting Status Bar */}
+          {activeRaycast ? (
         <div className="bg-gradient-to-r from-purple-950/80 via-slate-900 to-indigo-950/80 border border-purple-500/40 rounded-xl p-3.5 text-xs flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-purple-500/5 animate-in fade-in duration-200">
           <div className="flex items-center gap-2.5">
             <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300">
@@ -2103,17 +2215,19 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({ personId
           </div>
         )}
       </div>
+        </>
+      )}
 
-
-
-      {/* Audio Voice Inspector Modal / Drawer (Milestone M4) */}
-      <AudioVoiceInspector
-        isOpen={isInspectorOpen}
-        onClose={() => setIsInspectorOpen(false)}
-        context={inspectorHouseContext}
-        activeProvider={selectedLlmProvider}
-        onChangeProvider={setSelectedLlmProvider}
-      />
+      {/* Audio Voice Inspector Modal for individual cell click when in grid mode */}
+      {viewMode === 'grid' && (
+        <AudioVoiceInspector
+          isOpen={isInspectorOpen}
+          onClose={() => setIsInspectorOpen(false)}
+          context={inspectorHouseContext}
+          activeProvider={selectedLlmProvider}
+          onChangeProvider={setSelectedLlmProvider}
+        />
+      )}
     </div>
   );
 };

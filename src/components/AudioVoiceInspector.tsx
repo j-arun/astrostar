@@ -29,7 +29,11 @@ import {
   Cpu,
   FileText,
   Layers,
-  Database
+  Database,
+  Maximize2,
+  Minimize2,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import {
   LLMProviderId,
@@ -37,7 +41,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog, checkLmStudioHealth } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog } from '../services/llm/adapters';
 import { generateVedicPdfReport } from '../services/pdfReportGenerator';
 
 const MONTH_NAMES = [
@@ -51,6 +55,7 @@ interface AudioVoiceInspectorProps {
   context: VedicHouseContext | null;
   activeProvider: LLMProviderId;
   onChangeProvider: (provider: LLMProviderId) => void;
+  inlineView?: boolean;
 }
 
 const SAMPLE_QUICK_CHIPS = [
@@ -104,8 +109,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   onClose,
   context,
   activeProvider,
-  onChangeProvider
+  onChangeProvider,
+  inlineView = false
 }) => {
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [queryText, setQueryText] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'ta'>('en');
   const [activeDomainTab, setActiveDomainTab] = useState<string>('career_job');
@@ -137,21 +144,6 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   });
 
   const [ollamaPingResult, setOllamaPingResult] = useState<{
-    checking: boolean;
-    isOnline?: boolean;
-    models?: string[];
-    error?: string;
-  } | null>(null);
-
-  // LLM Studio / Bionic (14B) State
-  const [localLmStudioModel, setLocalLmStudioModel] = useState<string>(() => {
-    return localStorage.getItem('astro_lmstudio_model') || 'qwen2.5-14b-instruct';
-  });
-  const [lmStudioEndpoint, setLmStudioEndpoint] = useState<string>(() => {
-    return localStorage.getItem('astro_lmstudio_endpoint') || 'http://localhost:1234/v1/chat/completions';
-  });
-  const [availableLmStudioModels, setAvailableLmStudioModels] = useState<string[]>([]);
-  const [lmStudioPingResult, setLmStudioPingResult] = useState<{
     checking: boolean;
     isOnline?: boolean;
     models?: string[];
@@ -223,7 +215,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Auto-scan Ollama / LLM Studio models on open when provider is local
+  // Auto-scan Ollama models on open when provider is local
   useEffect(() => {
     if (isOpen && activeProvider === 'local_qwen') {
       checkOllamaHealth().then(res => {
@@ -231,14 +223,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           setAvailableOllamaModels(res.models);
         }
       }).catch(() => {});
-    } else if (isOpen && activeProvider === 'local_qwen_14b') {
-      checkLmStudioHealth(lmStudioEndpoint).then(res => {
-        if (res.isOnline && res.models && res.models.length > 0) {
-          setAvailableLmStudioModels(res.models);
-        }
-      }).catch(() => {});
     }
-  }, [isOpen, activeProvider, lmStudioEndpoint]);
+  }, [isOpen, activeProvider]);
 
   // Initialize synthesis when context changes or language changes
   useEffect(() => {
@@ -247,7 +233,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     } else {
       stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, localLmStudioModel, lmStudioEndpoint, selectedLanguage, enableTimeout, timeoutSeconds]);
+  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -277,8 +263,6 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         userQuery: q || undefined,
         language: selectedLanguage,
         selectedLocalModel: localOllamaModel,
-        selectedLmStudioModel: localLmStudioModel,
-        lmStudioEndpoint: lmStudioEndpoint,
         customPromptOverride: promptToSend,
         enableTimeout,
         timeoutSeconds
@@ -310,15 +294,13 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     if (!narrative) return;
     setRetryingInsert(true);
     try {
-      const engineMap: Record<LLMProviderId, 'Ollama' | 'LMStudio' | 'Gemini' | 'Claude'> = {
+      const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
         local_qwen: 'Ollama',
-        local_qwen_14b: 'LMStudio',
         gemini_pro: 'Gemini',
         claude: 'Claude'
       };
-      const engine = engineMap[activeProvider] || 'Gemini';
+      const engine = (engineMap as any)[activeProvider] || 'Ollama';
       const modelName = narrative.ollamaStats?.model || (
-        activeProvider === 'local_qwen_14b' ? localLmStudioModel :
         activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
         activeProvider === 'claude' ? 'claude-3-5-sonnet' : localOllamaModel
       );
@@ -383,26 +365,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     }
   };
 
-  const handleTestLmStudioConnection = async () => {
-    setLmStudioPingResult({ checking: true });
-    const res = await checkLmStudioHealth(lmStudioEndpoint);
-    setLmStudioPingResult({
-      checking: false,
-      isOnline: res.isOnline,
-      models: res.models,
-      error: res.error
-    });
-    if (res.models && res.models.length > 0) {
-      setAvailableLmStudioModels(res.models);
-      if (!res.models.includes(localLmStudioModel)) {
-        const matching14b = res.models.find(m => m.toLowerCase().includes('14b') || m.toLowerCase().includes('qwen'));
-        if (matching14b) {
-          setLocalLmStudioModel(matching14b);
-          localStorage.setItem('astro_lmstudio_model', matching14b);
-        }
-      }
-    }
-  };
+
 
   const [purgedToast, setPurgedToast] = useState<boolean>(false);
   const [isPurging, setIsPurging] = useState<boolean>(false);
@@ -536,11 +499,24 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    if (bodyScrollRef.current) {
+      bodyScrollRef.current.scrollTo({ top: bodyScrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToTop = () => {
+    if (bodyScrollRef.current) {
+      bodyScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   if (!isOpen || !context) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-4xl max-h-[94vh] flex flex-col bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
+  const inspectorContent = (
+    <div className={`relative w-full ${inlineView ? 'min-h-[85vh] rounded-2xl' : isFullScreen ? 'h-full rounded-none' : 'max-w-6xl h-[95vh] rounded-2xl'} flex flex-col bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden`}>
         {/* HEADER BAR */}
         <div className="flex items-center justify-between px-5 py-3.5 bg-slate-950 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -552,7 +528,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 <h3 className="text-base font-bold text-white flex items-center gap-1.5">
                   {context.isComprehensiveMonthly ? (
                     <>
-                      <span>Monthly Vedic Report</span>
+                      <span>Monthly Vedic Predictions Report</span>
                       <span className="text-slate-400">&bull;</span>
                       <span className="text-amber-300">{MONTH_NAMES[context.selectedMonth]} {context.selectedYear}</span>
                     </>
@@ -597,11 +573,19 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             <button
               onClick={handleDownloadPdf}
               disabled={isGenerating || !narrative || isExportingPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow disabled:opacity-40"
-              title="Download 3-Page Audit PDF: Page 1 = Dispatched Prompt, Pages 2 & 3 = Full LLM Reasoning & Response"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow disabled:opacity-40 cursor-pointer"
+              title="Download Astrological Predictions Report (PDF) - prompt excluded, all 5-domain predictions included"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download 3-Page PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'Download Predictions PDF'}</span>
+            </button>
+
+            <button
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 transition cursor-pointer"
+              title={isFullScreen ? "Exit Fullscreen" : "Maximize to Fullscreen"}
+            >
+              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
             <button
@@ -623,7 +607,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
         </div>
 
-        {/* CONTROLS ROW: PROVIDER SELECTOR & VOICE OVER CONTROLS */}
+        {/* CONTROLS ROW: PROVIDER SELECTOR & LOCAL CONTROLS */}
         <div className="px-5 py-2.5 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* LLM Provider Selector */}
           <div className="flex items-center gap-2">
@@ -639,7 +623,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   <button
                     key={pid}
                     onClick={() => onChangeProvider(pid)}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
                       isActive
                         ? 'bg-amber-500 text-slate-950 font-bold shadow'
                         : 'text-slate-400 hover:text-slate-200'
@@ -686,63 +670,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </div>
             )}
 
-            {/* LM Studio / Bionic Model Tag Selector */}
-            {activeProvider === 'local_qwen_14b' && (
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
-                <span className="text-[10px] text-slate-400 font-mono">14B Model:</span>
-                {availableLmStudioModels.length > 0 ? (
-                  <select
-                    value={localLmStudioModel}
-                    onChange={(e) => {
-                      setLocalLmStudioModel(e.target.value);
-                      localStorage.setItem('astro_lmstudio_model', e.target.value);
-                    }}
-                    className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold focus:outline-none cursor-pointer"
-                  >
-                    {availableLmStudioModels.map(m => (
-                      <option key={m} value={m} className="bg-slate-900 text-white font-mono">
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={localLmStudioModel}
-                    onChange={(e) => {
-                      setLocalLmStudioModel(e.target.value);
-                      localStorage.setItem('astro_lmstudio_model', e.target.value);
-                    }}
-                    className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold w-40 focus:outline-none"
-                    placeholder="qwen2.5-14b-instruct"
-                    title="Exact model identifier loaded in LM Studio / Bionic"
-                  />
-                )}
-              </div>
-            )}
-
-            {/* LM Studio Endpoint / Port Config */}
-            {activeProvider === 'local_qwen_14b' && (
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
-                <span className="text-[10px] text-slate-400 font-mono">Port:</span>
-                <input
-                  type="text"
-                  value={lmStudioEndpoint.replace('/v1/chat/completions', '')}
-                  onChange={(e) => {
-                    const base = e.target.value.trim();
-                    const full = base.includes('/chat/completions') ? base : `${base.replace(/\/+$/, '')}/v1/chat/completions`;
-                    setLmStudioEndpoint(full);
-                    localStorage.setItem('astro_lmstudio_endpoint', full);
-                  }}
-                  className="bg-transparent text-emerald-300 font-mono text-[11px] font-bold w-36 focus:outline-none"
-                  placeholder="http://localhost:1234"
-                  title="LM Studio server URL (default: http://localhost:1234 or http://127.0.0.1:1234)"
-                />
-              </div>
-            )}
-
-            {/* Local LLM (7B & 14B) Timeout & Throttle Configuration */}
-            {(activeProvider === 'local_qwen' || activeProvider === 'local_qwen_14b') && (
+            {/* Local LLM (7B) Timeout & Throttle Configuration */}
+            {activeProvider === 'local_qwen' && (
               <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 px-2 py-1 rounded-lg">
                 <span className="text-[10px] text-slate-400 font-mono">Timeout:</span>
                 <button
@@ -773,9 +702,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                       setTimeoutSeconds(val);
                       localStorage.setItem('astro_ollama_timeout_seconds', String(val));
                     }}
-                    className={`bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none cursor-pointer ${
-                      activeProvider === 'local_qwen_14b' ? 'text-emerald-300' : 'text-amber-300'
-                    }`}
+                    className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none cursor-pointer text-amber-300"
                     title="Select timeout limit in seconds"
                   >
                     <option value="180">180s (3m)</option>
@@ -942,17 +869,6 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               {showWireLog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
 
-            {activeProvider === 'local_qwen_14b' && (
-              <button
-                onClick={handleTestLmStudioConnection}
-                disabled={lmStudioPingResult?.checking}
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 transition text-[11px]"
-                title="Pings http://localhost:1234/v1/models to verify if LM Studio / Bionic server is running"
-              >
-                <Radio className={`w-3 h-3 ${lmStudioPingResult?.checking ? 'text-emerald-400 animate-spin' : 'text-slate-400'}`} />
-                <span>Test LM Studio</span>
-              </button>
-            )}
 
             {activeProvider === 'local_qwen' && (
               <>
@@ -1011,36 +927,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
         )}
 
-        {/* LIVE LM STUDIO / BIONIC HEALTH PING RESULT CARD (WHEN TESTED) */}
-        {lmStudioPingResult && (
-          <div className={`px-5 py-2 text-xs border-b border-slate-800 flex items-center justify-between ${
-            lmStudioPingResult.isOnline ? 'bg-emerald-950/40 text-emerald-200' : 'bg-rose-950/30 text-rose-200'
-          }`}>
-            <div className="flex items-center gap-2">
-              {lmStudioPingResult.isOnline ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-400" />
-                  <span>
-                    <strong>LM Studio / Bionic Online (Port 1234)!</strong> Detected models: {lmStudioPingResult.models?.join(', ') || 'Loaded in LM Studio'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4 text-rose-400" />
-                  <span>
-                    <strong>LM Studio / Bionic Offline:</strong> {lmStudioPingResult.error || 'Server not reachable on port 1234'}. Ensure the local server is started in LM Studio with CORS enabled.
-                  </span>
-                </>
-              )}
-            </div>
-            <button
-              onClick={() => setLmStudioPingResult(null)}
-              className="text-slate-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+
 
         {/* 404 MODEL NOT FOUND BANNER */}
         {narrative?.providerUsed === 'local_qwen' && narrative?.connectionError?.includes('404') && (
@@ -1436,7 +1323,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
         )}
 
         {/* BODY SCROLL AREA */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div ref={bodyScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 pb-44 relative">
           {/* USER INTERACTIVE QUERY & MIC INPUT */}
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
             <div className="flex items-center gap-2">
@@ -1956,13 +1843,13 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               <RotateCcw className="w-8 h-8 text-amber-400 animate-spin" />
               <div className="text-center space-y-1">
                 <p className="text-xs font-mono font-bold text-white">
-                  Running {LLM_PROVIDERS[activeProvider].name} {activeProvider === 'local_qwen' ? `(${localOllamaModel})` : activeProvider === 'local_qwen_14b' ? `(${localLmStudioModel})` : ''}...
+                  Running {LLM_PROVIDERS[activeProvider].name} {activeProvider === 'local_qwen' ? `(${localOllamaModel})` : ''}...
                 </p>
-                {(activeProvider === 'local_qwen' || activeProvider === 'local_qwen_14b') && (
+                {activeProvider === 'local_qwen' && (
                   enableTimeout ? (
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-amber-300 font-mono">
-                        Executing {activeProvider === 'local_qwen_14b' ? '14B' : '7B'} local inference on your hardware:{' '}
+                        Executing 7B local inference on your hardware:{' '}
                         <span className="font-bold text-white text-xs">{formatTimeDisplay(elapsedSeconds)}</span> / {timeoutSeconds}s limit
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60">
@@ -1979,7 +1866,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   ) : (
                     <div className="space-y-1.5 mt-2">
                       <p className="text-[11px] text-emerald-300 font-mono">
-                        Executing {activeProvider === 'local_qwen_14b' ? '14B (LLM Studio)' : '7B (Ollama)'} inference at <span className="font-bold text-white">Full Throttle</span>:{' '}
+                        Executing 7B (Ollama) inference at <span className="font-bold text-white">Full Throttle</span>:{' '}
                         <span className="font-extrabold text-white text-sm bg-slate-900 px-2 py-0.5 rounded border border-emerald-500/40">{formatTimeDisplay(elapsedSeconds)} elapsed</span>
                       </p>
                       <div className="w-56 h-1.5 bg-slate-800 rounded-full mx-auto overflow-hidden border border-slate-700/60 relative">
@@ -2023,14 +1910,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             </ul>
                           </div>
                           <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <span className="text-[11px] text-slate-400 font-semibold">Immediate unlimited solution:</span>
-                            <button
-                              type="button"
-                              onClick={() => onChangeProvider('local_qwen_14b')}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
-                            >
-                              <span>⚡ Switch to Local 14B (LM Studio / Bionic)</span>
-                            </button>
+                            <span className="text-[11px] text-slate-400 font-semibold">Immediate unlimited local option:</span>
                             <button
                               type="button"
                               onClick={() => onChangeProvider('local_qwen')}
@@ -2038,42 +1918,12 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             >
                               <span>🖥️ Switch to Local 7B (Ollama)</span>
                             </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : narrative.providerUsed === 'local_qwen_14b' && !narrative.connectionError.includes('timed out') ? (
-                    /* 1b. LM STUDIO / BIONIC 14B CONNECTION ERROR */
-                    <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs space-y-2 shadow-sm animate-fadeIn">
-                      <div className="flex items-start gap-2.5">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1 flex-1">
-                          <span className="font-bold text-amber-300 block">
-                            ⚡ LM Studio / Bionic (Local 14B) Notice:
-                          </span>
-                          <p className="leading-relaxed text-slate-300 text-[11px]">
-                            {narrative.connectionError}
-                          </p>
-                          <div className="text-[11px] text-slate-400 bg-slate-950/80 p-2 rounded border border-slate-800 space-y-1 mt-1">
-                            <p><strong>Troubleshooting LM Studio / Bionic:</strong></p>
-                            <p>1. Ensure LM Studio is open and the <strong>Qwen 2.5 14B Instruct</strong> model is loaded in memory.</p>
-                            <p>2. Start the local server on <strong>port 1234</strong> (Local Server tab &gt; Start Server).</p>
-                            <p>3. Enable <strong>CORS</strong> in LM Studio server settings.</p>
-                          </div>
-                          <div className="pt-1 flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={handleTestLmStudioConnection}
-                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
+                              onClick={() => onChangeProvider('claude')}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
                             >
-                              Scan LM Studio Port 1234
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onChangeProvider('local_qwen')}
-                              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
-                            >
-                              Switch to 7B (Ollama)
+                              <span>🧠 Switch to Claude</span>
                             </button>
                           </div>
                         </div>
@@ -2090,7 +1940,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </p>
                       </div>
                     </div>
-                  ) : (narrative.providerUsed === 'local_qwen' || narrative.providerUsed === 'local_qwen_14b') && narrative.connectionError.includes('timed out') ? (
+                  ) : narrative.providerUsed === 'local_qwen' && narrative.connectionError.includes('timed out') ? (
                     /* 3. LOCAL LLM TIMEOUT */
                     <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2.5 shadow-sm">
                       <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -2583,11 +2433,36 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold transition text-xs shadow-md disabled:opacity-40 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>{isExportingPdf ? 'Generating PDF...' : 'Download 3-Page PDF Report'}</span>
+                  <span>{isExportingPdf ? 'Generating PDF...' : 'Download Predictions PDF Report'}</span>
                 </button>
               </div>
             </div>
           ) : null}
+
+          {/* FLOATING QUICK SCROLL SHORTCUTS */}
+          <div className="sticky bottom-4 right-4 flex justify-end gap-2 pointer-events-none z-20">
+            <div className="pointer-events-auto flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-900 backdrop-blur border border-amber-500/40 rounded-full px-3 py-1.5 shadow-xl text-xs">
+              <button
+                type="button"
+                onClick={scrollToTop}
+                className="flex items-center gap-1 text-slate-300 hover:text-white px-2 py-0.5 rounded-full hover:bg-slate-800 transition cursor-pointer"
+                title="Scroll to top of report"
+              >
+                <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+                <span>Top</span>
+              </button>
+              <div className="w-px h-3.5 bg-slate-700" />
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="flex items-center gap-1 text-amber-300 hover:text-amber-200 px-2 py-0.5 rounded-full hover:bg-slate-800 transition font-bold cursor-pointer"
+                title="Scroll down to all prediction domains and remedies"
+              >
+                <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Scroll to End</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* FOOTER ACTIONS */}
@@ -2604,11 +2479,11 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
             <button
               onClick={handleDownloadPdf}
               disabled={!narrative || isExportingPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-50 shadow"
-              title="Download 3-Page Audit PDF: Page 1 = Prompt, Pages 2 & 3 = Response"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-50 shadow cursor-pointer"
+              title="Download Astrological Predictions Report (PDF) - prompt excluded, all 5-domain predictions included"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download 3-Page PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'Download Predictions PDF'}</span>
             </button>
 
             <button
@@ -2631,6 +2506,19 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
           </div>
         </div>
       </div>
+  );
+
+  if (inlineView) {
+    return (
+      <div className="w-full flex-1 flex flex-col animate-fadeIn">
+        {inspectorContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`fixed inset-0 z-50 flex ${isFullScreen ? 'p-0' : 'items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md'} animate-fadeIn`}>
+      {inspectorContent}
     </div>
   );
 };

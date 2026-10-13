@@ -1035,9 +1035,9 @@ ${part3}
     rawMarkdown,
     providerUsed: provider,
     executionTimeMs: Date.now() - startMs,
-    endpointUsed: provider === 'local_qwen' ? 'http://localhost:11434/api/generate' : provider === 'local_qwen_14b' ? 'http://localhost:1234/v1/chat/completions' : provider === 'gemini_pro' ? 'Google GenAI Cloud API' : 'Anthropic Claude Messages API',
+    endpointUsed: provider === 'local_qwen' ? 'http://localhost:11434/api/generate' : provider === 'gemini_pro' ? 'Google GenAI Cloud API' : 'Anthropic Claude Messages API',
     connectionStatus: 'simulated',
-    isPrivateLocal: provider === 'local_qwen' || provider === 'local_qwen_14b',
+    isPrivateLocal: provider === 'local_qwen',
     promptSent: buildVedicPrompt(context, provider),
     natalPromiseVsTransitDelivery: {
       natalPromiseScore,
@@ -1561,270 +1561,6 @@ function resStatusSuggestion(errorMsg?: string, model?: string): string {
   return 'Make sure Ollama is running with CORS enabled: `OLLAMA_ORIGINS="*" ollama serve`';
 }
 
-/**
- * Health check for LLM Studio / Bionic OpenAI-compatible server (default port 1234)
- */
-export async function checkLmStudioHealth(endpointUrl = 'http://localhost:1234'): Promise<{
-  isOnline: boolean;
-  models?: string[];
-  currentModel?: string;
-  error?: string;
-}> {
-  const cleanBase = endpointUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
-  const bases = [cleanBase];
-  if (cleanBase.includes('localhost')) {
-    bases.push(cleanBase.replace('localhost', '127.0.0.1'));
-  } else if (cleanBase.includes('127.0.0.1')) {
-    bases.push(cleanBase.replace('127.0.0.1', 'localhost'));
-  }
-
-  const testUrls: string[] = [];
-  for (const b of bases) {
-    testUrls.push(`${b}/v1/models`, `${b}/models`, `${b}/v1`);
-  }
-
-  for (const url of testUrls) {
-    try {
-      const res = await fetch(url, {
-        signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(2000) : undefined
-      });
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        let models: string[] = [];
-        if (data?.data && Array.isArray(data.data)) {
-          models = data.data.map((m: any) => m.id || m.name).filter(Boolean);
-        }
-        return {
-          isOnline: true,
-          models: models.length > 0 ? models : ['qwen2.5-14b-instruct'],
-          currentModel: models[0] || 'qwen2.5-14b-instruct'
-        };
-      }
-    } catch {}
-  }
-
-  return {
-    isOnline: false,
-    error: `Could not connect to LM Studio / Bionic at ${cleanBase}. Ensure LM Studio local server is started on port 1234 with 'Enable CORS' turned ON.`
-  };
-}
-
-/**
- * 1b. Qwen 14B Adapter (LLM Studio / Bionic on port 1234 with Parashara fallback)
- */
-export class Qwen14BStudioAdapter implements ILLMAdapter {
-  id: LLMProviderId = 'local_qwen_14b';
-
-  async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
-    const startMs = Date.now();
-    const prompt = buildVedicPrompt(context, 'Local Qwen 2.5 14B (LLM Studio / Bionic)');
-
-    // Default endpoint: http://localhost:1234/v1/chat/completions (configurable in UI / localStorage)
-    const storedEndpoint = typeof window !== 'undefined' ? localStorage.getItem('astro_lmstudio_endpoint') : null;
-    let configuredEndpoint = context.lmStudioEndpoint || storedEndpoint || 'http://localhost:1234/v1/chat/completions';
-    if (!configuredEndpoint.includes('/chat/completions') && !configuredEndpoint.includes('/v1')) {
-      configuredEndpoint = `${configuredEndpoint.replace(/\/+$/, '')}/v1/chat/completions`;
-    }
-
-    const storedModel = typeof window !== 'undefined' ? localStorage.getItem('astro_lmstudio_model') : null;
-    let targetModel = context.selectedLmStudioModel || storedModel || 'qwen2.5-14b-instruct';
-
-    // Auto-discover currently loaded model from LM Studio if not explicitly set
-    if (!context.selectedLmStudioModel) {
-      try {
-        const cleanBase = configuredEndpoint.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
-        const modelsRes = await fetch(`${cleanBase}/v1/models`, {
-          signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(1500) : undefined
-        });
-        if (modelsRes.ok) {
-          const mData = await modelsRes.json().catch(() => null);
-          if (mData?.data && Array.isArray(mData.data) && mData.data.length > 0) {
-            const detectedId = mData.data[0]?.id || mData.data[0]?.name;
-            if (detectedId) {
-              targetModel = detectedId;
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('astro_lmstudio_model', detectedId);
-              }
-            }
-          }
-        }
-      } catch {}
-    }
-
-    const systemInstruction = `You are an elite Parashara Vedic Astrological Reasoning System.
-Analyze the transit and Vimshottari Dasha planetary context provided.
-You MUST respond strictly with a valid JSON object matching this schema:
-{
-  "part1_probabilityAndScope": "string (Vedic astrological reasoning, house activations, fruition probability)",
-  "part2_financialAndResources": "string (Capital inflows, expenditure traps, Karakatwa triggers)",
-  "part3_microTimingWindow": "string (Peak auspicious date range, Moon transit activation windows)",
-  "summarySentence": "one authoritative synthesis sentence",
-  "overallConfidence": 85,
-  "peakDateRange": "e.g. October 14 - October 22, 2026"
-}`;
-
-    const requestBody: any = {
-      model: targetModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.25,
-      max_tokens: 4096,
-      stream: false
-    };
-
-    let connectionError: string | undefined;
-
-    // Timeout Configuration
-    const enableTimeout = context.enableTimeout ?? (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_enable_timeout') === 'true' : false);
-    const configuredTimeoutSec = context.timeoutSeconds ?? (typeof window !== 'undefined' ? parseInt(localStorage.getItem('astro_ollama_timeout_seconds') || '300', 10) : 300);
-
-    const controller = new AbortController();
-    let timeoutTimer: any = null;
-
-    if (enableTimeout && configuredTimeoutSec > 0) {
-      timeoutTimer = setTimeout(() => {
-        controller.abort();
-      }, configuredTimeoutSec * 1000);
-    }
-
-    const candidateEndpoints = [configuredEndpoint];
-    if (configuredEndpoint.includes('localhost')) {
-      candidateEndpoints.push(configuredEndpoint.replace('localhost', '127.0.0.1'));
-    } else if (configuredEndpoint.includes('127.0.0.1')) {
-      candidateEndpoints.push(configuredEndpoint.replace('127.0.0.1', 'localhost'));
-    }
-
-    let actualEndpointUsed = configuredEndpoint;
-    let res: Response | null = null;
-    let lastFetchErr: any = null;
-
-    try {
-      for (const ep of candidateEndpoints) {
-        try {
-          res = await fetch(ep, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal
-          });
-          actualEndpointUsed = ep;
-          break;
-        } catch (fErr: any) {
-          lastFetchErr = fErr;
-          if (fErr.name === 'AbortError') break;
-        }
-      }
-
-      if (!res && lastFetchErr) {
-        throw lastFetchErr;
-      }
-
-      // If server returned 404 (Model not found) or 400 (Model not loaded), retry with discovered loaded model
-      if (res && !res.ok && (res.status === 404 || res.status === 400)) {
-        try {
-          const cleanBase = actualEndpointUsed.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
-          const modelsRes = await fetch(`${cleanBase}/v1/models`).catch(() => null);
-          if (modelsRes && modelsRes.ok) {
-            const mData = await modelsRes.json().catch(() => null);
-            if (mData?.data?.[0]?.id) {
-              requestBody.model = mData.data[0].id;
-              targetModel = mData.data[0].id;
-              res = await fetch(actualEndpointUsed, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-                signal: controller.signal
-              });
-            }
-          }
-        } catch {}
-      }
-
-      if (timeoutTimer) {
-        clearTimeout(timeoutTimer);
-      }
-
-      if (res && res.ok) {
-        const json = await res.json();
-        const contentStr = json.choices?.[0]?.message?.content || json.choices?.[0]?.text || '';
-        const cleanContent = (contentStr || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-
-        const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen_14b', startMs);
-        const parsed = extractAndParseVedicJson(cleanContent, fallback);
-
-        const finalP1 = parsed.part1_probabilityAndScope && parsed.part1_probabilityAndScope !== fallback.part1_probabilityAndScope
-          ? parsed.part1_probabilityAndScope
-          : (cleanContent || fallback.part1_probabilityAndScope);
-
-        return {
-          part1_probabilityAndScope: finalP1,
-          part2_financialAndResources: parsed.part2_financialAndResources || fallback.part2_financialAndResources,
-          part3_microTimingWindow: parsed.part3_microTimingWindow || fallback.part3_microTimingWindow,
-          summarySentence: parsed.summarySentence || fallback.summarySentence,
-          overallConfidence: typeof parsed.overallConfidence === 'number' ? parsed.overallConfidence : fallback.overallConfidence,
-          peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
-          natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
-          supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
-          rawMarkdown: cleanContent || parsed.rawMarkdown || finalP1,
-          providerUsed: 'local_qwen_14b',
-          executionTimeMs: Date.now() - startMs,
-          timeoutEnforced: enableTimeout,
-          configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
-          endpointUsed: `LLM Studio / Bionic (${actualEndpointUsed})`,
-          connectionStatus: 'connected_live',
-          isPrivateLocal: true,
-          promptSent: prompt,
-          rawRequestBody: requestBody,
-          rawResponseBody: json,
-          httpStatus: res.status,
-          ollamaStats: {
-            model: json.model || targetModel,
-            totalDurationMs: Date.now() - startMs,
-            promptEvalCount: json.usage?.prompt_tokens,
-            evalCount: json.usage?.completion_tokens
-          }
-        };
-      } else if (res) {
-        const errJson = await res.json().catch(() => null);
-        const detailedErr = errJson?.error?.message || errJson?.error || res.statusText;
-        connectionError = `LLM Studio / Bionic HTTP ${res.status}: ${detailedErr}`;
-      }
-    } catch (err: any) {
-      if (timeoutTimer) {
-        clearTimeout(timeoutTimer);
-      }
-      const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
-      if (err.name === 'AbortError' || controller.signal.aborted) {
-        connectionError = `Local 14B LLM timed out after ${elapsedSec}s (enforced limit: ${configuredTimeoutSec}s). Reverted to Parashara analytical synthesis. Turn off timeout in the header to run full throttle.`;
-      } else {
-        connectionError = `Failed to fetch from LM Studio / Bionic (${candidateEndpoints.join(' / ')}). Check that: 1) Local Server is STARTED on port 1234 in LM Studio, and 2) 'Enable CORS' is checked ON in LM Studio Local Server settings.`;
-      }
-    }
-
-    const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen_14b', startMs);
-    return {
-      ...fallback,
-      endpointUsed: `LLM Studio / Bionic (${actualEndpointUsed})`,
-      connectionStatus: 'connection_failed_fallback',
-      connectionError,
-      isPrivateLocal: true,
-      promptSent: prompt,
-      rawRequestBody: requestBody,
-      executionTimeMs: Date.now() - startMs,
-      timeoutEnforced: enableTimeout,
-      configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
-      rawResponseBody: {
-        fallback_reason: connectionError,
-        requested_model: targetModel,
-        endpoints_tested: candidateEndpoints,
-        suggestion: `How to enable LM Studio / Bionic for your Browser:\n1. Open LM Studio on your computer.\n2. Click the 'Local Server' tab (↔ icon on the left navigation bar).\n3. In the top dropdown, select your Qwen 2.5 14B Instruct model to load it into memory.\n4. Under Server Settings on the right, make sure 'Enable CORS' is toggled ON.\n5. Click the green 'Start Server' button (default port 1234).\n6. Return to this screen and click 'Test LM Studio' or 'Generate Astrological Reasoning'.`,
-        note: 'Executed deterministic Parashara heuristic engine because LM Studio / Bionic local server was unreachable or CORS was not enabled.'
-      }
-    };
-  }
-}
 
 /**
  * 2. Google Gemini Pro Adapter (@google/genai SDK)
@@ -2044,26 +1780,23 @@ export async function fetchRecentLLMPromptLogs(limit: number = 20): Promise<any[
 export class LLMReasoningService {
   private adapters: Record<LLMProviderId, ILLMAdapter> = {
     local_qwen: new QwenLocalAdapter(),
-    local_qwen_14b: new Qwen14BStudioAdapter(),
     gemini_pro: new GeminiStudioAdapter(),
     claude: new ClaudeAdapter()
   };
 
   async generate(providerId: LLMProviderId, context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const adapter = this.adapters[providerId] || this.adapters.local_qwen;
+    const adapter = (this.adapters as any)[providerId] || this.adapters.local_qwen;
     const result = await adapter.generateReasoning(context);
 
     // Map provider to engine name
-    const engineMap: Record<LLMProviderId, 'Ollama' | 'LMStudio' | 'Gemini' | 'Claude'> = {
+    const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
       local_qwen: 'Ollama',
-      local_qwen_14b: 'LMStudio',
       gemini_pro: 'Gemini',
       claude: 'Claude'
     };
-    const engine = engineMap[providerId] || 'Gemini';
+    const engine = (engineMap as any)[providerId] || 'Ollama';
     const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
-      providerId === 'local_qwen_14b' ? (context.selectedLmStudioModel || 'qwen2.5-14b-instruct') :
       providerId === 'gemini_pro' ? 'gemini-3.8-flash' :
       providerId === 'claude' ? 'claude-3-5-sonnet' :
       (context.selectedLocalModel || 'qwen2.5:7b-instruct')

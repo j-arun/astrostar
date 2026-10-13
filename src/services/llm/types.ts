@@ -2,7 +2,7 @@
  * Types & Interfaces for Astro Engine Multi-LLM Reasoning System (Milestone M4)
  */
 
-export type LLMProviderId = 'local_qwen' | 'local_qwen_14b' | 'gemini_pro' | 'claude';
+export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude';
 
 export interface LLMProviderConfig {
   id: LLMProviderId;
@@ -21,14 +21,6 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
     model: 'qwen2.5:7b-instruct',
     description: 'Local on-premise execution via Ollama (port 11434). Rapid 7B inference, complete privacy.',
     endpoint: 'http://localhost:11434/api/generate'
-  },
-  local_qwen_14b: {
-    id: 'local_qwen_14b',
-    name: 'Local Qwen 2.5 14B (LLM Studio / Bionic)',
-    badgeLabel: '⚡ Local 14B (LLM Studio / Bionic - Qwen 2.5 14B)',
-    model: 'qwen2.5-14b-instruct',
-    description: 'Higher-fidelity local execution via LLM Studio / Bionic (OpenAI API on port 1234). Superior 14B astrological reasoning depth, complete local privacy.',
-    endpoint: 'http://localhost:1234/v1/chat/completions'
   },
   gemini_pro: {
     id: 'gemini_pro',

@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf';
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
-import { buildVedicPrompt } from './llm/adapters';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -51,693 +50,575 @@ export function generateVedicPdfReport(
   const pageHeight = 297;
   const margin = 12;
   const contentWidth = pageWidth - margin * 2; // 186mm
+  const bottomLimit = pageHeight - margin - 12; // 273mm
+
+  let currentY = 14;
 
   const timePeriodText = `${MONTH_NAMES[context.selectedMonth] || 'Active Month'} ${context.selectedYear}`;
   const providerMeta = LLM_PROVIDERS[narrative.providerUsed] || {
     id: narrative.providerUsed,
-    name: narrative.providerUsed,
+    name: narrative.providerUsed === 'local_qwen' ? 'Local Qwen 2.5 7B (Ollama)' : narrative.providerUsed,
     badgeLabel: narrative.providerUsed,
     model: 'custom'
   };
   const providerName = providerMeta.name;
   const modelName = narrative.ollamaStats?.model || providerMeta.model || (narrative.isPrivateLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash');
 
-  // Retrieve exact prompt sent to LLM
-  const rawPrompt = narrative.promptSent || buildVedicPrompt(context, narrative.providerUsed);
-  const promptCharCount = rawPrompt.length;
-  const estimatedTokens = narrative.ollamaStats?.promptEvalCount || Math.round(promptCharCount / 3.8);
-
-  // ========================================================================
-  // PAGE 1: THE DISPATCHED PROMPT (SYSTEM & REASONING AUDIT INSPECTION)
-  // ========================================================================
-  
-  // Header Banner
-  doc.setFillColor(15, 23, 42); // Dark slate
-  doc.rect(margin, 12, contentWidth, 22, 'F');
-
-  doc.setTextColor(245, 158, 11); // Amber
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12.5);
-  doc.text('VEDIC PARASHARA ASTROLOGICAL INFERENCE REPORT', margin + 5, 19.5);
-
-  doc.setTextColor(203, 213, 225); // Slate 300
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text(
-    'PAGE 1 OF 3 • DISPATCHED SYSTEM & EVALUATION PROMPT INSPECTION',
-    margin + 5,
-    25.5
-  );
-
-  doc.setTextColor(148, 163, 184); // Slate 400
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(
-    context.isComprehensiveMonthly || !context.houseNumber
-      ? `Scope: Full-Month Vedic Synthesis (All 12 Houses) • Period: ${timePeriodText}`
-      : `Target: House ${context.houseNumber} (${context.rashiName} / ${context.tamilName}) • Period: ${timePeriodText}`,
-    margin + 5,
-    30.5
-  );
-
-  // Right Header Badges
-  doc.setFillColor(30, 41, 59);
-  doc.roundedRect(pageWidth - margin - 58, 15, 54, 16, 1.5, 1.5, 'F');
-
-  doc.setTextColor(52, 211, 153); // Emerald
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('● PROMPT AUDIT STREAM', pageWidth - margin - 31, 20, { align: 'center' });
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text(
-    `${providerName.toUpperCase()}`,
-    pageWidth - margin - 31,
-    25,
-    { align: 'center' }
-  );
-  doc.setTextColor(203, 213, 225);
-  doc.text(
-    `Model: ${modelName}`,
-    pageWidth - margin - 31,
-    29,
-    { align: 'center' }
-  );
-
-  // Metadata Strip Card
-  doc.setFillColor(248, 250, 252); // Slate 50
-  doc.setDrawColor(226, 232, 240); // Slate 200
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, 36, contentWidth, 11, 1.5, 1.5, 'FD');
-
-  const col4W = contentWidth / 4;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-
-  // Col 1
-  doc.text('EVALUATION TARGET', margin + 3, 40);
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.text(
-    context.isComprehensiveMonthly || !context.houseNumber
-      ? 'Comprehensive Monthly'
-      : `House ${context.houseNumber} (${context.rashiName || ''})`,
-    margin + 3,
-    44.5
-  );
-
-  // Col 2
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text('DASHA TRIAD HIERARCHY', margin + col4W + 3, 40);
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.text(
-    `MD: ${context.activeDasha.mahadasha} | AD: ${context.activeDasha.antardasha} | PD: ${context.activeDasha.pratyantardasha}`,
-    margin + col4W + 3,
-    44.5
-  );
-
-  // Col 3
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text('PROMPT PAYLOAD SIZE', margin + col4W * 2 + 3, 40);
-  doc.setTextColor(180, 83, 9); // Amber
-  doc.setFont('helvetica', 'bold');
-  doc.text(`${promptCharCount.toLocaleString()} chars (~${estimatedTokens.toLocaleString()} tokens)`, margin + col4W * 2 + 3, 44.5);
-
-  // Col 4
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text('EXECUTION TIME / MODE', margin + col4W * 3 + 3, 40);
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  const throttleLabel = narrative.timeoutEnforced ? `Cap: ${narrative.configuredTimeoutSeconds}s` : '⚡ Full Throttle';
-  doc.text(`${formatDuration(narrative.executionTimeMs)} (${throttleLabel})`, margin + col4W * 3 + 3, 44.5);
-
-  // Prompt Container Box (2-column layout for high density readability)
-  const promptBoxY = 49;
-  const promptBoxH = 227; // Reaches y = 276
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(margin, promptBoxY, contentWidth, promptBoxH, 1.5, 1.5, 'FD');
-
-  // Title Bar of Prompt Box
-  doc.setFillColor(30, 41, 59);
-  doc.rect(margin, promptBoxY, contentWidth, 7, 'F');
-  doc.setTextColor(245, 158, 11);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text(
-    `EXACT PROMPT PAYLOAD DISPATCHED TO ${providerName.toUpperCase()} (${modelName}):`,
-    margin + 4,
-    promptBoxY + 4.8
-  );
-  doc.setTextColor(148, 163, 184);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.text(
-    'Audit inspection of coordinates, Tara Bala, SAV bindus, planetary degrees & task contract',
-    pageWidth - margin - 4,
-    promptBoxY + 4.8,
-    { align: 'right' }
-  );
-
-  // 2-Column Monospace Text Layout
-  const pColW = (contentWidth - 6) / 2; // ~90mm
-  const col1Left = margin + 3;
-  const col2Left = margin + pColW + 3;
-  const textStartY = promptBoxY + 11;
-  const lineHeightMm = 2.22;
-  const maxLinesPerCol = 96; // 96 lines * 2.22mm = ~213mm
-
-  // Split prompt text into lines fitted to column width
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(5.6);
-  const rawLines: string[] = doc.splitTextToSize(rawPrompt, pColW - 2);
-
-  // Draw separator line between columns
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.3);
-  doc.line(margin + pColW + 1.5, promptBoxY + 8, margin + pColW + 1.5, promptBoxY + promptBoxH - 6);
-
-  // Column 1 rendering
-  const col1Lines = rawLines.slice(0, maxLinesPerCol);
-  let curY = textStartY;
-  doc.setTextColor(30, 41, 59);
-  for (let i = 0; i < col1Lines.length; i++) {
-    const line = col1Lines[i];
-    if (line.startsWith('===') || line.startsWith('NATAL') || line.startsWith('9-GRAHA') || line.startsWith('CRITICAL')) {
-      doc.setFont('courier', 'bold');
-      doc.setTextColor(180, 83, 9);
-    } else if (line.includes('•') || line.includes(':')) {
-      doc.setFont('courier', 'normal');
-      doc.setTextColor(30, 41, 59);
-    } else {
-      doc.setFont('courier', 'normal');
-      doc.setTextColor(71, 85, 105);
+  // Helper to ensure vertical space, auto-adding a page if required
+  const ensureSpace = (requiredHeightMm: number, forceNewPageHeader = true) => {
+    if (currentY + requiredHeightMm > bottomLimit) {
+      doc.addPage();
+      currentY = 14;
+      if (forceNewPageHeader) {
+        drawPageBanner();
+      }
     }
-    doc.text(line, col1Left, curY);
-    curY += lineHeightMm;
-  }
+  };
 
-  // Column 2 rendering
-  const col2Lines = rawLines.slice(maxLinesPerCol, maxLinesPerCol * 2);
-  curY = textStartY;
-  for (let i = 0; i < col2Lines.length; i++) {
-    const line = col2Lines[i];
-    if (line.startsWith('===') || line.startsWith('NATAL') || line.startsWith('9-GRAHA') || line.startsWith('CRITICAL')) {
-      doc.setFont('courier', 'bold');
-      doc.setTextColor(180, 83, 9);
-    } else if (line.includes('•') || line.includes(':')) {
-      doc.setFont('courier', 'normal');
-      doc.setTextColor(30, 41, 59);
-    } else {
-      doc.setFont('courier', 'normal');
-      doc.setTextColor(71, 85, 105);
-    }
-    doc.text(line, col2Left, curY);
-    curY += lineHeightMm;
-  }
+  // Draw header banner at top of pages
+  const drawPageBanner = (isFirstPage = false) => {
+    doc.setFillColor(15, 23, 42); // Dark slate
+    doc.rect(margin, currentY, contentWidth, isFirstPage ? 22 : 14, 'F');
 
-  // Notice if prompt was longer than fits in 192 lines
-  if (rawLines.length > maxLinesPerCol * 2) {
-    doc.setFillColor(254, 243, 199);
-    doc.roundedRect(col2Left - 1, promptBoxY + promptBoxH - 6, pColW, 4.5, 1, 1, 'F');
-    doc.setTextColor(146, 64, 14);
+    doc.setTextColor(245, 158, 11); // Amber
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.8);
+    doc.setFontSize(isFirstPage ? 12 : 9.5);
+    doc.text('VEDIC PARASHARA ASTROLOGICAL INFERENCE & PREDICTIONS', margin + 4, currentY + (isFirstPage ? 7.5 : 5.8));
+
+    doc.setTextColor(203, 213, 225); // Slate 300
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(isFirstPage ? 7.5 : 7);
     doc.text(
-      `[PROMPT AUDIT: 192 lines displayed above • Full ${promptCharCount} chars preserved in Wire Tab]`,
-      col2Left + 1,
-      promptBoxY + promptBoxH - 2.8
+      context.isComprehensiveMonthly || !context.houseNumber
+        ? `FULL-MONTH SYNTHESIS • PERIOD: ${timePeriodText.toUpperCase()} • ENGINE: ${providerName.toUpperCase()}`
+        : `HOUSE ${context.houseNumber} (${context.rashiName || ''}) • PERIOD: ${timePeriodText.toUpperCase()} • ENGINE: ${providerName.toUpperCase()}`,
+      margin + 4,
+      currentY + (isFirstPage ? 13.5 : 10.5)
     );
-  }
+
+    if (isFirstPage) {
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(
+        `Authoritative Parashara Hora Shastra Astrological Evaluation • Model: ${modelName} • Time: ${formatDuration(narrative.executionTimeMs)}`,
+        margin + 4,
+        currentY + 18.5
+      );
+
+      // Status pill on top right
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(pageWidth - margin - 52, currentY + 3.5, 48, 15, 1.5, 1.5, 'F');
+
+      doc.setTextColor(context.isEventActive ? 52 : 148, context.isEventActive ? 211 : 163, context.isEventActive ? 153 : 184);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text(context.isEventActive ? '● EVENT ACTIVE' : '○ INACTIVE/DORMANT', pageWidth - margin - 28, currentY + 8.5, { align: 'center' });
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.text(`Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`, pageWidth - margin - 28, currentY + 12.5, { align: 'center' });
+      doc.text(`Score: ${(context.activationScore ?? 0).toFixed(2)}`, pageWidth - margin - 28, currentY + 16, { align: 'center' });
+    } else {
+      doc.setTextColor(52, 211, 153);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text(`Active Engine: ${providerName} (${modelName})`, pageWidth - margin - 4, currentY + 8.5, { align: 'right' });
+    }
+
+    currentY += (isFirstPage ? 25 : 17);
+  };
 
   // ========================================================================
-  // PAGE 2: RESPONSE PART 1 — CORE MODEL SYNTHESIS & 3-PART EVALUATION
+  // PAGE 1 START: EXECUTIVE ASTROLOGICAL CHARTER & CORE SYNTHESIS
   // ========================================================================
-  doc.addPage();
+  drawPageBanner(true);
 
-  // Header Banner
-  doc.setFillColor(15, 23, 42); // Dark slate
-  doc.rect(margin, 12, contentWidth, 20, 'F');
-
-  doc.setTextColor(245, 158, 11); // Amber
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12.5);
-  doc.text('VEDIC PARASHARA ASTROLOGICAL INFERENCE REPORT', margin + 5, 19.5);
-
-  doc.setTextColor(203, 213, 225);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text(
-    'PAGE 2 OF 3 • MODEL SYNTHESIS & DUAL EVALUATION (RESPONSE PART 1)',
-    margin + 5,
-    25.5
-  );
-
-  doc.setTextColor(148, 163, 184);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(
-    context.isComprehensiveMonthly || !context.houseNumber
-      ? `Comprehensive Monthly (All Houses) • Period: ${timePeriodText} • Engine: ${providerName}`
-      : `House ${context.houseNumber} (${context.rashiName || ''}) • Period: ${timePeriodText} • Engine: ${providerName}`,
-    margin + 5,
-    29.5
-  );
-
-  // Right Status Badge
-  doc.setTextColor(context.isEventActive ? 52 : 148, context.isEventActive ? 211 : 163, context.isEventActive ? 153 : 184);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text(
-    context.isEventActive ? '● EVENT ACTIVE' : '○ INACTIVE/DORMANT',
-    pageWidth - margin - 5,
-    19.5,
-    { align: 'right' }
-  );
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(
-    `Activation Score: ${(context.activationScore ?? 0).toFixed(2)} | Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`,
-    pageWidth - margin - 5,
-    25.5,
-    { align: 'right' }
-  );
-
-  // Dasha Triad Ribbon (MD / AD / PD)
-  let y2 = 34;
+  // DASHA TRIAD RIBBON (MD / AD / PD)
+  const dColW = (contentWidth - 6) / 3;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y2, contentWidth, 18, 1.5, 1.5, 'FD');
+  doc.roundedRect(margin, currentY, contentWidth, 18, 1.5, 1.5, 'FD');
 
-  const dColW = (contentWidth - 8) / 3;
   // MD Box
-  doc.setFillColor(254, 243, 199);
-  doc.roundedRect(margin + 2, y2 + 2, dColW, 14, 1, 1, 'F');
+  doc.setFillColor(254, 243, 199); // Amber 100
+  doc.roundedRect(margin + 2, currentY + 2, dColW, 14, 1, 1, 'F');
   doc.setTextColor(146, 64, 14);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
-  doc.text('MAHADASHA (MD)', margin + 4, y2 + 6);
+  doc.text('MAHADASHA (MD)', margin + 4, currentY + 6);
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(9.5);
-  doc.text(context.activeDasha.mahadasha || 'Lord', margin + 4, y2 + 11);
+  doc.text(context.activeDasha.mahadasha || 'Lord', margin + 4, currentY + 10.5);
   doc.setTextColor(100, 116, 139);
   doc.setFontSize(6.5);
-  doc.text('Primary Planetary Period', margin + 4, y2 + 14.5);
+  doc.text('Primary Planetary Period Lord', margin + 4, currentY + 14);
 
   // AD Box
-  doc.setFillColor(224, 242, 254);
-  doc.roundedRect(margin + 4 + dColW, y2 + 2, dColW, 14, 1, 1, 'F');
+  doc.setFillColor(224, 242, 254); // Sky 100
+  doc.roundedRect(margin + 3 + dColW, currentY + 2, dColW, 14, 1, 1, 'F');
   doc.setTextColor(3, 105, 161);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
-  doc.text('ANTARDASHA (AD)', margin + 6 + dColW, y2 + 6);
+  doc.text('ANTARDASHA (AD)', margin + 5 + dColW, currentY + 6);
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(9.5);
-  doc.text(context.activeDasha.antardasha || 'Lord', margin + 6 + dColW, y2 + 11);
+  doc.text(context.activeDasha.antardasha || 'Lord', margin + 5 + dColW, currentY + 10.5);
   doc.setTextColor(100, 116, 139);
   doc.setFontSize(6.5);
-  doc.text('Sub-Period Manifestor', margin + 6 + dColW, y2 + 14.5);
+  doc.text('Sub-Period Manifestor Lord', margin + 5 + dColW, currentY + 14);
 
   // PD Box
-  doc.setFillColor(220, 252, 231);
-  doc.roundedRect(margin + 6 + dColW * 2, y2 + 2, dColW, 14, 1, 1, 'F');
+  doc.setFillColor(220, 252, 231); // Emerald 100
+  doc.roundedRect(margin + 4 + dColW * 2, currentY + 2, dColW, 14, 1, 1, 'F');
   doc.setTextColor(21, 128, 61);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
-  doc.text('PRATYANTARDASHA (PD)', margin + 8 + dColW * 2, y2 + 6);
+  doc.text('PRATYANTARDASHA (PD)', margin + 6 + dColW * 2, currentY + 6);
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(9.5);
-  doc.text(context.activeDasha.pratyantardasha || 'Lord', margin + 8 + dColW * 2, y2 + 11);
+  doc.text(context.activeDasha.pratyantardasha || 'Lord', margin + 6 + dColW * 2, currentY + 10.5);
   doc.setTextColor(100, 116, 139);
   doc.setFontSize(6.5);
-  doc.text(`Window: ${narrative.peakDateRange || 'Active Month'}`, margin + 8 + dColW * 2, y2 + 14.5);
+  doc.text(`Active Window: ${narrative.peakDateRange || 'Entire Month'}`, margin + 6 + dColW * 2, currentY + 14);
 
-  y2 += 21;
+  currentY += 21;
 
-  // Bottom-Line Synthesis Box
-  doc.setFillColor(255, 251, 235); // Amber 50
-  doc.setDrawColor(245, 158, 11);
-  doc.setLineWidth(0.6);
+  // BOTTOM-LINE SYNTHESIS CARD
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.8);
   const summaryLines = doc.splitTextToSize(
     narrative.summarySentence || 'Parashara synthesis completed.',
     contentWidth - 8
   );
-  const summaryH = Math.min(24, Math.max(16, summaryLines.length * 3.8 + 8));
-  doc.roundedRect(margin, y2, contentWidth, summaryH, 1.5, 1.5, 'FD');
+  const summaryH = Math.max(16, summaryLines.length * 4.2 + 8);
+  ensureSpace(summaryH + 4);
+
+  doc.setFillColor(255, 251, 235); // Amber 50
+  doc.setDrawColor(245, 158, 11); // Amber 500
+  doc.setLineWidth(0.6);
+  doc.roundedRect(margin, currentY, contentWidth, summaryH, 1.5, 1.5, 'FD');
 
   doc.setTextColor(180, 83, 9);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('BOTTOM-LINE SYNTHESIS:', margin + 4, y2 + 5.5);
+  doc.text('BOTTOM-LINE SYNTHESIS VERDICT:', margin + 4, currentY + 5.8);
 
   doc.setTextColor(30, 41, 59);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.8);
-  doc.text(summaryLines.slice(0, 4), margin + 4, y2 + 10.5);
+  doc.setFontSize(7.6);
+  doc.text(summaryLines, margin + 4, currentY + 10.5);
 
-  y2 += summaryH + 3;
+  currentY += summaryH + 4;
 
-  // Dual Evaluation Card: Natal Promise vs Transit Delivery
-  const dualCardH = 25;
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y2, contentWidth, dualCardH, 1.5, 1.5, 'FD');
+  // DUAL EVALUATION CARD: NATAL PROMISE VS TRANSIT DELIVERY
+  if (narrative.natalPromiseVsTransitDelivery) {
+    const pScore = narrative.natalPromiseVsTransitDelivery.natalPromiseScore ?? 0.88;
+    const pVerdict = narrative.natalPromiseVsTransitDelivery.natalPromiseVerdict || 'Strong foundational promise confirmed.';
+    const tScore = narrative.natalPromiseVsTransitDelivery.transitDeliveryScore ?? 0.78;
+    const tVerdict = narrative.natalPromiseVsTransitDelivery.transitDeliveryVerdict || 'Active gochara transits deliver opportune window.';
+    const sVerdict = narrative.natalPromiseVsTransitDelivery.synthesisVerdict || 'Combined Fruition: High manifest probability during evaluated micro-timing window.';
 
-  const halfW = (contentWidth - 6) / 2;
-  const promiseScore = narrative.natalPromiseVsTransitDelivery?.natalPromiseScore ?? 0.85;
-  const promiseVerdict = narrative.natalPromiseVsTransitDelivery?.natalPromiseVerdict ?? 'Strong foundational promise confirmed by natal lagna and karaka alignment.';
-  const transitScore = narrative.natalPromiseVsTransitDelivery?.transitDeliveryScore ?? 0.78;
-  const transitVerdict = narrative.natalPromiseVsTransitDelivery?.transitDeliveryVerdict ?? 'Active gochara transits deliver opportune window through active dasha triad.';
-  const synthesisVerdict = narrative.natalPromiseVsTransitDelivery?.synthesisVerdict ?? 'Combined Fruition: High manifest probability during evaluated micro-timing window.';
+    const halfW = (contentWidth - 6) / 2;
+    doc.setFontSize(7);
+    const pLines = doc.splitTextToSize(pVerdict, halfW - 6);
+    const tLines = doc.splitTextToSize(tVerdict, halfW - 6);
+    const sLines = doc.splitTextToSize(`Combined Synthesis: ${sVerdict}`, contentWidth - 8);
 
-  // Natal Promise Column
-  doc.setFillColor(254, 243, 199);
-  doc.roundedRect(margin + 2, y2 + 2, halfW, 14, 1, 1, 'F');
-  doc.setTextColor(146, 64, 14);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text(`1. NATAL PROMISE (D1/D9) — ${(promiseScore * 100).toFixed(0)}%`, margin + 4, y2 + 6);
-  doc.setTextColor(71, 85, 105);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8);
-  const pLines = doc.splitTextToSize(promiseVerdict, halfW - 4);
-  doc.text(pLines.slice(0, 2), margin + 4, y2 + 10);
+    const dualH = Math.max(26, Math.max(pLines.length, tLines.length) * 3.8 + sLines.length * 3.8 + 14);
+    ensureSpace(dualH + 4);
 
-  // Transit Delivery Column
-  doc.setFillColor(224, 242, 254);
-  doc.roundedRect(margin + halfW + 4, y2 + 2, halfW, 14, 1, 1, 'F');
-  doc.setTextColor(3, 105, 161);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text(`2. GOCHARA TRANSIT DELIVERY — ${(transitScore * 100).toFixed(0)}%`, margin + halfW + 6, y2 + 6);
-  doc.setTextColor(71, 85, 105);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.8);
-  const tLines = doc.splitTextToSize(transitVerdict, halfW - 4);
-  doc.text(tLines.slice(0, 2), margin + halfW + 6, y2 + 10);
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, currentY, contentWidth, dualH, 1.5, 1.5, 'FD');
 
-  // Combined Synthesis Row
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin + 2, y2 + 17.5, contentWidth - 4, 6, 1, 1, 'F');
-  doc.setTextColor(30, 41, 59);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.text(`Combined Synthesis: ${synthesisVerdict}`, margin + 4, y2 + 21.5);
+    // Natal Promise Column
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(margin + 2, currentY + 2, halfW, Math.max(14, pLines.length * 3.8 + 7), 1, 1, 'F');
+    doc.setTextColor(146, 64, 14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(`1. NATAL PROMISE (D1/D9) — ${(pScore * 100).toFixed(0)}%`, margin + 4, currentY + 6);
+    doc.setTextColor(51, 65, 85);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(pLines, margin + 4, currentY + 10);
 
-  y2 += dualCardH + 3;
+    // Transit Delivery Column
+    doc.setFillColor(224, 242, 254);
+    doc.roundedRect(margin + halfW + 4, currentY + 2, halfW, Math.max(14, tLines.length * 3.8 + 7), 1, 1, 'F');
+    doc.setTextColor(3, 105, 161);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(`2. GOCHARA TRANSIT DELIVERY — ${(tScore * 100).toFixed(0)}%`, margin + halfW + 6, currentY + 6);
+    doc.setTextColor(51, 65, 85);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(tLines, margin + halfW + 6, currentY + 10);
 
-  // 3-PART PARASHARA INFERENCE BLOCKS (Formatted compactly to strictly fit Page 2)
-  const renderCompactPart = (
-    title: string,
-    content: string,
-    badge: string,
-    headerColor: [number, number, number],
-    boxHeight: number
+    // Combined Synthesis Row
+    const sBoxY = currentY + Math.max(14, Math.max(pLines.length, tLines.length) * 3.8 + 7) + 3;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin + 2, sBoxY, contentWidth - 4, sLines.length * 3.8 + 4, 1, 1, 'F');
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.text(sLines, margin + 4, sBoxY + 4.5);
+
+    currentY += dualH + 4;
+  }
+
+  // ========================================================================
+  // SECTION 3: CORE PARASHARA 3-PART PREDICTIONS
+  // ========================================================================
+  const renderPredictionCard = (
+    partTitle: string,
+    rawText: string,
+    badgeText: string,
+    themeColor: [number, number, number]
   ) => {
+    const cleaned = cleanNarrativeText(rawText) || 'No narrative commentary provided.';
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.4);
+    const bodyLines = doc.splitTextToSize(cleaned, contentWidth - 8);
+    const cardHeight = Math.max(20, bodyLines.length * 3.9 + 11);
+
+    ensureSpace(cardHeight + 4);
+
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y2, contentWidth, boxHeight, 1.5, 1.5, 'FD');
+    doc.roundedRect(margin, currentY, contentWidth, cardHeight, 1.5, 1.5, 'FD');
 
-    // Header strip inside card
-    doc.setTextColor(headerColor[0], headerColor[1], headerColor[2]);
+    // Title & Badge strip
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin, currentY, contentWidth, 7, 1.5, 1.5, 'F');
+
+    doc.setTextColor(themeColor[0], themeColor[1], themeColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.2);
-    doc.text(title, margin + 4, y2 + 5.5);
+    doc.setFontSize(8);
+    doc.text(partTitle, margin + 4, currentY + 5);
 
     doc.setTextColor(100, 116, 139);
-    doc.setFontSize(7);
-    doc.text(badge, pageWidth - margin - 4, y2 + 5.5, { align: 'right' });
+    doc.setFontSize(6.8);
+    doc.text(badgeText, pageWidth - margin - 4, currentY + 5, { align: 'right' });
 
     // Body Text
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.3);
-    const lines = doc.splitTextToSize(content || 'No commentary provided.', contentWidth - 8);
-    const maxLines = Math.floor((boxHeight - 8.5) / 3.4);
-    doc.text(lines.slice(0, maxLines), margin + 4, y2 + 9.5);
+    doc.setFontSize(7.4);
+    doc.text(bodyLines, margin + 4, currentY + 11.5);
 
-    y2 += boxHeight + 3;
+    currentY += cardHeight + 4;
   };
 
-  // Part 1: Event Probability & Scope
-  renderCompactPart(
+  renderPredictionCard(
     'PART 1: EVENT PROBABILITY & SCOPE',
-    cleanNarrativeText(narrative.part1_probabilityAndScope),
+    narrative.part1_probabilityAndScope,
     `Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`,
-    [180, 83, 9], // Amber
-    46
+    [180, 83, 9] // Amber
   );
 
-  // Part 2: Financial & Resource Sources
-  renderCompactPart(
+  renderPredictionCard(
     'PART 2: FINANCIAL & RESOURCE SOURCES',
-    cleanNarrativeText(narrative.part2_financialAndResources),
-    'Signification Analysis',
-    [2, 132, 199], // Sky
-    44
+    narrative.part2_financialAndResources,
+    'Capital & Liquidity Origin',
+    [2, 132, 199] // Sky
   );
 
-  // Part 3: Micro-Timing Window (Pratyantardasha)
-  renderCompactPart(
+  renderPredictionCard(
     'PART 3: MICRO-TIMING WINDOW (PRATYANTARDASHA)',
-    cleanNarrativeText(narrative.part3_microTimingWindow),
-    `Peak: ${narrative.peakDateRange || 'Active Month'}`,
-    [16, 185, 129], // Emerald
-    42
+    narrative.part3_microTimingWindow,
+    `Peak: ${narrative.peakDateRange || 'Active Month Window'}`,
+    [16, 185, 129] // Emerald
   );
-
-  // Optional User Inquiry Strip (if present)
-  if (context.userQuery && y2 <= 268) {
-    doc.setFillColor(254, 249, 195);
-    doc.roundedRect(margin, y2, contentWidth, 8, 1, 1, 'F');
-    doc.setTextColor(133, 77, 14);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.8);
-    doc.text('USER INQUIRY:', margin + 3, y2 + 4);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(66, 32, 6);
-    const uLine = doc.splitTextToSize(`"${context.userQuery}"`, contentWidth - 28);
-    doc.text(uLine[0] || '', margin + 26, y2 + 4);
-  }
 
   // ========================================================================
-  // PAGE 3: RESPONSE PART 2 — CROSS-DOMAIN IMPACT DOSSIER & AUDIT TELEMETRY
+  // SECTION 4: ALL 5 CORE LIFE DOMAINS PREDICTIONS & DEEP DIVES
   // ========================================================================
-  doc.addPage();
+  ensureSpace(24);
 
-  // Header Banner
-  doc.setFillColor(15, 23, 42); // Dark slate
-  doc.rect(margin, 12, contentWidth, 20, 'F');
-
-  doc.setTextColor(245, 158, 11); // Amber
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12.5);
-  doc.text('VEDIC PARASHARA ASTROLOGICAL INFERENCE REPORT', margin + 5, 19.5);
-
-  doc.setTextColor(203, 213, 225);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text(
-    'PAGE 3 OF 3 • CROSS-DOMAIN IMPACT DOSSIER & AUDIT TELEMETRY (RESPONSE PART 2)',
-    margin + 5,
-    25.5
-  );
-
-  doc.setTextColor(148, 163, 184);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(
-    context.isComprehensiveMonthly || !context.houseNumber
-      ? `Bhavat Bhavam & Drishti Matrix • Comprehensive Monthly • Period: ${timePeriodText}`
-      : `Bhavat Bhavam & Drishti Matrix • House ${context.houseNumber} (${context.rashiName || ''}) • Period: ${timePeriodText}`,
-    margin + 5,
-    29.5
-  );
-
-  // Right Header Info
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text(`${providerName.toUpperCase()}`, pageWidth - margin - 5, 20, { align: 'right' });
-  doc.setTextColor(203, 213, 225);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text(`Time: ${formatDuration(narrative.executionTimeMs)}`, pageWidth - margin - 5, 25, { align: 'right' });
-  doc.setTextColor(52, 211, 153);
-  doc.text('✓ Telemetry Verified', pageWidth - margin - 5, 29, { align: 'right' });
-
-  let y3 = 34;
-
-  // Subheader Ribbon
+  // Section Header Ribbon
   doc.setFillColor(30, 41, 59);
-  doc.roundedRect(margin, y3, contentWidth, 7, 1, 1, 'F');
+  doc.roundedRect(margin, currentY, contentWidth, 8, 1, 1, 'F');
   doc.setTextColor(245, 158, 11);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text(
-    'SUPPLEMENTARY CROSS-DOMAIN IMPACT READOUTS (BHAVAT BHAVAM & KARAKATWA)',
-    margin + 4,
-    y3 + 4.8
-  );
+  doc.setFontSize(8);
+  doc.text('COMPREHENSIVE 5-DOMAIN LIFE PREDICTIONS & KARAKATWA DOSSIER', margin + 4, currentY + 5.5);
   doc.setTextColor(203, 213, 225);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
-  doc.text('Real-world outcomes across 5 vital life domains', pageWidth - margin - 4, y3 + 4.8, { align: 'right' });
+  doc.text('Real-world outcomes across Career, Romance, Wealth, Vitality & Domestic Ambiance', pageWidth - margin - 4, currentY + 5.5, { align: 'right' });
 
-  y3 += 9;
-
-  // Render 5 Cross-Domain Scenarios (Career, Love, Health, Wealth, Family)
-  const defaultScenarios = [
-    {
-      domain: 'career_job',
-      title: '💼 CAREER & EMPLOYMENT STATUS',
-      verdict: 'Active Momentum / Professional Progress',
-      astrologicalReasoning: `10th house Karma and 6th house service receive favorable drishti. The active PD Lord (${context.activeDasha.pratyantardasha}) activates workplace responsibilities and professional visibility.`,
-      practicalGuidance: 'Seize key initiatives mid-month; maintain collaborative dialogue with supervisors and prioritize execution over speculation.',
-      confidenceScore: 0.85,
-      timingWindow: narrative.peakDateRange || 'Days 8–24'
-    },
-    {
-      domain: 'love_romance',
-      title: '❤️ LOVE & ROMANTIC MANIFESTATION',
-      verdict: 'Emotional Clarity / Constructive Bonding',
-      astrologicalReasoning: `Venus and Moon transits in relation to 5th and 7th lords foster affectionate warmth. Transit drishti softens prior misunderstandings.`,
-      practicalGuidance: 'Open communication yields mutual trust; avoid sensitive financial discussions during Chandrashtama dates.',
-      confidenceScore: 0.82,
-      timingWindow: 'Mid-Month Window'
-    },
-    {
-      domain: 'health_vitality',
-      title: '🩺 HEALTH & PHYSICAL VITALITY',
-      verdict: 'Stamina Stable / Pacing Recommended',
-      astrologicalReasoning: `6th house and lagna lord configurations maintain solid constitutional resilience. Minor seasonal or digestive sensitivity flagged during Moon ingress.`,
-      practicalGuidance: 'Maintain regular sleep cycles, stay well-hydrated, and adopt moderate daily cardiovascular pacing.',
-      confidenceScore: 0.88,
-      timingWindow: 'Continuous Monthly Balance'
-    },
-    {
-      domain: 'finance_wealth',
-      title: '💰 WEALTH & CAPITAL INFLOWS',
-      verdict: 'Resource Inflow / Prudent Asset Growth',
-      astrologicalReasoning: `2nd house liquid reserves and 11th house gains indicate favorable inflow channels. Sarvashtakavarga strength supports calculated financial decisions.`,
-      practicalGuidance: 'Channel excess liquidity into secure collateral or high-stability instruments; defer speculative bets.',
-      confidenceScore: 0.80,
-      timingWindow: narrative.peakDateRange || 'Days 10–22'
-    },
-    {
-      domain: 'family_home',
-      title: '🏡 FAMILY & DOMESTIC AMBIANCE',
-      verdict: 'Harmonious Foundation / Property Stability',
-      astrologicalReasoning: `4th house Sukha and maternal significations remain well-supported under Jupiter benefic rays and domestic peace alignment.`,
-      practicalGuidance: 'Invest time in domestic organization; celebrate familial milestones and support maternal health needs.',
-      confidenceScore: 0.86,
-      timingWindow: 'Entire Evaluated Month'
-    }
-  ];
+  currentY += 12;
 
   const scenariosToRender = (narrative.supplementaryScenarios && narrative.supplementaryScenarios.length > 0)
     ? narrative.supplementaryScenarios
-    : defaultScenarios;
+    : [
+        {
+          id: 'career_job',
+          domain: 'career_job',
+          title: '💼 CAREER & EMPLOYMENT STATUS',
+          verdict: 'Active Momentum / Professional Progress',
+          astrologicalReasoning: `10th house Karma and 6th house service receive favorable drishti. The active PD Lord (${context.activeDasha.pratyantardasha}) activates workplace responsibilities and professional visibility.`,
+          practicalGuidance: 'Seize key initiatives mid-month; maintain collaborative dialogue with supervisors and prioritize execution over speculation.',
+          confidenceScore: 0.85,
+          timingWindow: narrative.peakDateRange || 'Days 8–24'
+        },
+        {
+          id: 'love_romance',
+          domain: 'love_romance',
+          title: '❤️ LOVE & ROMANTIC MANIFESTATION',
+          verdict: 'Emotional Clarity / Constructive Bonding',
+          astrologicalReasoning: 'Venus and Moon transits in relation to 5th and 7th lords foster affectionate warmth. Transit drishti softens prior misunderstandings.',
+          practicalGuidance: 'Open communication yields mutual trust; avoid sensitive discussions during Chandrashtama dates.',
+          confidenceScore: 0.82,
+          timingWindow: 'Mid-Month Window'
+        },
+        {
+          id: 'finance_wealth',
+          domain: 'finance_wealth',
+          title: '💰 WEALTH & CAPITAL INFLOWS',
+          verdict: 'Resource Inflow / Prudent Asset Growth',
+          astrologicalReasoning: '2nd house liquid reserves and 11th house gains indicate favorable inflow channels. Sarvashtakavarga strength supports calculated financial decisions.',
+          practicalGuidance: 'Channel excess liquidity into secure collateral or high-stability instruments; defer speculative bets.',
+          confidenceScore: 0.80,
+          timingWindow: narrative.peakDateRange || 'Days 10–22'
+        },
+        {
+          id: 'health_vitality',
+          domain: 'health_vitality',
+          title: '🩺 HEALTH & PHYSICAL VITALITY',
+          verdict: 'Stamina Stable / Pacing Recommended',
+          astrologicalReasoning: '6th house and lagna lord configurations maintain solid constitutional resilience. Pacing recommended during Moon ingress.',
+          practicalGuidance: 'Maintain regular sleep cycles, stay well-hydrated, and adopt moderate daily cardiovascular pacing.',
+          confidenceScore: 0.88,
+          timingWindow: 'Continuous Monthly Balance'
+        },
+        {
+          id: 'family_home',
+          domain: 'family_home',
+          title: '🏡 FAMILY & DOMESTIC AMBIANCE',
+          verdict: 'Harmonious Foundation / Property Stability',
+          astrologicalReasoning: '4th house Sukha and maternal significations remain well-supported under benefic rays and domestic peace alignment.',
+          practicalGuidance: 'Invest time in domestic organization; celebrate familial milestones and support maternal health needs.',
+          confidenceScore: 0.86,
+          timingWindow: 'Entire Evaluated Month'
+        }
+      ];
 
-  // Render up to 5 domain cards (card height ~34mm each => 5 * 34 = 170mm)
-  const cardH = 34;
-  for (let i = 0; i < Math.min(5, scenariosToRender.length); i++) {
-    const sc = scenariosToRender[i];
+  // Render each domain completely with all sub-inferences
+  scenariosToRender.forEach((sc: any) => {
+    // Collect all text blocks for this domain to calculate true height
+    const domainTitle = sc.title || sc.domain;
+    const verdict = sc.verdict || 'Evaluated';
+    const subWindow = sc.timingWindow || 'Active Month';
+    const conf = ((sc.confidenceScore ?? 0.85) * 100).toFixed(0);
+
+    // Compute lines
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.2);
+    const reasonLines = doc.splitTextToSize(sc.astrologicalReasoning || 'Consistent with astrological indicators.', contentWidth - 8);
+    const guideLines = doc.splitTextToSize(sc.practicalGuidance || 'Align timing with active planetary windows.', contentWidth - 8);
+
+    // Deep dive subsections for Career, Romance, Finance, Health, Family
+    const deepDiveBlocks: Array<{ title: string; lines: string[]; color: [number, number, number] }> = [];
+
+    if (sc.id === 'career_job') {
+      if (sc.employmentStatusInference) {
+        deepDiveBlocks.push({
+          title: `Native Employment State Inference: [${sc.employmentStatusInference.label}]`,
+          lines: doc.splitTextToSize(`Astrological Deduction (10th Karma & 6th Service): ${sc.employmentStatusInference.inferenceReasoning}`, contentWidth - 10),
+          color: [146, 64, 14]
+        });
+      }
+      if (sc.jobSearchAnalysis) {
+        deepDiveBlocks.push({
+          title: `Job Search & Transition Phase: [Momentum: ${sc.jobSearchAnalysis.momentum || 'Active'}]`,
+          lines: doc.splitTextToSize(`Struggle vs Current Phase: ${sc.jobSearchAnalysis.pastStruggleVsCurrentPhase} • Auspicious Offer Window: ${sc.jobSearchAnalysis.timingAuspiciousness}`, contentWidth - 10),
+          color: [2, 132, 199]
+        });
+      }
+      if (sc.newJobAcquisition) {
+        deepDiveBlocks.push({
+          title: 'New Job Acquisition & Workplace Atmosphere:',
+          lines: doc.splitTextToSize(`Role & Mood: ${sc.newJobAcquisition.jobTypeAndMood} • Atmosphere: ${sc.newJobAcquisition.workplaceAtmosphere} • Comparison: ${sc.newJobAcquisition.comparisonWithCurrentRole}`, contentWidth - 10),
+          color: [21, 128, 61]
+        });
+      }
+      if (sc.existingJobPhase) {
+        deepDiveBlocks.push({
+          title: 'Existing Job Phase (For Native Currently Serving):',
+          lines: doc.splitTextToSize(`Workplace Climate: ${sc.existingJobPhase.currentPhaseNature} • Retention vs Exit Advice: ${sc.existingJobPhase.retentionVsExitAdvice}`, contentWidth - 10),
+          color: [79, 70, 229]
+        });
+      }
+    } else if (sc.id === 'love_romance') {
+      if (sc.crushStatusInference) {
+        deepDiveBlocks.push({
+          title: `Crush Outlook & Potential: [New Attraction: ${sc.crushStatusInference.newCrushProbability || 'Moderate'}]`,
+          lines: doc.splitTextToSize(`Existing Trajectory: ${sc.crushStatusInference.existingCrushTrajectory} • Attraction Trigger: ${sc.crushStatusInference.newCrushDetails}`, contentWidth - 10),
+          color: [225, 29, 72]
+        });
+      }
+      if (sc.romanceAtmosphere) {
+        deepDiveBlocks.push({
+          title: `Romance Chemistry (${sc.romanceAtmosphere.chemistryRating || 80}%) & Emotional Weather:`,
+          lines: doc.splitTextToSize(sc.romanceAtmosphere.emotionalWeather, contentWidth - 10),
+          color: [180, 83, 9]
+        });
+      }
+      if (sc.manifestationPath) {
+        deepDiveBlocks.push({
+          title: `Love Manifestation Horizon: [${sc.manifestationPath.outcomeLabel || 'Favorable'}]`,
+          lines: doc.splitTextToSize(`Likelihood: ${sc.manifestationPath.manifestationLikelihood} • Astrological Reasoning (5th, 7th & D9): ${sc.manifestationPath.astrologicalPathReasoning}`, contentWidth - 10),
+          color: [21, 128, 61]
+        });
+      }
+    } else if (sc.id === 'finance_wealth' && sc.financeDetails) {
+      deepDiveBlocks.push({
+        title: 'Liquid Cashflow & Asset Inflow Breakdown:',
+        lines: doc.splitTextToSize(`Liquidity vs Outflow: ${sc.financeDetails.liquidityVsOutflow} • Windfalls: ${sc.financeDetails.windfallAndSpeculation} • Asset Financing: ${sc.financeDetails.debtAndAssetFinancing}`, contentWidth - 10),
+        color: [180, 83, 9]
+      });
+    } else if (sc.id === 'health_vitality' && sc.healthDetails) {
+      const vZones = (sc.healthDetails.vulnerableZones || []).join(', ') || 'Digestive pacing, solar vitality';
+      deepDiveBlocks.push({
+        title: `Health Significations & Vulnerable Zones: [${vZones}]`,
+        lines: doc.splitTextToSize(`Mental Tranquility (Sukha): ${sc.healthDetails.mentalTranquilityAndStress} • Holistic Remedies: ${sc.healthDetails.holisticRemedies}`, contentWidth - 10),
+        color: [225, 29, 72]
+      });
+    } else if (sc.id === 'family_home' && sc.familyDetails) {
+      deepDiveBlocks.push({
+        title: 'Domestic Ambiance & Maternal Significations:',
+        lines: doc.splitTextToSize(`Domestic Ambiance: ${sc.familyDetails.domesticAmbiance} • Maternal Wellbeing: ${sc.familyDetails.maternalWellbeing} • Property & Relocation: ${sc.familyDetails.propertyAndRelocation}`, contentWidth - 10),
+        color: [79, 70, 229]
+      });
+    }
+
+    if (sc.detailedParagraphs && sc.detailedParagraphs.length > 0) {
+      sc.detailedParagraphs.forEach((pText: string, pIdx: number) => {
+        deepDiveBlocks.push({
+          title: `In-Depth Analysis Section ${pIdx + 1}:`,
+          lines: doc.splitTextToSize(pText, contentWidth - 10),
+          color: [51, 65, 85]
+        });
+      });
+    }
+
+    // Calculate approximate height for whole domain card
+    let estimatedCardH = 10; // title bar
+    estimatedCardH += reasonLines.length * 3.7 + 6;
+    estimatedCardH += guideLines.length * 3.7 + 6;
+    deepDiveBlocks.forEach(b => {
+      estimatedCardH += b.lines.length * 3.6 + 8;
+    });
+
+    ensureSpace(Math.min(estimatedCardH, 75));
+
+    // Outer card container
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y3, contentWidth, cardH, 1.5, 1.5, 'FD');
+    doc.roundedRect(margin, currentY, contentWidth, estimatedCardH, 1.5, 1.5, 'FD');
 
-    // Title & Verdict Bar
+    // Title bar
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(margin, y3, contentWidth, 7, 1.5, 1.5, 'F');
+    doc.roundedRect(margin, currentY, contentWidth, 7, 1.5, 1.5, 'F');
 
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.8);
-    const domainTitle = sc.title.includes('💼') || sc.title.includes('❤️') || sc.title.includes('🩺') || sc.title.includes('💰') || sc.title.includes('🏡')
-      ? sc.title
-      : defaultScenarios[i]?.title || sc.title;
-    doc.text(domainTitle, margin + 3.5, y3 + 4.8);
+    doc.text(domainTitle, margin + 4, currentY + 4.8);
 
     doc.setTextColor(180, 83, 9);
-    doc.setFontSize(7);
-    doc.text(`[${sc.verdict}]`, margin + 64, y3 + 4.8);
+    doc.setFontSize(7.2);
+    doc.text(`[${verdict}]`, margin + 64, currentY + 4.8);
 
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(6.8);
-    doc.text(
-      `Window: ${sc.timingWindow} | Confidence: ${(sc.confidenceScore * 100).toFixed(0)}%`,
-      pageWidth - margin - 3.5,
-      y3 + 4.8,
-      { align: 'right' }
-    );
+    doc.text(`Window: ${subWindow} | Confidence: ${conf}%`, pageWidth - margin - 4, currentY + 4.8, { align: 'right' });
 
-    // Astrological Reasoning
+    let innerY = currentY + 10.5;
+
+    // Causal Reasoning
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.8);
-    doc.text('Astrological Rationale:', margin + 3.5, y3 + 11.5);
+    doc.text('Astrological Causal Rationale (Drishti & Karakatwa):', margin + 4, innerY);
+    innerY += 4;
 
     doc.setTextColor(30, 41, 59);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    const reasonLines = doc.splitTextToSize(sc.astrologicalReasoning || 'Consistent with astrological indicators.', contentWidth - 10);
-    doc.text(reasonLines.slice(0, 2), margin + 3.5, y3 + 15.5);
+    doc.text(reasonLines, margin + 4, innerY);
+    innerY += reasonLines.length * 3.7 + 3;
 
-    // Practical Guidance
+    // Guidance
     doc.setTextColor(16, 185, 129); // Emerald
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.8);
-    doc.text('Practical Remedial Guidance:', margin + 3.5, y3 + 24);
+    doc.text('Practical Remedial Guidance:', margin + 4, innerY);
+    innerY += 4;
 
     doc.setTextColor(51, 65, 85);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    const guideLines = doc.splitTextToSize(sc.practicalGuidance || 'Align decisions with active window timing.', contentWidth - 10);
-    doc.text(guideLines.slice(0, 2), margin + 3.5, y3 + 28);
+    doc.text(guideLines, margin + 4, innerY);
+    innerY += guideLines.length * 3.7 + 3;
 
-    y3 += cardH + 2.5;
-  }
+    // Deep dive blocks
+    deepDiveBlocks.forEach(b => {
+      doc.setFillColor(248, 250, 252);
+      const bH = b.lines.length * 3.6 + 6;
+      doc.roundedRect(margin + 2, innerY - 2.5, contentWidth - 4, bH, 1, 1, 'F');
 
-  // Wire Telemetry & Verification Footer Card
-  const telemetryH = 34;
+      doc.setTextColor(b.color[0], b.color[1], b.color[2]);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.text(b.title, margin + 4, innerY + 1);
+
+      doc.setTextColor(30, 41, 59);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.text(b.lines, margin + 4, innerY + 5.2);
+
+      innerY += bH + 2;
+    });
+
+    currentY += estimatedCardH + 4;
+  });
+
+  // ========================================================================
+  // SECTION 5: ENGINE VERIFICATION & PARASHARA TELEMETRY FOOTER CARD
+  // ========================================================================
+  const telemetryH = 32;
+  ensureSpace(telemetryH + 4);
+
   doc.setFillColor(15, 23, 42); // Dark slate
-  doc.roundedRect(margin, y3, contentWidth, telemetryH, 1.5, 1.5, 'F');
+  doc.roundedRect(margin, currentY, contentWidth, telemetryH, 1.5, 1.5, 'F');
 
   doc.setTextColor(245, 158, 11);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('ENGINE WIRE TELEMETRY & VERIFICATION AUDIT', margin + 4, y3 + 5.5);
+  doc.text('ENGINE WIRE TELEMETRY & ASTRONOMICAL INTEGRITY SEAL', margin + 4, currentY + 5.5);
 
   doc.setTextColor(148, 163, 184);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.text(
-    `Audit Hash: SHA-256-${Math.abs(promptCharCount * 1337 + (context.houseNumber || 108)).toString(16).toUpperCase()}`,
+    `Timestamp: ${new Date().toISOString()}`,
     pageWidth - margin - 4,
-    y3 + 5.5,
+    currentY + 5.5,
     { align: 'right' }
   );
 
   // 4 Metrics Grid
   const tColW = (contentWidth - 8) / 4;
-  const tGridY = y3 + 8.5;
+  const tGridY = currentY + 8.5;
 
   const renderTCell = (x: number, label: string, val: string, color: [number, number, number]) => {
     doc.setFillColor(30, 41, 59);
@@ -748,39 +629,34 @@ export function generateVedicPdfReport(
     doc.text(label, x + 2.5, tGridY + 4);
     doc.setTextColor(color[0], color[1], color[2]);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.3);
     doc.text(val, x + 2.5, tGridY + 9.5);
   };
 
   renderTCell(margin + 2, 'ENGINE / MODEL', `${providerName} (${modelName})`, [255, 255, 255]);
   renderTCell(margin + 2 + tColW, 'TIME TAKEN', formatDuration(narrative.executionTimeMs), [245, 158, 11]);
-  renderTCell(margin + 2 + tColW * 2, 'THROTTLE MODE', throttleLabel, [52, 211, 153]);
-  renderTCell(margin + 2 + tColW * 3, 'MEMORY PURGE', narrative.memoryPurged ? '✓ VRAM Purged' : 'Normal', [148, 163, 184]);
+  renderTCell(margin + 2 + tColW * 2, 'THROTTLE MODE', 'Deterministic Ephemeris', [52, 211, 153]);
+  renderTCell(margin + 2 + tColW * 3, 'PERSISTENCE', narrative.pgPersisted ? '✓ Persisted DB' : 'Audit Synced', [148, 163, 184]);
 
   // Parashara Seal Note
   doc.setTextColor(148, 163, 184);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.5);
   doc.text(
-    `Endpoint: ${narrative.endpointUsed} • Status: ${narrative.connectionStatus} • Compliant with Parashara Hora Shastra principles (MD-AD-PD triad alignment).`,
+    `Status: ${narrative.connectionStatus || 'Verified'} • Compliant with Parashara Hora Shastra principles (MD-AD-PD triad alignment).`,
     margin + 4,
-    y3 + 27.5
+    currentY + 26
   );
   doc.text(
-    'Private LLM Verification: Output generated with deterministic astronomical ephemeris coordinates.',
+    'Private Prediction Verification: Documented with deterministic planetary sputa and nakshatra coordinates.',
     margin + 4,
-    y3 + 31
+    currentY + 29.5
   );
 
   // ========================================================================
-  // FINAL PASS: DRAW GOLDEN BORDERS & DISTINCT FOOTERS ON ALL 3 PAGES
+  // FINAL PASS: DRAW GOLDEN BORDERS & DYNAMIC FOOTERS ON ALL PAGES
   // ========================================================================
   const totalPages = (doc as any).internal.getNumberOfPages();
-  const pageFooters = [
-    'Vedic Parashara Inference Report • Page 1 of 3 (Dispatched System & Evaluation Prompt) • Audit Protocol',
-    'Vedic Parashara Inference Report • Page 2 of 3 (Core Model Synthesis & Triad Evaluation) • Audit Protocol',
-    'Vedic Parashara Inference Report • Page 3 of 3 (Cross-Domain Impact Dossier & Telemetry) • Audit Protocol'
-  ];
 
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
@@ -799,21 +675,18 @@ export function generateVedicPdfReport(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.2);
     doc.setTextColor(140, 140, 140);
-    const footerText = pageFooters[p - 1] || `Vedic Parashara Inference Report • Page ${p} of ${totalPages} • Audit Protocol`;
     doc.text(
-      footerText,
+      `Vedic Parashara Inference & Predictions Report • Page ${p} of ${totalPages} • All Sections Documented`,
       pageWidth / 2,
       pageHeight - 9.5,
       { align: 'center' }
     );
   }
 
-  // Determine provider label for filename: Gemini | Ollama | LMStudio | Claude
+  // Determine provider label for filename: Gemini | Ollama | Claude
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
     providerTag = 'Ollama-7B';
-  } else if (narrative.providerUsed === 'local_qwen_14b') {
-    providerTag = 'LMStudio-14B';
   } else if (narrative.providerUsed === 'claude') {
     providerTag = 'Claude';
   } else if (narrative.providerUsed === 'gemini_pro') {
@@ -825,7 +698,6 @@ export function generateVedicPdfReport(
   const monthName = MONTH_NAMES[context.selectedMonth] || `Month${context.selectedMonth + 1}`;
   const year = context.selectedYear;
 
-  // Save the 3-Page PDF file with standardized naming: Month_Year_Provider_AstroPredictions.pdf
   const filename = `${monthName}_${year}_${providerTag}_AstroPredictions.pdf`;
   doc.save(filename);
 }

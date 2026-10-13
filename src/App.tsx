@@ -63,7 +63,7 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'api'>('charts');
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api'>('charts');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -254,11 +254,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Integrated 3 Navigation Menu Items */}
+          {/* Integrated 4 Navigation Menu Items */}
           <nav className="flex items-center gap-1.5 flex-wrap">
             {[
               { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
-              { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
+              { id: 'monthly', label: 'Monthly View (Matrix)', icon: CalendarDays },
+              { id: 'report', label: 'Voice & Predictions Studio', icon: Sparkles },
               { id: 'api', label: 'SAP Query Studio', icon: Server },
             ].map(tab => {
               const Icon = tab.icon;
@@ -832,9 +833,14 @@ export default function App() {
       </div>
     )}
 
-        {/* TAB 4: MONTHLY VIEW (D1 DUAL-LAYER TRANSIT & RAYCASTER) */}
+        {/* TAB 2: MONTHLY VIEW (D1 DUAL-LAYER TRANSIT & RAYCASTER MATRIX) */}
         {activeTab === 'monthly' && (
-          <MonthlyTransitView key={activePersonId} personId={activePersonId} />
+          <MonthlyTransitView key={`${activePersonId}-grid`} personId={activePersonId} initialViewMode="grid" />
+        )}
+
+        {/* TAB 3: DEDICATED FULL-PAGE VOICE & PREDICTIONS STUDIO (FITTING IN-APP, NO CLIPPING) */}
+        {activeTab === 'report' && (
+          <MonthlyTransitView key={`${activePersonId}-report`} personId={activePersonId} initialViewMode="report" />
         )}
       </main>
     </div>

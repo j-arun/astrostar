@@ -1,0 +1,28 @@
+{
+  "year": 2026,
+  "month": "October",
+  "engineKey": "claude_iq",
+  "engineName": "Claude IQ (Haiku 5.5)",
+  "savedAt": "2026-10-14T09:21:45.188Z",
+  "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Claude IQ (Haiku 5.5).",
+  "context": {
+    "selectedYear": 2026,
+    "selectedMonth": 9,
+    "isComprehensiveMonthly": true,
+    "houseNumber": 1,
+    "rashiName": "Dhanus (Sagittarius)",
+    "activeDasha": {
+      "mahadasha": "Venus",
+      "antardasha": "Saturn",
+      "pratyantardasha": "Mercury"
+    }
+  },
+  "narrative": {
+    "providerUsed": "claude_haiku",
+    "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Claude IQ (Haiku 5.5).",
+    "part1_probabilityAndScope": "The planetary transit alignments for October 2026 show prominent activation of personal and professional aspirations under Claude IQ (Haiku 5.5) reasoning.",
+    "part2_financialAndResources": "Financial reserves through the 2nd and 11th houses demonstrate stable inflow with auspicious investment windows.",
+    "part3_microTimingWindow": "Peak trigger windows are highlighted across the lunar progression with favorable days for milestone execution.",
+    "overallConfidence": 0.85
+  }
+}

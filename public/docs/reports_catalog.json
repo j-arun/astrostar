@@ -1,0 +1,159 @@
+{
+  "years": [
+    2020,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026,
+    2027
+  ],
+  "catalog": {
+    "2020": {
+      "year": 2020,
+      "months": {
+        "December": {
+          "monthName": "December",
+          "monthIndex": 11,
+          "reports": {
+            "claude_iq": {
+              "engineKey": "claude_iq",
+              "engineName": "Claude IQ (Haiku 5.5)",
+              "categoryLabel": "1. IQ",
+              "badge": "⚡ IQ Engine",
+              "providerId": "claude_haiku",
+              "htmlUrl": "/docs/2020/December/claude_iq/Tamil_Vedic_Report_December_2020_claude_iq.html",
+              "pdfUrl": "/docs/2020/December/claude_iq/Tamil_Vedic_Report_December_2020_claude_iq.pdf",
+              "docUrl": "/docs/2020/December/claude_iq/Tamil_Vedic_Report_December_2020_claude_iq.doc",
+              "timestamp": "2026-10-14T09:21:45.195Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for December 2020 synthesized under classical Parashara and Jaimini principles by Claude IQ (Haiku 5.5)."
+            },
+            "claude_sonnet": {
+              "engineKey": "claude_sonnet",
+              "engineName": "Claude Sonnet 5.5",
+              "categoryLabel": "2. Sonnet",
+              "badge": "🧠 Sonnet Engine",
+              "providerId": "claude_sonnet",
+              "htmlUrl": "/docs/2020/December/claude_sonnet/Tamil_Vedic_Report_December_2020_claude_sonnet.html",
+              "pdfUrl": "/docs/2020/December/claude_sonnet/Tamil_Vedic_Report_December_2020_claude_sonnet.pdf",
+              "docUrl": "/docs/2020/December/claude_sonnet/Tamil_Vedic_Report_December_2020_claude_sonnet.doc",
+              "timestamp": "2026-10-14T09:21:45.196Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for December 2020 synthesized under classical Parashara and Jaimini principles by Claude Sonnet 5.5."
+            },
+            "gemini_pro": {
+              "engineKey": "gemini_pro",
+              "engineName": "Google Gemini Pro",
+              "categoryLabel": "3. Gemini Pro",
+              "badge": "♊ Gemini Pro",
+              "providerId": "gemini_pro",
+              "htmlUrl": "/docs/2020/December/gemini_pro/Tamil_Vedic_Report_December_2020_gemini_pro.html",
+              "pdfUrl": "/docs/2020/December/gemini_pro/Tamil_Vedic_Report_December_2020_gemini_pro.pdf",
+              "docUrl": "/docs/2020/December/gemini_pro/Tamil_Vedic_Report_December_2020_gemini_pro.doc",
+              "timestamp": "2026-10-14T09:21:45.198Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for December 2020 synthesized under classical Parashara and Jaimini principles by Google Gemini Pro."
+            },
+            "fable_ollama": {
+              "engineKey": "fable_ollama",
+              "engineName": "Fable / Ollama (Local 7B)",
+              "categoryLabel": "4. Fable / Ollama",
+              "badge": "🖥️ Fable / Ollama",
+              "providerId": "local_qwen",
+              "htmlUrl": "/docs/2020/December/fable_ollama/Tamil_Vedic_Report_December_2020_fable_ollama.html",
+              "pdfUrl": "/docs/2020/December/fable_ollama/Tamil_Vedic_Report_December_2020_fable_ollama.pdf",
+              "docUrl": "/docs/2020/December/fable_ollama/Tamil_Vedic_Report_December_2020_fable_ollama.doc",
+              "timestamp": "2026-10-14T09:21:45.199Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for December 2020 synthesized under classical Parashara and Jaimini principles by Fable / Ollama (Local 7B)."
+            }
+          }
+        }
+      }
+    },
+    "2022": {
+      "year": 2022,
+      "months": {}
+    },
+    "2023": {
+      "year": 2023,
+      "months": {}
+    },
+    "2024": {
+      "year": 2024,
+      "months": {}
+    },
+    "2025": {
+      "year": 2025,
+      "months": {}
+    },
+    "2026": {
+      "year": 2026,
+      "months": {
+        "October": {
+          "monthName": "October",
+          "monthIndex": 9,
+          "reports": {
+            "claude_iq": {
+              "engineKey": "claude_iq",
+              "engineName": "Claude IQ (Haiku 5.5)",
+              "categoryLabel": "1. IQ",
+              "badge": "⚡ IQ Engine",
+              "providerId": "claude_haiku",
+              "htmlUrl": "/docs/2026/October/claude_iq/Tamil_Vedic_Report_October_2026_claude_iq.html",
+              "pdfUrl": "/docs/2026/October/claude_iq/Tamil_Vedic_Report_October_2026_claude_iq.pdf",
+              "docUrl": "/docs/2026/October/claude_iq/Tamil_Vedic_Report_October_2026_claude_iq.doc",
+              "timestamp": "2026-10-14T09:21:45.189Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Claude IQ (Haiku 5.5)."
+            },
+            "claude_sonnet": {
+              "engineKey": "claude_sonnet",
+              "engineName": "Claude Sonnet 5.5",
+              "categoryLabel": "2. Sonnet",
+              "badge": "🧠 Sonnet Engine",
+              "providerId": "claude_sonnet",
+              "htmlUrl": "/docs/2026/October/claude_sonnet/Tamil_Vedic_Report_October_2026_claude_sonnet.html",
+              "pdfUrl": "/docs/2026/October/claude_sonnet/Tamil_Vedic_Report_October_2026_claude_sonnet.pdf",
+              "docUrl": "/docs/2026/October/claude_sonnet/Tamil_Vedic_Report_October_2026_claude_sonnet.doc",
+              "timestamp": "2026-10-14T09:21:45.190Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Claude Sonnet 5.5."
+            },
+            "gemini_pro": {
+              "engineKey": "gemini_pro",
+              "engineName": "Google Gemini Pro",
+              "categoryLabel": "3. Gemini Pro",
+              "badge": "♊ Gemini Pro",
+              "providerId": "gemini_pro",
+              "htmlUrl": "/docs/2026/October/gemini_pro/Tamil_Vedic_Report_October_2026_gemini_pro.html",
+              "pdfUrl": "/docs/2026/October/gemini_pro/Tamil_Vedic_Report_October_2026_gemini_pro.pdf",
+              "docUrl": "/docs/2026/October/gemini_pro/Tamil_Vedic_Report_October_2026_gemini_pro.doc",
+              "timestamp": "2026-10-14T09:21:45.192Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Google Gemini Pro."
+            },
+            "fable_ollama": {
+              "engineKey": "fable_ollama",
+              "engineName": "Fable / Ollama (Local 7B)",
+              "categoryLabel": "4. Fable / Ollama",
+              "badge": "🖥️ Fable / Ollama",
+              "providerId": "local_qwen",
+              "htmlUrl": "/docs/2026/October/fable_ollama/Tamil_Vedic_Report_October_2026_fable_ollama.html",
+              "pdfUrl": "/docs/2026/October/fable_ollama/Tamil_Vedic_Report_October_2026_fable_ollama.pdf",
+              "docUrl": "/docs/2026/October/fable_ollama/Tamil_Vedic_Report_October_2026_fable_ollama.doc",
+              "timestamp": "2026-10-14T09:21:45.194Z",
+              "hasNarrative": true,
+              "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Fable / Ollama (Local 7B)."
+            }
+          }
+        }
+      }
+    },
+    "2027": {
+      "year": 2027,
+      "months": {}
+    }
+  }
+}

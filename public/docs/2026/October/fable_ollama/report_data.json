@@ -1,0 +1,28 @@
+{
+  "year": 2026,
+  "month": "October",
+  "engineKey": "fable_ollama",
+  "engineName": "Fable / Ollama (Local 7B)",
+  "savedAt": "2026-10-14T09:21:45.193Z",
+  "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Fable / Ollama (Local 7B).",
+  "context": {
+    "selectedYear": 2026,
+    "selectedMonth": 9,
+    "isComprehensiveMonthly": true,
+    "houseNumber": 1,
+    "rashiName": "Dhanus (Sagittarius)",
+    "activeDasha": {
+      "mahadasha": "Venus",
+      "antardasha": "Saturn",
+      "pratyantardasha": "Mercury"
+    }
+  },
+  "narrative": {
+    "providerUsed": "local_qwen",
+    "summarySentence": "Comprehensive Gochara transit analysis for October 2026 synthesized under classical Parashara and Jaimini principles by Fable / Ollama (Local 7B).",
+    "part1_probabilityAndScope": "The planetary transit alignments for October 2026 show prominent activation of personal and professional aspirations under Fable / Ollama (Local 7B) reasoning.",
+    "part2_financialAndResources": "Financial reserves through the 2nd and 11th houses demonstrate stable inflow with auspicious investment windows.",
+    "part3_microTimingWindow": "Peak trigger windows are highlighted across the lunar progression with favorable days for milestone execution.",
+    "overallConfidence": 0.85
+  }
+}

@@ -30,6 +30,7 @@ import {
   FileText,
   Globe,
   FileCode,
+  Folder,
   Layers,
   Database,
   Maximize2,
@@ -51,6 +52,8 @@ import {
   generateVedicWordReport,
   exportAllVedicReports
 } from '../services/reportExportService';
+import { DocsBreadcrumbSidebar } from './DocsBreadcrumbSidebar';
+import { saveReportToServerDocs } from '../services/docsStorageService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -130,6 +133,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showDocsSidebar, setShowDocsSidebar] = useState<boolean>(true);
 
   // Wire Telemetry State
   const [showWireLog, setShowWireLog] = useState<boolean>(false);
@@ -296,6 +300,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         anthropicThinkingMode
       });
       setNarrative(result);
+      if (context) {
+        saveReportToServerDocs(context, result).catch(() => {});
+      }
       loadDbLogs().catch(() => {});
     } catch (e) {
       console.error('LLM synthesis error:', e);
@@ -628,6 +635,20 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Toggle Docs Archive Sidebar */}
+            <button
+              onClick={() => setShowDocsSidebar(!showDocsSidebar)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                showDocsSidebar
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-700/80'
+              }`}
+              title="Toggle Year-Wise Web Server Docs Archive & Breadcrumb Navigation"
+            >
+              <Folder className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Docs Archive (Year-Wise)</span>
+            </button>
+
             {/* Multi-Format Export Group: PDF, HTML, Word */}
             <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 shadow-sm">
               <button
@@ -1492,8 +1513,22 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
           </div>
         )}
 
-        {/* BODY SCROLL AREA */}
-        <div ref={bodyScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 pb-44 relative">
+        {/* MAIN BODY CONTAINER: DUAL SPLIT WITH LEFT-HAND DOCS BREADCRUMB SIDEBAR */}
+        <div className="flex-1 flex overflow-hidden min-h-0 relative">
+          {showDocsSidebar && (
+            <DocsBreadcrumbSidebar
+              currentYear={context.selectedYear}
+              currentMonthIndex={context.selectedMonth}
+              currentContext={context}
+              currentNarrative={narrative}
+              onLoadReportIntoApp={(newNarrative) => {
+                setNarrative(newNarrative);
+              }}
+            />
+          )}
+
+          {/* BODY SCROLL AREA */}
+          <div ref={bodyScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 pb-44 relative">
           {/* USER INTERACTIVE QUERY & MIC INPUT */}
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
             <div className="flex items-center gap-2">
@@ -2737,6 +2772,15 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   >
                     <span>All 3</span>
                   </button>
+
+                  <button
+                    onClick={() => setShowDocsSidebar(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/40 font-bold transition text-xs shadow cursor-pointer"
+                    title="Open Web Server Docs Archive & Year-Wise Navigation"
+                  >
+                    <Folder className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Docs Archive</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -2767,6 +2811,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
             </div>
           </div>
         </div>
+      </div>
 
         {/* FOOTER ACTIONS */}
         <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs">

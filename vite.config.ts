@@ -842,11 +842,240 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
   };
 }
 
+function docsServerPlugin(): Plugin {
+  return {
+    name: 'docs-server-plugin',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const rawUrl = req.url || '';
+        let urlObj: URL;
+        try {
+          urlObj = new URL(rawUrl, 'http://localhost:3000');
+        } catch {
+          urlObj = new URL('/' + rawUrl, 'http://localhost:3000');
+        }
+        const pathname = decodeURIComponent(urlObj.pathname);
+
+        // 1. GET /api/docs/catalog
+        if (pathname === '/api/docs/catalog' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          try {
+            const catalogPath = path.resolve(__dirname, 'docs/reports_catalog.json');
+            if (fs.existsSync(catalogPath)) {
+              const data = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+              res.statusCode = 200;
+              res.end(JSON.stringify(data));
+              return;
+            }
+          } catch (e: any) {
+            console.error('Error reading catalog:', e);
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify({ years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} }));
+          return;
+        }
+
+        // 2. GET /api/docs/load?year=2026&month=October&engine=claude_sonnet
+        if (pathname === '/api/docs/load' && req.method === 'GET') {
+          const year = urlObj.searchParams.get('year') || '2026';
+          const month = urlObj.searchParams.get('month') || 'October';
+          const engine = urlObj.searchParams.get('engine') || 'claude_sonnet';
+          res.setHeader('Content-Type', 'application/json');
+
+          try {
+            const jsonPath = path.resolve(__dirname, 'docs', year, month, engine, 'report_data.json');
+            if (fs.existsSync(jsonPath)) {
+              const content = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, ...content }));
+              return;
+            }
+          } catch (e: any) {}
+
+          res.statusCode = 404;
+          res.end(JSON.stringify({ success: false, error: 'Report not found' }));
+          return;
+        }
+
+        // 3. POST /api/docs/save
+        if (pathname === '/api/docs/save' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const payload = JSON.parse(body || '{}');
+              const {
+                year,
+                month,
+                monthIndex,
+                engineKey,
+                engineName,
+                categoryLabel,
+                badge,
+                htmlContent,
+                docContent,
+                pdfBase64,
+                narrative,
+                context,
+                summarySentence
+              } = payload;
+
+              if (!year || !month || !engineKey) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Missing year, month, or engineKey' }));
+                return;
+              }
+
+              const docsDir = path.resolve(__dirname, 'docs', String(year), String(month), String(engineKey));
+              const publicDocsDir = path.resolve(__dirname, 'public/docs', String(year), String(month), String(engineKey));
+
+              [docsDir, publicDocsDir].forEach(d => {
+                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+              });
+
+              const fileBase = `Tamil_Vedic_Report_${month}_${year}_${engineKey}`;
+              const htmlFilename = `${fileBase}.html`;
+              const docFilename = `${fileBase}.doc`;
+              const pdfFilename = `${fileBase}.pdf`;
+              const jsonFilename = `report_data.json`;
+
+              // Save HTML
+              if (htmlContent) {
+                [docsDir, publicDocsDir].forEach(d => {
+                  fs.writeFileSync(path.join(d, htmlFilename), htmlContent, 'utf-8');
+                });
+              }
+
+              // Save Word Doc
+              if (docContent) {
+                [docsDir, publicDocsDir].forEach(d => {
+                  fs.writeFileSync(path.join(d, docFilename), docContent, 'utf-8');
+                });
+              }
+
+              // Save PDF
+              if (pdfBase64) {
+                const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '').replace(/^data:.*,/, '');
+                const pdfBuffer = Buffer.from(base64Data, 'base64');
+                [docsDir, publicDocsDir].forEach(d => {
+                  fs.writeFileSync(path.join(d, pdfFilename), pdfBuffer);
+                });
+              }
+
+              // Save JSON metadata
+              const reportData = {
+                year,
+                month,
+                monthIndex,
+                engineKey,
+                engineName,
+                savedAt: new Date().toISOString(),
+                summarySentence,
+                context,
+                narrative
+              };
+              [docsDir, publicDocsDir].forEach(d => {
+                fs.writeFileSync(path.join(d, jsonFilename), JSON.stringify(reportData, null, 2), 'utf-8');
+              });
+
+              // Update reports_catalog.json
+              const catalogPath = path.resolve(__dirname, 'docs/reports_catalog.json');
+              const publicCatalogPath = path.resolve(__dirname, 'public/docs/reports_catalog.json');
+              let cat: any = { years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} };
+              if (fs.existsSync(catalogPath)) {
+                try {
+                  cat = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+                } catch {}
+              }
+
+              if (!cat.years.includes(Number(year))) {
+                cat.years.push(Number(year));
+                cat.years.sort((a: number, b: number) => a - b);
+              }
+              if (!cat.catalog[year]) {
+                cat.catalog[year] = { year: Number(year), months: {} };
+              }
+              if (!cat.catalog[year].months[month]) {
+                cat.catalog[year].months[month] = { monthName: month, monthIndex: monthIndex || 0, reports: {} };
+              }
+
+              const htmlUrl = `/docs/${year}/${month}/${engineKey}/${htmlFilename}`;
+              const pdfUrl = `/docs/${year}/${month}/${engineKey}/${pdfFilename}`;
+              const docUrl = `/docs/${year}/${month}/${engineKey}/${docFilename}`;
+
+              cat.catalog[year].months[month].reports[engineKey] = {
+                engineKey,
+                engineName: engineName || engineKey,
+                categoryLabel: categoryLabel || engineKey,
+                badge: badge || 'Vedic Engine',
+                providerId: narrative?.providerUsed || 'claude_sonnet',
+                htmlUrl,
+                pdfUrl,
+                docUrl,
+                timestamp: new Date().toISOString(),
+                hasNarrative: true,
+                summarySentence: summarySentence || narrative?.summarySentence || ''
+              };
+
+              fs.writeFileSync(catalogPath, JSON.stringify(cat, null, 2), 'utf-8');
+              fs.writeFileSync(publicCatalogPath, JSON.stringify(cat, null, 2), 'utf-8');
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                links: {
+                  html: htmlUrl,
+                  pdf: pdfUrl,
+                  doc: docUrl
+                }
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 4. Static handler for /docs/*
+        if (pathname.startsWith('/docs/')) {
+          const subPath = pathname.replace(/^\/docs\//, '');
+          let filePath = path.resolve(__dirname, 'docs', subPath);
+          if (!fs.existsSync(filePath)) {
+            filePath = path.resolve(__dirname, 'public/docs', subPath);
+          }
+
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            if (pathname.endsWith('.html')) {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            } else if (pathname.endsWith('.pdf')) {
+              res.setHeader('Content-Type', 'application/pdf');
+              res.setHeader('Content-Disposition', 'inline');
+            } else if (pathname.endsWith('.doc')) {
+              res.setHeader('Content-Type', 'application/msword; charset=utf-8');
+              res.setHeader('Content-Disposition', 'attachment');
+            } else if (pathname.endsWith('.json')) {
+              res.setHeader('Content-Type', 'application/json');
+            }
+
+            const stream = fs.createReadStream(filePath);
+            stream.pipe(res);
+            return;
+          }
+        }
+
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin()],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

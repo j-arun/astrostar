@@ -59,10 +59,10 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
   return providerId;
 }
 
-export function generateVedicPdfReport(
+export function buildVedicPdfDoc(
   context: VedicHouseContext,
   narrative: LLMThreePartNarrative
-): void {
+): jsPDF {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -774,7 +774,17 @@ export function generateVedicPdfReport(
     );
   }
 
-  // Determine provider label for filename: Gemini | Ollama | Claude-Sonnet | Claude-Haiku
+  return doc;
+}
+
+export function generateVedicPdfReport(
+  context: VedicHouseContext,
+  narrative: LLMThreePartNarrative
+): void {
+  const doc = buildVedicPdfDoc(context, narrative);
+  const monthName = MONTH_NAMES[context.selectedMonth] || `Month${context.selectedMonth + 1}`;
+  const year = context.selectedYear;
+
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
     providerTag = 'Ollama-7B';
@@ -790,4 +800,12 @@ export function generateVedicPdfReport(
 
   const filename = `${monthName}_${year}_${providerTag}_AstroPredictions.pdf`;
   doc.save(filename);
+}
+
+export function getVedicPdfBase64(
+  context: VedicHouseContext,
+  narrative: LLMThreePartNarrative
+): string {
+  const doc = buildVedicPdfDoc(context, narrative);
+  return doc.output('datauristring');
 }

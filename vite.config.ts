@@ -670,11 +670,12 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const { prompt, model: requestedModel } = JSON.parse(body || '{}');
+            const { prompt, model: requestedModel, apiKey: bodyApiKey } = JSON.parse(body || '{}');
 
-            // Header x-api-key sent by client UI, or server environment variables
+            // Header x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = req.headers['x-api-key'] as string | undefined;
             const rawKey = (
+              bodyApiKey ||
               customHeaderKey ||
               env.ANTHROPIC_API_KEY ||
               process.env.ANTHROPIC_API_KEY ||
@@ -738,6 +739,18 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             for (const candidate of candidates) {
               attemptedModels.push(candidate);
               try {
+                // Exact request format matching working curl (omits temperature to prevent thinking conflicts)
+                const payload: any = {
+                  model: candidate,
+                  max_tokens: 4096,
+                  messages: [
+                    {
+                      role: 'user',
+                      content: prompt
+                    }
+                  ]
+                };
+
                 const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
                   method: 'POST',
                   headers: {
@@ -745,17 +758,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
                     'x-api-key': rawKey,
                     'anthropic-version': '2023-06-01'
                   },
-                  body: JSON.stringify({
-                    model: candidate,
-                    max_tokens: 4096,
-                    temperature: 0.25,
-                    messages: [
-                      {
-                        role: 'user',
-                        content: prompt
-                      }
-                    ]
-                  })
+                  body: JSON.stringify(payload)
                 });
 
                 const data: any = await anthropicResponse.json();

@@ -1689,7 +1689,8 @@ async function callClaudeProxy(
 
   const requestBody = {
     model: customModel,
-    prompt
+    prompt,
+    apiKey: customKey ? customKey.trim() : undefined
   };
 
   let connectionError: string | undefined;

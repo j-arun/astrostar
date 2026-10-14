@@ -583,27 +583,76 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const { prompt } = JSON.parse(body || '{}');
-            const rawKey = (env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '').trim();
+            const { prompt, apiKey: bodyApiKey, model: requestedModel, isTestPing } = JSON.parse(body || '{}');
+
+            // Header x-goog-api-key / x-api-key sent by client UI, JSON body, or server environment variables
+            const customHeaderKey = (req.headers['x-goog-api-key'] || req.headers['x-api-key']) as string | undefined;
+            const rawKey = (
+              bodyApiKey ||
+              customHeaderKey ||
+              env.GEMINI_API_KEY ||
+              process.env.GEMINI_API_KEY ||
+              ''
+            ).trim();
+
             const isPlaceholder = !rawKey || rawKey === 'MY_GEMINI_API_KEY' || rawKey.includes('placeholder') || rawKey.includes('your_api_key');
 
             if (isPlaceholder) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
-                error: 'GEMINI_API_KEY is not configured or is a placeholder. Please set GEMINI_API_KEY="AIzaSy..." in your .env file or system environment variables. (Get a free key at https://aistudio.google.com/apikey).'
+                error: 'GEMINI_API_KEY is not configured or is a placeholder. Please paste your Gemini API Key in the Key Settings panel or set GEMINI_API_KEY in your .env file. (Get a free key at https://aistudio.google.com/apikey).'
               }));
               return;
             }
 
             const { GoogleGenAI } = await import('@google/genai');
             const ai = new GoogleGenAI({ apiKey: rawKey });
+            const targetModel = requestedModel || 'gemini-2.5-flash';
+
+            // If this is a lightweight test ping to verify key health
+            if (isTestPing || prompt === 'ping' || prompt === 'hi') {
+              try {
+                const pingRes = await ai.models.generateContent({
+                  model: targetModel,
+                  contents: 'Say hello in 3 words to confirm Gemini API key connection.',
+                  config: { maxOutputTokens: 15 }
+                });
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  success: true,
+                  status: 'OK',
+                  message: `Gemini API Key Verified & Connected (${targetModel})`,
+                  model: pingRes.modelVersion || targetModel,
+                  sampleResponse: pingRes.text
+                }));
+                return;
+              } catch (pingErr: any) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                let errDetail = pingErr.message || 'Gemini Key Ping Failed';
+                try {
+                  const parsed = JSON.parse(errDetail);
+                  if (parsed.error?.message) {
+                    errDetail = `${parsed.error.code ? `[Code ${parsed.error.code}] ` : ''}${parsed.error.message}`;
+                  }
+                } catch {
+                  // Keep as string
+                }
+                res.end(JSON.stringify({
+                  success: false,
+                  error: errDetail
+                }));
+                return;
+              }
+            }
 
             let response;
-            let usedModel = 'gemini-3.8-flash';
+            let usedModel = targetModel;
             try {
               response = await ai.models.generateContent({
-                model: 'gemini-3.8-flash',
+                model: targetModel,
                 contents: prompt,
                 config: {
                   temperature: 0.2,
@@ -611,9 +660,10 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                 }
               });
             } catch (e: any) {
-              usedModel = 'gemini-3.1-flash-lite';
+              // Fallback to gemini-2.5-flash or gemini-1.5-flash if requestedModel encountered an issue
+              usedModel = targetModel === 'gemini-2.5-pro' ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
               response = await ai.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
+                model: usedModel,
                 contents: prompt,
                 config: {
                   temperature: 0.2,
@@ -670,7 +720,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const { prompt, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens } = JSON.parse(body || '{}');
+            const { prompt, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens, isTestPing } = JSON.parse(body || '{}');
 
             // Header x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = req.headers['x-api-key'] as string | undefined;
@@ -703,8 +753,9 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               primaryModel = 'claude-haiku-5-5';
             }
 
-            // Effective token limit: Claude Sonnet 5.5 needs up to 16,000 tokens for comprehensive Vedic JSON synthesis
-            const effectiveMaxTokens = Math.max(maxTokens || 16000, 16000);
+            // Fast token limit for test ping, else 16,000 for full synthesis
+            const isPing = isTestPing || prompt === 'ping' || prompt === 'hi';
+            const effectiveMaxTokens = isPing ? 10 : Math.max(maxTokens || 16000, 16000);
 
             const payload: any = {
               model: primaryModel,
@@ -712,7 +763,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               messages: [
                 {
                   role: 'user',
-                  content: prompt
+                  content: isPing ? 'hi' : prompt
                 }
               ]
             };

@@ -1170,10 +1170,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 onChange={(e) => {
                   const newProv = e.target.value as LLMProviderId;
                   setSelectedLlmProvider(newProv);
-                  handleOpenMonthlyReport(newProv);
                 }}
                 className="bg-transparent text-[11px] font-semibold text-slate-200 focus:outline-none cursor-pointer pr-1"
-                title="Select Multi-LLM Reasoning Engine Provider (immediately runs reasoning for selected model)"
+                title="Select Multi-LLM Reasoning Engine Provider"
               >
                 <option value="local_qwen" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.local_qwen.badgeLabel}
@@ -1190,28 +1189,14 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               </select>
             </div>
 
-            {/* Monthly Vedic Report Button */}
+            {/* BUTTON 1: SEND PROMPT TO LLM (Primary Single Execution Button) */}
             <button
               onClick={() => handleOpenMonthlyReport()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
-              title={`Open Multi-LLM Reasoning Engine for Comprehensive Monthly Report (${MONTH_NAMES[selectedMonth]} ${selectedYear})`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-extrabold transition shadow-md shadow-amber-500/20 text-xs cursor-pointer active:scale-95"
+              title={`Send prompt to LLM for ${MONTH_NAMES[selectedMonth]} ${selectedYear} using ${LLM_PROVIDERS[selectedLlmProvider].name}`}
             >
-              <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>
-                {selectedLlmProvider === 'local_qwen' ? '🖥️ Run 7B Report (Ollama)' :
-                 selectedLlmProvider === 'gemini_pro' ? '♊ Run Gemini Report' :
-                 selectedLlmProvider === 'claude_haiku' ? '📜 Run Claude Haiku (Fable)' : '🧠 Run Claude Sonnet'}
-              </span>
-            </button>
-
-            {/* Quick Open Audio Voice Inspector Button */}
-            <button
-              onClick={() => handleOpenMonthlyReport()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/30 transition shadow-sm font-bold text-xs cursor-pointer"
-              title={`Open Multi-LLM Audio Voice Inspector for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-              <span>Voice Inspector</span>
+              <Sparkles className="w-4 h-4 fill-current" />
+              <span>Send Prompt to LLM</span>
             </button>
 
             {/* PD Micro-Focus Mode Slider */}
@@ -1573,9 +1558,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               <button
                 onClick={() => handleOpenMonthlyReport()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
+                title="Send prompt to LLM to run full monthly predictions"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Re-Analyze</span>
+                <Sparkles className="w-3.5 h-3.5 fill-current" />
+                <span>Send Prompt to LLM</span>
               </button>
             </div>
           </div>

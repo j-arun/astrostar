@@ -54,6 +54,7 @@ import {
 } from '../services/reportExportService';
 import { DocsBreadcrumbSidebar } from './DocsBreadcrumbSidebar';
 import { saveReportToServerDocs } from '../services/docsStorageService';
+import { testGeminiConnection, testClaudeConnection } from '../services/apiHealthService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -145,6 +146,12 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   });
   const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [ollamaPingResult, setOllamaPingResult] = useState<{
+    checking?: boolean;
+    isOnline?: boolean;
+    models?: string[];
+    error?: string;
+  } | null>(null);
   
   // Timeout Configuration State (Default is false: Full Throttle / No Timeout - runs full time)
   const [enableTimeout, setEnableTimeout] = useState<boolean>(() => {
@@ -172,11 +179,18 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   });
   const [showThinkingBlock, setShowThinkingBlock] = useState<boolean>(false);
 
-  const [ollamaPingResult, setOllamaPingResult] = useState<{
-    checking: boolean;
-    isOnline?: boolean;
-    models?: string[];
-    error?: string;
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
+  });
+  const [geminiModel, setGeminiModel] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') || 'gemini-2.5-flash';
+  });
+  const [showKeySettings, setShowKeySettings] = useState<boolean>(false);
+  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
+  const [keyHealthStatus, setKeyHealthStatus] = useState<{
+    provider: string;
+    success: boolean;
+    message: string;
   } | null>(null);
 
   // Recognition ref
@@ -295,6 +309,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         customPromptOverride: promptToSend,
         enableTimeout,
         timeoutSeconds,
+        geminiApiKey: geminiApiKey.trim() || undefined,
+        geminiModel: geminiModel.trim() || undefined,
         anthropicApiKey: anthropicApiKey.trim() || undefined,
         anthropicModel: anthropicModel || undefined,
         anthropicThinkingMode
@@ -400,6 +416,38 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           localStorage.setItem('astro_ollama_model', matchingQwen);
         }
       }
+    }
+  };
+
+  const handleTestKeyHealth = async () => {
+    setIsTestingKey(true);
+    setKeyHealthStatus(null);
+    try {
+      if (activeProvider === 'gemini_pro') {
+        const res = await testGeminiConnection(geminiApiKey, geminiModel);
+        setKeyHealthStatus({
+          provider: 'Google Gemini',
+          success: !!res.success,
+          message: res.message
+        });
+      } else if (activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') {
+        const res = await testClaudeConnection(anthropicApiKey, anthropicModel);
+        setKeyHealthStatus({
+          provider: 'Anthropic Claude',
+          success: !!res.success,
+          message: res.message
+        });
+      } else if (activeProvider === 'local_qwen') {
+        await handleTestOllamaConnection();
+      }
+    } catch (e: any) {
+      setKeyHealthStatus({
+        provider: 'API',
+        success: false,
+        message: e.message || 'Key test failed'
+      });
+    } finally {
+      setIsTestingKey(false);
     }
   };
 
@@ -816,7 +864,86 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               </div>
             )}
 
-            {/* Claude Model & Key Configurator */}
+            {/* Google Gemini Model & Key Configurator with One-Click Test Query */}
+            {activeProvider === 'gemini_pro' && (
+              <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
+                <span className="text-[10px] text-cyan-300 font-mono font-bold flex items-center gap-1">
+                  <span>♊</span>
+                  <span>Google Gemini</span>
+                </span>
+                <div className="h-3.5 w-px bg-slate-700" />
+                <select
+                  value={geminiModel}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGeminiModel(val);
+                    localStorage.setItem('astro_gemini_model', val);
+                  }}
+                  className="bg-slate-950 border border-cyan-500/40 rounded px-1.5 py-0.5 text-[10px] font-mono text-cyan-200 focus:outline-none cursor-pointer"
+                  title="Select Google Gemini Model"
+                >
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default &amp; Recommended)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Reasoning)</option>
+                  <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fastest)</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy)</option>
+                </select>
+                <div className="h-3.5 w-px bg-slate-700" />
+                <div className="flex items-center gap-1.5">
+                  <Key className="w-3 h-3 text-amber-400" />
+                  <input
+                    type="password"
+                    value={geminiApiKey}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setGeminiApiKey(val);
+                      localStorage.setItem('astro_gemini_api_key', val);
+                    }}
+                    placeholder="Gemini API Key (AIzaSy...)"
+                    className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-[10px] font-mono text-cyan-200 focus:outline-none w-44 placeholder:text-slate-600"
+                    title="Enter Gemini API Key (stored in browser localStorage, overrides server default)"
+                  />
+                  {geminiApiKey ? (
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5" title="API Key provided">
+                      <Check className="w-2.5 h-2.5" /> Saved
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-mono" title="If empty, will use GEMINI_API_KEY from .env">
+                      (or .env)
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleTestKeyHealth}
+                    disabled={isTestingKey}
+                    className="px-2 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[10px] transition cursor-pointer shadow-sm ml-1 flex items-center gap-1 disabled:opacity-50 active:scale-95"
+                    title="Fire a test query ping to verify your Gemini API key"
+                  >
+                    {isTestingKey ? <RotateCcw className="w-2.5 h-2.5 animate-spin" /> : <span>⚡</span>}
+                    <span>{isTestingKey ? 'Pinging...' : 'Test Key'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* API Key Health Status Feedback */}
+            {keyHealthStatus && (
+              <div className={`px-2.5 py-1 rounded-lg text-[10px] font-mono flex items-center gap-1.5 border shadow-sm ${
+                keyHealthStatus.success
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-950/80 text-rose-300 border-rose-500/40'
+              }`}>
+                {keyHealthStatus.success ? <Check className="w-3 h-3 text-emerald-400 shrink-0" /> : <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />}
+                <span className="truncate max-w-xs sm:max-w-md font-semibold">{keyHealthStatus.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setKeyHealthStatus(null)}
+                  className="text-slate-400 hover:text-white ml-1 font-bold cursor-pointer"
+                  title="Dismiss"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
             {(activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') && (
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
                 <span className="text-[10px] text-purple-300 font-mono font-bold flex items-center gap-1">

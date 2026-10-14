@@ -25,8 +25,8 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   gemini_pro: {
     id: 'gemini_pro',
     name: 'Google Gemini Pro',
-    badgeLabel: '♊ Google Gemini Pro (gemini-3.1-pro)',
-    model: 'gemini-3.1-pro-preview',
+    badgeLabel: '♊ Google Gemini (gemini-2.5-flash / pro)',
+    model: 'gemini-2.5-flash',
     description: 'Google DeepMind flagship multimodal reasoning model with deep Vedic synthesis capabilities.',
     endpoint: '/api/llm/gemini'
   },
@@ -214,6 +214,8 @@ export interface VedicHouseContext {
     significations: string;
     outletImpact: string;
   };
+  geminiApiKey?: string;
+  geminiModel?: string;
   anthropicApiKey?: string;
   anthropicModel?: string;
   anthropicThinkingMode?: 'disabled' | 'enabled' | 'auto';

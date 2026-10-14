@@ -1573,9 +1573,22 @@ export class GeminiStudioAdapter implements ILLMAdapter {
     const prompt = buildVedicPrompt(context, 'Google Gemini Pro');
     const endpoint = '/api/llm/gemini';
 
-    const requestBody = {
-      model: 'gemini-3.8-flash',
-      prompt
+    const geminiKey = (
+      (context as any).geminiApiKey ||
+      (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') ||
+      ''
+    ).trim();
+
+    const geminiModel = (
+      (context as any).geminiModel ||
+      (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') ||
+      'gemini-2.5-flash'
+    ).trim();
+
+    const requestBody: any = {
+      model: geminiModel,
+      prompt,
+      apiKey: geminiKey || undefined
     };
 
     let connectionError: string | undefined;
@@ -1583,7 +1596,10 @@ export class GeminiStudioAdapter implements ILLMAdapter {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(geminiKey ? { 'x-goog-api-key': geminiKey, 'x-api-key': geminiKey } : {})
+        },
         body: JSON.stringify(requestBody)
       });
 
@@ -1595,7 +1611,7 @@ export class GeminiStudioAdapter implements ILLMAdapter {
         const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (GOOGLE GEMINI)
 **Target:** ${context.isComprehensiveMonthly || !context.houseNumber ? `Comprehensive Full-Month Synthesis (${MONTH_NAMES[context.selectedMonth]} ${context.selectedYear})` : `House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})`}  
 **Timeline:** Month ${context.selectedMonth + 1}/${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
-**Model:** ${json.model || 'gemini-3.8-flash'}  
+**Model:** ${json.model || geminiModel}  
 
 ---
 #### 1. Event Probability & Scope
@@ -1620,7 +1636,7 @@ ${parsed.part3_microTimingWindow}
           rawMarkdown,
           providerUsed: 'gemini_pro',
           executionTimeMs: Date.now() - startMs,
-          endpointUsed: `Google Gemini Cloud API (${json.model || 'gemini-3.8-flash'})`,
+          endpointUsed: `Google Gemini Cloud API (${json.model || geminiModel})`,
           connectionStatus: 'connected_live',
           isPrivateLocal: false,
           promptSent: prompt,
@@ -1951,7 +1967,7 @@ export class LLMReasoningService {
     };
     const engine = (engineMap as any)[providerId] || 'Ollama';
     const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
-      providerId === 'gemini_pro' ? 'gemini-3.8-flash' :
+      providerId === 'gemini_pro' ? (context.geminiModel || 'gemini-2.5-flash') :
       providerId === 'claude_haiku' ? (context.anthropicModel || 'claude-haiku-5-5') :
       (providerId === 'claude_sonnet' || providerId === 'claude') ? (context.anthropicModel || 'claude-sonnet-5-5') :
       (context.selectedLocalModel || 'qwen2.5:7b-instruct')

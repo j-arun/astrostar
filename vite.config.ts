@@ -719,8 +719,13 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
 
             // Configure thinking parameter based on requested mode
             if (thinkingMode === 'disabled') {
-              // Explicitly disable adaptive thinking so 100% of tokens go to direct text response
-              payload.thinking = { type: 'disabled' };
+              // On Sonnet 5.5 and Claude 5 models, Anthropic requires "between_tools" instead of "disabled" to turn thinking off
+              // (Error: 'To turn thinking off on this model, send "thinking": {"type": "between_tools"} instead of {"type": "disabled"}')
+              if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5') || primaryModel.includes('opus-5')) {
+                payload.thinking = { type: 'between_tools' };
+              } else {
+                payload.thinking = { type: 'disabled' };
+              }
             } else if (thinkingMode === 'enabled') {
               if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5')) {
                 // Sonnet 5.5 / 5 uses output_config effort or adaptive thinking without budget_tokens
@@ -734,7 +739,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             // 1. Log outgoing payload right before fetch (as requested)
             console.log("SENT:", JSON.stringify({ ...payload, messages: "[omitted]" }));
 
-            const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+            let anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -744,11 +749,47 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               body: JSON.stringify(payload)
             });
 
-            const data: any = await anthropicResponse.json();
+            let data: any = await anthropicResponse.json();
 
             console.log("ANTHROPIC STATUS:", anthropicResponse.status);
 
-            // 2. No silent retry-without-field logic: if Anthropic rejects, log exact error and return to caller
+            // Auto-recovery if Anthropic specifies thinking parameter requirement
+            if (!anthropicResponse.ok && data?.error?.message) {
+              const errMsg = data.error.message;
+              if (errMsg.includes('between_tools') && payload.thinking?.type !== 'between_tools') {
+                console.log("Auto-correcting thinking parameter to { type: 'between_tools' } per Anthropic API requirement...");
+                payload.thinking = { type: 'between_tools' };
+                console.log("RETRY SENT:", JSON.stringify({ ...payload, messages: "[omitted]" }));
+                anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': rawKey,
+                    'anthropic-version': '2023-06-01'
+                  },
+                  body: JSON.stringify(payload)
+                });
+                data = await anthropicResponse.json();
+                console.log("ANTHROPIC RETRY STATUS:", anthropicResponse.status);
+              } else if (errMsg.includes('"disabled"') && payload.thinking?.type !== 'disabled') {
+                console.log("Auto-correcting thinking parameter to { type: 'disabled' } per Anthropic API requirement...");
+                payload.thinking = { type: 'disabled' };
+                console.log("RETRY SENT:", JSON.stringify({ ...payload, messages: "[omitted]" }));
+                anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': rawKey,
+                    'anthropic-version': '2023-06-01'
+                  },
+                  body: JSON.stringify(payload)
+                });
+                data = await anthropicResponse.json();
+                console.log("ANTHROPIC RETRY STATUS:", anthropicResponse.status);
+              }
+            }
+
+            // If still not ok, log error and return to caller
             if (!anthropicResponse.ok) {
               console.error("ANTHROPIC ERROR RESPONSE:", JSON.stringify(data));
               res.statusCode = anthropicResponse.status;

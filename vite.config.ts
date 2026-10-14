@@ -694,45 +694,116 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               return;
             }
 
-            const model = requestedModel || 'claude-3-5-sonnet-20241022';
+            let primaryModel = requestedModel || 'claude-sonnet-5-5';
+            // Normalize any 5.5 / IQ variations
+            if (primaryModel === 'claude-5-5-sonnet' || primaryModel === 'claude-sonnet-5.5' || primaryModel === 'claude') {
+              primaryModel = 'claude-sonnet-5-5';
+            } else if (primaryModel === 'claude-5-5-haiku' || primaryModel === 'claude-haiku-5.5' || primaryModel === 'claude-iq' || primaryModel === 'claude-5-5-iq') {
+              primaryModel = 'claude-haiku-5-5';
+            }
 
-            // Server-to-server call to Anthropic Messages API (completely overcomes CORS!)
-            const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': rawKey,
-                'anthropic-version': '2023-06-01'
-              },
-              body: JSON.stringify({
-                model,
-                max_tokens: 4096,
-                temperature: 0.25,
-                messages: [
-                  {
-                    role: 'user',
-                    content: prompt
-                  }
-                ]
-              })
-            });
+            // Build smart fallback cascade list based on requested model family
+            const candidates: string[] = [];
+            const addCandidate = (m: string) => { if (m && !candidates.includes(m)) candidates.push(m); };
 
-            const data: any = await anthropicResponse.json();
+            addCandidate(primaryModel);
+            if (primaryModel.includes('sonnet') || primaryModel.includes('5-5') || primaryModel === 'claude') {
+              addCandidate('claude-sonnet-5-5');
+              addCandidate('claude-5-5-sonnet');
+              addCandidate('claude-3-5-sonnet-latest');
+              addCandidate('claude-3-7-sonnet-latest');
+              addCandidate('claude-3-5-sonnet-20241022');
+              addCandidate('claude-haiku-5-5');
+              addCandidate('claude-3-5-haiku-latest');
+              addCandidate('claude-3-haiku-20240307');
+            } else if (primaryModel.includes('haiku') || primaryModel.includes('iq') || primaryModel.includes('fable')) {
+              addCandidate('claude-haiku-5-5');
+              addCandidate('claude-5-5-haiku');
+              addCandidate('claude-3-5-haiku-latest');
+              addCandidate('claude-3-haiku-20240307');
+              addCandidate('claude-sonnet-5-5');
+            } else {
+              addCandidate('claude-sonnet-5-5');
+              addCandidate('claude-haiku-5-5');
+              addCandidate('claude-3-5-sonnet-latest');
+            }
 
-            if (!anthropicResponse.ok) {
-              res.statusCode = anthropicResponse.status;
-              res.setHeader('Content-Type', 'application/json');
-              let errMsg = data?.error?.message || `Anthropic HTTP Error ${anthropicResponse.status}`;
-              if (errMsg.includes('credit balance is too low') || errMsg.includes('insufficient_quota')) {
-                errMsg = 'Anthropic Claude Error: Credit balance is too low. Please top up credits at https://console.anthropic.com/settings/plans.';
-              } else if (errMsg.includes('invalid x-api-key') || errMsg.includes('authentication_error')) {
-                errMsg = 'Anthropic Claude Error: Invalid API key (401). Please verify your ANTHROPIC_API_KEY at https://console.anthropic.com/settings/keys.';
+            let successfulData: any = null;
+            let finalModelUsed = primaryModel;
+            let lastStatus = 500;
+            let lastErrMsg = '';
+            const attemptedModels: string[] = [];
+
+            // Attempt candidate models in sequence
+            for (const candidate of candidates) {
+              attemptedModels.push(candidate);
+              try {
+                const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': rawKey,
+                    'anthropic-version': '2023-06-01'
+                  },
+                  body: JSON.stringify({
+                    model: candidate,
+                    max_tokens: 4096,
+                    temperature: 0.25,
+                    messages: [
+                      {
+                        role: 'user',
+                        content: prompt
+                      }
+                    ]
+                  })
+                });
+
+                const data: any = await anthropicResponse.json();
+
+                if (anthropicResponse.ok) {
+                  successfulData = data;
+                  finalModelUsed = data.model || candidate;
+                  break;
+                }
+
+                lastStatus = anthropicResponse.status;
+                const errMessage = data?.error?.message || `HTTP ${anthropicResponse.status}`;
+
+                // If authentication error or invalid API key, no point in trying other models
+                if (anthropicResponse.status === 401 || errMessage.includes('invalid x-api-key') || errMessage.includes('authentication_error')) {
+                  lastErrMsg = 'Anthropic Claude Error: Invalid API key (401). Please verify your ANTHROPIC_API_KEY at https://console.anthropic.com/settings/keys.';
+                  break;
+                }
+
+                // If credit exhaustion, stop early with friendly message
+                if (errMessage.includes('credit balance is too low') || errMessage.includes('insufficient_quota')) {
+                  lastErrMsg = 'Anthropic Claude Error: Credit balance is too low. Please top up credits at https://console.anthropic.com/settings/plans.';
+                  break;
+                }
+
+                // If not found (404) or model-specific error, try next candidate
+                if (anthropicResponse.status === 404 || errMessage.includes('model:') || data?.error?.type === 'not_found_error') {
+                  lastErrMsg = `Model '${candidate}' not found or inaccessible for this API key tier (${errMessage}).`;
+                  continue;
+                }
+
+                lastErrMsg = errMessage;
+              } catch (subErr: any) {
+                lastErrMsg = subErr.message || 'Network fetch to Anthropic failed';
               }
-              res.end(JSON.stringify({ error: errMsg }));
+            }
+
+            if (!successfulData) {
+              res.statusCode = lastStatus;
+              res.setHeader('Content-Type', 'application/json');
+              const detailedError = lastErrMsg.includes('not found or inaccessible')
+                ? `Anthropic Claude Error: Model '${primaryModel}' is not provisioned or active for this API key account tier. Attempted models: [${attemptedModels.join(', ')}]. Root message: ${lastErrMsg}. Please verify plan tier at https://console.anthropic.com/settings/plans or test with Claude 3 Haiku.`
+                : lastErrMsg || `Anthropic Request Failed (HTTP ${lastStatus})`;
+              res.end(JSON.stringify({ error: detailedError, attemptedModels }));
               return;
             }
 
-            const text = data.content
+            const text = successfulData.content
               ?.filter((c: any) => c.type === 'text')
               ?.map((c: any) => c.text)
               ?.join('\n') || '';
@@ -741,8 +812,10 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
               text,
-              model: data.model || model,
-              usage: data.usage
+              model: finalModelUsed,
+              requestedModel: primaryModel,
+              attemptedModels,
+              usage: successfulData.usage
             }));
           } catch (err: any) {
             res.statusCode = 500;

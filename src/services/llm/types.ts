@@ -32,25 +32,25 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   },
   claude_sonnet: {
     id: 'claude_sonnet',
-    name: 'Anthropic Claude 3.5 Sonnet',
-    badgeLabel: '🧠 Claude 3.5 Sonnet (Anthropic)',
-    model: 'claude-3-5-sonnet-20241022',
+    name: 'Anthropic Claude Sonnet 5.5',
+    badgeLabel: '🧠 Claude Sonnet 5.5 (Anthropic)',
+    model: 'claude-sonnet-5-5',
     description: 'Anthropic flagship reasoning model for nuanced astrological timing breakdowns and precision analysis.',
     endpoint: '/api/llm/claude'
   },
   claude_haiku: {
     id: 'claude_haiku',
-    name: 'Anthropic Claude 3.5 Haiku / Fable',
-    badgeLabel: '📜 Claude 3.5 Haiku / Fable (Anthropic)',
-    model: 'claude-3-5-haiku-20241022',
+    name: 'Anthropic Claude Haiku 5.5',
+    badgeLabel: '📜 Claude Haiku 5.5 (Anthropic)',
+    model: 'claude-haiku-5-5',
     description: 'Anthropic high-speed narrative model for lyrical, mythic, and expressive Vedic storytelling.',
     endpoint: '/api/llm/claude'
   },
   claude: {
     id: 'claude',
-    name: 'Anthropic Claude 3.5 Sonnet',
-    badgeLabel: '🧠 Claude 3.5 Sonnet (Anthropic)',
-    model: 'claude-3-5-sonnet-20241022',
+    name: 'Anthropic Claude Sonnet 5.5',
+    badgeLabel: '🧠 Claude Sonnet 5.5 (Anthropic)',
+    model: 'claude-sonnet-5-5',
     description: 'Anthropic state-of-the-art reasoning model for nuanced astrological timing breakdowns.',
     endpoint: '/api/llm/claude'
   }
@@ -215,6 +215,7 @@ export interface VedicHouseContext {
     outletImpact: string;
   };
   anthropicApiKey?: string;
+  anthropicModel?: string;
 }
 
 export interface EmploymentStatusInference {

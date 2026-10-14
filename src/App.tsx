@@ -11,7 +11,8 @@ import {
   Database,
   ChevronDown,
   ChevronUp,
-  Layers
+  Layers,
+  FileText
 } from 'lucide-react';
 import {
   samplePersonMaster,
@@ -29,6 +30,7 @@ import {
 import storedPersonsData from './data/stored_persons.json';
 import RestApiStudio, { getStarLordShort } from './components/RestApiStudio';
 import { MonthlyTransitView } from './components/MonthlyTransitView';
+import { NatalAvatarStudio } from './components/NatalAvatarStudio';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
 // 0,0: Meenam (Pisces)   | 0,1: Mesham (Aries)   | 0,2: Rishabam (Taurus) | 0,3: Mithunam (Gemini)
@@ -63,7 +65,7 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api'>('charts');
+  const [activeTab, setActiveTab] = useState<'avatar' | 'charts' | 'monthly' | 'report' | 'api'>('avatar');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -254,16 +256,18 @@ export default function App() {
             </div>
           </div>
 
-          {/* Integrated 4 Navigation Menu Items */}
+          {/* Integrated 5 Navigation Menu Items */}
           <nav className="flex items-center gap-1.5 flex-wrap">
             {[
+              { id: 'avatar', label: 'Natal Avatar & Karakatvas (Prototype)', icon: Sparkles, highlight: true },
               { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
               { id: 'monthly', label: 'Monthly View (Matrix)', icon: CalendarDays },
-              { id: 'report', label: 'Voice & Predictions Studio', icon: Sparkles },
+              { id: 'report', label: 'Voice & Predictions Studio', icon: FileText },
               { id: 'api', label: 'SAP Query Studio', icon: Server },
             ].map(tab => {
-              const Icon = tab.icon;
+              const Icon = (tab as any).icon || Compass;
               const isActive = activeTab === tab.id;
+              const isHighlight = (tab as any).highlight;
               return (
                 <button
                   key={tab.id}
@@ -271,11 +275,18 @@ export default function App() {
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
                     isActive
                       ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold'
+                      : isHighlight
+                      ? 'bg-gradient-to-r from-amber-500/20 to-indigo-500/20 text-amber-300 hover:text-white hover:bg-slate-800 border border-amber-500/40 shadow-sm'
                       : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700/60'
                   }`}
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
                   {tab.label}
+                  {isHighlight && !isActive && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/30 text-amber-300 font-bold uppercase">
+                      New
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -285,6 +296,15 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+        {/* TAB 0: VEDIC NATAL AVATAR & KARAKATVA LIFE STORY PROTOTYPE */}
+        {activeTab === 'avatar' && (
+          <NatalAvatarStudio
+            activeRecord={activeRecord}
+            onSelectPerson={handleSelectPerson}
+            availablePersonIds={availablePersonIds}
+          />
+        )}
+
         {/* TAB 0: REST API QUERY (MODEL 2) */}
         {activeTab === 'api' && (
           <RestApiStudio

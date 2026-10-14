@@ -148,6 +148,14 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
   });
 
+  const [anthropicModel, setAnthropicModel] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : null;
+    if (!saved || saved === 'claude-3-5-sonnet-20241022' || saved === 'claude-3-5-sonnet-latest') {
+      return 'claude-sonnet-5-5';
+    }
+    return saved;
+  });
+
   const [ollamaPingResult, setOllamaPingResult] = useState<{
     checking: boolean;
     isOnline?: boolean;
@@ -238,7 +246,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     } else {
       stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, selectedLanguage, enableTimeout, timeoutSeconds]);
+  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, anthropicModel, selectedLanguage, enableTimeout, timeoutSeconds]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -271,7 +279,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         customPromptOverride: promptToSend,
         enableTimeout,
         timeoutSeconds,
-        anthropicApiKey: anthropicApiKey.trim() || undefined
+        anthropicApiKey: anthropicApiKey.trim() || undefined,
+        anthropicModel: anthropicModel || undefined
       });
       setNarrative(result);
       loadDbLogs().catch(() => {});
@@ -310,8 +319,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       const engine = (engineMap as any)[activeProvider] || 'Claude';
       const modelName = narrative.ollamaStats?.model || (
         activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
-        activeProvider === 'claude_haiku' ? 'claude-3-5-haiku-20241022' :
-        (activeProvider === 'claude_sonnet' || activeProvider === 'claude') ? 'claude-3-5-sonnet-20241022' : localOllamaModel
+        activeProvider === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') :
+        (activeProvider === 'claude_sonnet' || activeProvider === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : localOllamaModel
       );
       const res = await persistLLMPromptLog({
         engine,
@@ -725,11 +734,30 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
 
             {/* Claude Model & Key Configurator */}
             {(activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') && (
-              <div className="flex items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
+              <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
                 <span className="text-[10px] text-purple-300 font-mono font-bold flex items-center gap-1">
                   <span>🧠</span>
-                  <span>{activeProvider === 'claude_haiku' ? 'Claude 3.5 Haiku / Fable' : 'Claude 3.5 Sonnet'}</span>
+                  <span>{activeProvider === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'}</span>
                 </span>
+                <div className="h-3.5 w-px bg-slate-700" />
+                <select
+                  value={anthropicModel}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAnthropicModel(val);
+                    localStorage.setItem('astro_anthropic_model', val);
+                  }}
+                  className="bg-slate-950 border border-purple-500/40 rounded px-1.5 py-0.5 text-[10px] font-mono text-purple-200 focus:outline-none cursor-pointer"
+                  title="Select Anthropic Claude Model"
+                >
+                  <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
+                  <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
+                  <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
+                  <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
+                  <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+                  <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
+                  <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
+                </select>
                 <div className="h-3.5 w-px bg-slate-700" />
                 <div className="flex items-center gap-1.5">
                   <Key className="w-3 h-3 text-amber-400" />
@@ -747,7 +775,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   />
                   {anthropicApiKey ? (
                     <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5" title="API Key provided">
-                      <Check className="w-2.5 h-2.5" /> Key Saved
+                      <Check className="w-2.5 h-2.5" /> Saved
                     </span>
                   ) : (
                     <span className="text-[10px] text-slate-500 font-mono" title="If empty, will use ANTHROPIC_API_KEY from .env">
@@ -758,9 +786,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     type="button"
                     onClick={() => handleGenerate()}
                     className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition cursor-pointer shadow-sm ml-1"
-                    title="Test Claude live inference with this key"
+                    title="Test Claude live inference with this key and model"
                   >
-                    Test Inference
+                    Test Live
                   </button>
                 </div>
               </div>
@@ -1246,7 +1274,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                       <div>
                         <span className="text-slate-500 block">Engine &amp; Model</span>
-                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? 'claude-3-5-sonnet-20241022' : 'qwen2.5:7b-instruct')})</span>
+                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : 'qwen2.5:7b-instruct')})</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Time Taken</span>
@@ -2028,16 +2056,16 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                     </div>
                   ) : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude_haiku' || narrative.providerUsed === 'claude') ? (
-                    /* 4. ANTHROPIC CLAUDE MISSING KEY OR QUOTA CARD */
+                    /* 4. ANTHROPIC CLAUDE MISSING KEY, QUOTA, OR MODEL ISSUE CARD */
                     <div className="p-4 rounded-xl bg-purple-950/30 border border-purple-500/40 text-purple-200 text-xs space-y-2.5 shadow-md animate-fadeIn">
                       <div className="flex items-start gap-2.5">
                         <AlertCircle className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
                         <div className="space-y-1.5 flex-1">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
-                              <span>🧠 Anthropic Claude ({narrative.providerUsed === 'claude_haiku' ? 'Claude 3.5 Haiku / Fable' : 'Claude 3.5 Sonnet'})</span>
+                              <span>🧠 Anthropic Claude ({narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'})</span>
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
-                                {narrative.connectionError?.includes('Credit balance') ? 'CREDITS NEEDED' : 'KEY REQUIRED'}
+                                {narrative.connectionError?.includes('Credit balance') ? 'CREDITS NEEDED' : narrative.connectionError?.includes('Model') || narrative.connectionError?.includes('snapshot') ? 'MODEL AVAILABILITY' : 'KEY REQUIRED'}
                               </span>
                             </span>
                           </div>
@@ -2045,13 +2073,30 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             {narrative.connectionError}
                           </p>
                           <div className="p-3 rounded-lg bg-slate-900/90 border border-purple-500/30 text-[11px] text-slate-300 space-y-2">
-                            <p className="font-bold text-purple-300">💡 How to test live Claude reasoning:</p>
+                            <p className="font-bold text-purple-300">💡 Configure &amp; Test Live Claude 5.5:</p>
                             <ol className="list-decimal list-inside space-y-1 text-slate-300/90 pl-1">
-                              <li>Get an API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-amber-400 underline hover:text-white inline-flex items-center gap-0.5">console.anthropic.com/settings/keys <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
-                              <li>Enter it below or in your local <code className="text-slate-200">.env</code> as <code className="text-amber-300 bg-slate-950 px-1 py-0.5 rounded font-mono">ANTHROPIC_API_KEY="sk-ant-..."</code>.</li>
-                              <li>The app proxies requests through <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded font-mono">/api/llm/claude</code> to bypass browser CORS rules.</li>
+                              <li>Configured with latest <strong className="text-amber-300">Claude Sonnet 5.5</strong> (<code className="text-purple-300 font-mono">claude-sonnet-5-5</code>) and <strong className="text-amber-300">Claude Haiku 5.5</strong> (<code className="text-purple-300 font-mono">claude-haiku-5-5</code>).</li>
+                              <li>Ensure you have active balance/credits at <a href="https://console.anthropic.com/settings/plans" target="_blank" rel="noreferrer" className="text-amber-400 underline hover:text-white inline-flex items-center gap-0.5">console.anthropic.com/settings/plans <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
+                              <li>Enter your API key below or in your local <code className="text-slate-200">.env</code> as <code className="text-amber-300 bg-slate-950 px-1 py-0.5 rounded font-mono">ANTHROPIC_API_KEY="sk-ant-..."</code>.</li>
                             </ol>
                             <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <select
+                                value={anthropicModel}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setAnthropicModel(val);
+                                  localStorage.setItem('astro_anthropic_model', val);
+                                }}
+                                className="bg-slate-950 border border-purple-500/60 rounded px-2 py-1 text-xs font-mono text-purple-200 focus:outline-none cursor-pointer"
+                              >
+                                <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
+                                <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
+                                <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
+                                <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
+                                <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+                                <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
+                                <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
+                              </select>
                               <input
                                 type="password"
                                 value={anthropicApiKey}
@@ -2061,14 +2106,14 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                                   localStorage.setItem('astro_anthropic_api_key', val);
                                 }}
                                 placeholder="Paste your Claude API Key (sk-ant-...)"
-                                className="bg-slate-950 border border-purple-500/50 rounded px-2.5 py-1 text-xs font-mono text-amber-200 focus:outline-none w-72 placeholder:text-slate-600"
+                                className="bg-slate-950 border border-purple-500/50 rounded px-2.5 py-1 text-xs font-mono text-amber-200 focus:outline-none w-64 placeholder:text-slate-600"
                               />
                               <button
                                 type="button"
                                 onClick={() => handleGenerate()}
                                 className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow"
                               >
-                                Save Key &amp; Test Live
+                                Save &amp; Test Live
                               </button>
                             </div>
                           </div>

@@ -216,6 +216,8 @@ export interface VedicHouseContext {
   };
   anthropicApiKey?: string;
   anthropicModel?: string;
+  anthropicThinkingMode?: 'disabled' | 'enabled' | 'auto';
+  anthropicBudgetTokens?: number;
 }
 
 export interface EmploymentStatusInference {
@@ -346,6 +348,8 @@ export interface LLMThreePartNarrative {
     promptEvalCount?: number;
     evalCount?: number;
   };
+  thinkingContent?: string;
+  stopReason?: string;
   logId?: string;
   runningNumber?: number;
   sqlInsert?: string;

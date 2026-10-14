@@ -670,7 +670,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const { prompt, model: requestedModel, apiKey: bodyApiKey } = JSON.parse(body || '{}');
+            const { prompt, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens } = JSON.parse(body || '{}');
 
             // Header x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = req.headers['x-api-key'] as string | undefined;
@@ -735,14 +735,16 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             let lastErrMsg = '';
             const attemptedModels: string[] = [];
 
+            // Effective token limit: Claude Sonnet 5.5 can use up to 8192-16384 tokens
+            const effectiveMaxTokens = maxTokens || 8192;
+
             // Attempt candidate models in sequence
             for (const candidate of candidates) {
               attemptedModels.push(candidate);
               try {
-                // Exact request format matching working curl (omits temperature to prevent thinking conflicts)
                 const payload: any = {
                   model: candidate,
-                  max_tokens: 4096,
+                  max_tokens: effectiveMaxTokens,
                   messages: [
                     {
                       role: 'user',
@@ -751,7 +753,16 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
                   ]
                 };
 
-                const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                // If user explicitly asks for thinking, enable it with budget
+                if (thinkingMode === 'enabled') {
+                  payload.thinking = { type: 'enabled', budget_tokens: budgetTokens || 2048 };
+                  payload.max_tokens = Math.max(effectiveMaxTokens, (payload.thinking.budget_tokens || 2048) + 4096);
+                } else if (thinkingMode === 'disabled') {
+                  // Explicitly disable thinking to ensure 100% of tokens are devoted to direct response text
+                  payload.thinking = { type: 'disabled' };
+                }
+
+                let anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -761,7 +772,23 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
                   body: JSON.stringify(payload)
                 });
 
-                const data: any = await anthropicResponse.json();
+                let data: any = await anthropicResponse.json();
+
+                // If thinking: { type: 'disabled' } returned a 400 (e.g. model rejects the thinking parameter), retry without thinking field
+                if (!anthropicResponse.ok && anthropicResponse.status === 400 && payload.thinking && JSON.stringify(data).includes('thinking')) {
+                  delete payload.thinking;
+                  payload.max_tokens = Math.max(effectiveMaxTokens, 8192);
+                  anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-api-key': rawKey,
+                      'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify(payload)
+                  });
+                  data = await anthropicResponse.json();
+                }
 
                 if (anthropicResponse.ok) {
                   successfulData = data;
@@ -806,18 +833,32 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               return;
             }
 
-            const text = successfulData.content
+            let text = successfulData.content
               ?.filter((c: any) => c.type === 'text')
               ?.map((c: any) => c.text)
               ?.join('\n') || '';
+
+            const thinkingText = successfulData.content
+              ?.filter((c: any) => c.type === 'thinking')
+              ?.map((c: any) => c.thinking)
+              ?.join('\n') || '';
+
+            // CRITICAL FIX: If text block is empty because the model spent its token budget in thinking,
+            // or if the model placed its analytical output in the thinking/scratchpad block,
+            // fallback to thinkingText so the user never gets an empty string ("")!
+            if (!text.trim() && thinkingText.trim()) {
+              text = thinkingText;
+            }
 
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
               text,
+              thinking: thinkingText,
               model: finalModelUsed,
               requestedModel: primaryModel,
               attemptedModels,
+              stop_reason: successfulData.stop_reason,
               usage: successfulData.usage
             }));
           } catch (err: any) {

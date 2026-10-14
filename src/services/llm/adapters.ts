@@ -1687,10 +1687,14 @@ async function callClaudeProxy(
   const endpoint = '/api/llm/claude';
   const customKey = context.anthropicApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : null) || '';
 
+  const thinkingMode = context.anthropicThinkingMode || (typeof window !== 'undefined' ? (localStorage.getItem('astro_anthropic_thinking_mode') as 'disabled' | 'enabled' | 'auto') : null) || 'disabled';
+
   const requestBody = {
     model: customModel,
     prompt,
-    apiKey: customKey ? customKey.trim() : undefined
+    apiKey: customKey ? customKey.trim() : undefined,
+    thinkingMode,
+    maxTokens: thinkingMode === 'enabled' ? 12000 : 8192
   };
 
   let connectionError: string | undefined;
@@ -1711,14 +1715,15 @@ async function callClaudeProxy(
 
     if (res.ok) {
       const json = await res.json();
+      const rawText = (json.text || json.thinking || '').trim();
       const fallback = synthesizeAnalyticalVedicNarrative(context, providerId, startMs);
-      const parsed = extractAndParseVedicJson(json.text || '', fallback);
+      const parsed = extractAndParseVedicJson(rawText, fallback);
 
       const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (${modelDisplayName.toUpperCase()})
 **Target:** ${context.isComprehensiveMonthly || !context.houseNumber ? `Comprehensive Full-Month Synthesis (${MONTH_NAMES[context.selectedMonth]} ${context.selectedYear})` : `House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})`}  
 **Timeline:** Month ${context.selectedMonth + 1}/${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
 **Model:** ${json.model || customModel}  
-
+${json.thinking ? `\n> 🧠 **Claude Extended Thinking (${json.usage?.output_tokens_details?.thinking_tokens || 0} tokens):**\n> ${json.thinking.split('\n').slice(0, 8).join('\n> ')}\n` : ''}
 ---
 #### 1. Event Probability & Scope
 ${parsed.part1_probabilityAndScope}
@@ -1748,7 +1753,9 @@ ${parsed.part3_microTimingWindow}
         promptSent: prompt,
         rawRequestBody: requestBody,
         rawResponseBody: json,
-        httpStatus: res.status
+        httpStatus: res.status,
+        thinkingContent: json.thinking,
+        stopReason: json.stop_reason
       };
     } else {
       const errJson = await res.json().catch(() => ({}));

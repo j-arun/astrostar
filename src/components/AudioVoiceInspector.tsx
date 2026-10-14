@@ -156,6 +156,11 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     return saved;
   });
 
+  const [anthropicThinkingMode, setAnthropicThinkingMode] = useState<'disabled' | 'enabled' | 'auto'>(() => {
+    return (typeof window !== 'undefined' ? (localStorage.getItem('astro_anthropic_thinking_mode') as any) : null) || 'disabled';
+  });
+  const [showThinkingBlock, setShowThinkingBlock] = useState<boolean>(false);
+
   const [ollamaPingResult, setOllamaPingResult] = useState<{
     checking: boolean;
     isOnline?: boolean;
@@ -280,7 +285,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         enableTimeout,
         timeoutSeconds,
         anthropicApiKey: anthropicApiKey.trim() || undefined,
-        anthropicModel: anthropicModel || undefined
+        anthropicModel: anthropicModel || undefined,
+        anthropicThinkingMode
       });
       setNarrative(result);
       loadDbLogs().catch(() => {});
@@ -757,6 +763,21 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
                   <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
                   <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
+                </select>
+                <div className="h-3.5 w-px bg-slate-700" />
+                <select
+                  value={anthropicThinkingMode}
+                  onChange={(e) => {
+                    const val = e.target.value as 'disabled' | 'enabled' | 'auto';
+                    setAnthropicThinkingMode(val);
+                    localStorage.setItem('astro_anthropic_thinking_mode', val);
+                  }}
+                  className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-cyan-300 focus:outline-none cursor-pointer"
+                  title="Claude Thinking Mode: Direct Output (Thinking OFF) prevents token depletion, while Extended Thinking generates deep scratchpad reasoning"
+                >
+                  <option value="disabled">⚡ Direct Output (Thinking OFF)</option>
+                  <option value="enabled">🧠 Extended Thinking (ON)</option>
+                  <option value="auto">🔄 Auto Adaptive</option>
                 </select>
                 <div className="h-3.5 w-px bg-slate-700" />
                 <div className="flex items-center gap-1.5">
@@ -2131,6 +2152,35 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                     </div>
                   )}
                 </>
+              )}
+
+              {/* CLAUDE EXTENDED THINKING PROCESS ACCORDION */}
+              {narrative.thinkingContent && (
+                <div className="bg-purple-950/30 border border-purple-500/40 rounded-xl p-3.5 space-y-2 text-xs shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                      <span>🧠</span>
+                      <span>Claude Sonnet 5.5 Chain of Thought / Internal Reasoning</span>
+                      {narrative.rawResponseBody?.usage?.output_tokens_details?.thinking_tokens ? (
+                        <span className="text-[10px] px-2 py-0.5 bg-purple-900/60 text-purple-200 rounded font-mono border border-purple-500/30">
+                          {narrative.rawResponseBody.usage.output_tokens_details.thinking_tokens} thinking tokens
+                        </span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowThinkingBlock(!showThinkingBlock)}
+                      className="text-[11px] text-purple-300 hover:text-white underline font-mono cursor-pointer transition"
+                    >
+                      {showThinkingBlock ? 'Hide Thinking ▲' : 'View Reasoning Scratchpad ▼'}
+                    </button>
+                  </div>
+                  {showThinkingBlock && (
+                    <div className="p-3 bg-slate-950/90 rounded-lg border border-purple-500/30 font-mono text-[11px] text-purple-200/95 whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
+                      {narrative.thinkingContent}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Summary Bottom Line */}

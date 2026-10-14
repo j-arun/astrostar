@@ -683,12 +683,14 @@ export function generateVedicPdfReport(
     );
   }
 
-  // Determine provider label for filename: Gemini | Ollama | Claude
+  // Determine provider label for filename: Gemini | Ollama | Claude-Sonnet | Claude-Haiku
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
     providerTag = 'Ollama-7B';
-  } else if (narrative.providerUsed === 'claude') {
-    providerTag = 'Claude';
+  } else if (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') {
+    providerTag = 'Claude-Sonnet';
+  } else if (narrative.providerUsed === 'claude_haiku') {
+    providerTag = 'Claude-Haiku';
   } else if (narrative.providerUsed === 'gemini_pro') {
     providerTag = 'Gemini';
   } else {

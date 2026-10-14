@@ -1181,8 +1181,11 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 <option value="gemini_pro" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.gemini_pro.badgeLabel}
                 </option>
-                <option value="claude" className="bg-slate-900 text-white">
-                  {LLM_PROVIDERS.claude.badgeLabel}
+                <option value="claude_sonnet" className="bg-slate-900 text-white">
+                  {LLM_PROVIDERS.claude_sonnet.badgeLabel}
+                </option>
+                <option value="claude_haiku" className="bg-slate-900 text-white">
+                  {LLM_PROVIDERS.claude_haiku.badgeLabel}
                 </option>
               </select>
             </div>
@@ -1196,7 +1199,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               <Sparkles className="w-3.5 h-3.5 fill-current" />
               <span>
                 {selectedLlmProvider === 'local_qwen' ? '🖥️ Run 7B Report (Ollama)' :
-                 selectedLlmProvider === 'gemini_pro' ? '♊ Run Gemini Report' : '🧠 Run Claude Report'}
+                 selectedLlmProvider === 'gemini_pro' ? '♊ Run Gemini Report' :
+                 selectedLlmProvider === 'claude_haiku' ? '📜 Run Claude Haiku (Fable)' : '🧠 Run Claude Sonnet'}
               </span>
             </button>
 

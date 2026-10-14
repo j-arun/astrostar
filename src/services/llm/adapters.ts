@@ -1665,25 +1665,154 @@ ${parsed.part3_microTimingWindow}
 }
 
 /**
- * 3. Anthropic Claude Adapter
+ * Generic Base / Helper function for calling Anthropic Claude via local Vite proxy /api/llm/claude
+ */
+async function callClaudeProxy(
+  context: VedicHouseContext,
+  providerId: LLMProviderId,
+  model: string,
+  modelDisplayName: string,
+  startMs: number
+): Promise<LLMThreePartNarrative> {
+  const prompt = buildVedicPrompt(context, modelDisplayName);
+  const endpoint = '/api/llm/claude';
+  const customKey = context.anthropicApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : null) || '';
+
+  const requestBody = {
+    model,
+    prompt
+  };
+
+  let connectionError: string | undefined;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (customKey && customKey.trim().length > 0) {
+      headers['x-api-key'] = customKey.trim();
+    }
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const fallback = synthesizeAnalyticalVedicNarrative(context, providerId, startMs);
+      const parsed = extractAndParseVedicJson(json.text || '', fallback);
+
+      const rawMarkdown = `### Astrological Reasoning & Micro-Timing Report (${modelDisplayName.toUpperCase()})
+**Target:** ${context.isComprehensiveMonthly || !context.houseNumber ? `Comprehensive Full-Month Synthesis (${MONTH_NAMES[context.selectedMonth]} ${context.selectedYear})` : `House ${context.houseNumber} (${context.rashiName} / ${context.tamilName})`}  
+**Timeline:** Month ${context.selectedMonth + 1}/${context.selectedYear} | **PD Lord:** ${context.activeDasha.pratyantardasha}  
+**Model:** ${json.model || model}  
+
+---
+#### 1. Event Probability & Scope
+${parsed.part1_probabilityAndScope}
+
+#### 2. Financial & Resource Sources
+${parsed.part2_financialAndResources}
+
+#### 3. Micro-Timing Window
+${parsed.part3_microTimingWindow}
+`;
+
+      return {
+        part1_probabilityAndScope: parsed.part1_probabilityAndScope || fallback.part1_probabilityAndScope,
+        part2_financialAndResources: parsed.part2_financialAndResources || fallback.part2_financialAndResources,
+        part3_microTimingWindow: parsed.part3_microTimingWindow || fallback.part3_microTimingWindow,
+        summarySentence: parsed.summarySentence || fallback.summarySentence,
+        overallConfidence: typeof parsed.overallConfidence === 'number' ? parsed.overallConfidence : fallback.overallConfidence,
+        peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
+        natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
+        supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
+        rawMarkdown,
+        providerUsed: providerId,
+        executionTimeMs: Date.now() - startMs,
+        endpointUsed: `Anthropic Claude Cloud API (${json.model || model})`,
+        connectionStatus: 'connected_live',
+        isPrivateLocal: false,
+        promptSent: prompt,
+        rawRequestBody: requestBody,
+        rawResponseBody: json,
+        httpStatus: res.status
+      };
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      let rawErr = errJson.error || `HTTP ${res.status}: ${res.statusText}`;
+      try {
+        const parsed = JSON.parse(rawErr);
+        if (parsed?.error?.message) rawErr = parsed.error.message;
+      } catch {}
+
+      if (rawErr.includes('invalid x-api-key') || rawErr.includes('authentication_error') || rawErr.includes('ANTHROPIC_API_KEY is not configured')) {
+        connectionError = 'Anthropic Claude Error: Missing or Invalid API Key. Please provide ANTHROPIC_API_KEY in your .env file or enter your key in the Claude API Key input field in the top bar.';
+      } else {
+        connectionError = rawErr;
+      }
+    }
+  } catch (err: any) {
+    connectionError = err.message || 'Failed to reach /api/llm/claude proxy';
+  }
+
+  // Graceful fallback to analytical synthesis if cloud API unreachable
+  const fallback = synthesizeAnalyticalVedicNarrative(context, providerId, startMs);
+  return {
+    ...fallback,
+    endpointUsed: `Anthropic Claude API (${model}) via /api/llm/claude`,
+    connectionStatus: 'connection_failed_fallback',
+    connectionError,
+    isPrivateLocal: false,
+    promptSent: prompt,
+    rawRequestBody: requestBody,
+    rawResponseBody: {
+      fallback_reason: connectionError,
+      note: 'Executed deterministic Parashara heuristic engine because Claude API returned an error or is unconfigured.'
+    }
+  };
+}
+
+/**
+ * 3a. Anthropic Claude 3.5 Sonnet Adapter
+ */
+export class ClaudeSonnetAdapter implements ILLMAdapter {
+  id: LLMProviderId = 'claude_sonnet';
+
+  async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
+    const startMs = Date.now();
+    return callClaudeProxy(context, 'claude_sonnet', 'claude-3-5-sonnet-20241022', 'Anthropic Claude 3.5 Sonnet', startMs);
+  }
+}
+
+/**
+ * 3b. Anthropic Claude 3.5 Haiku / Fable Storyteller Adapter
+ */
+export class ClaudeHaikuAdapter implements ILLMAdapter {
+  id: LLMProviderId = 'claude_haiku';
+
+  async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
+    const startMs = Date.now();
+    return callClaudeProxy(context, 'claude_haiku', 'claude-3-5-haiku-20241022', 'Anthropic Claude 3.5 Haiku / Fable', startMs);
+  }
+}
+
+/**
+ * 3c. Backwards-compatible Claude Adapter (defaults to Claude 3.5 Sonnet)
  */
 export class ClaudeAdapter implements ILLMAdapter {
   id: LLMProviderId = 'claude';
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const prompt = buildVedicPrompt(context, 'Anthropic Claude');
-    const narrative = synthesizeAnalyticalVedicNarrative(context, 'claude', startMs);
-    return {
-      ...narrative,
-      promptSent: prompt,
-      endpointUsed: 'Anthropic Claude Engine (Deterministic Parashara Logic)'
-    };
+    return callClaudeProxy(context, 'claude', 'claude-3-5-sonnet-20241022', 'Anthropic Claude 3.5 Sonnet', startMs);
   }
 }
 
 export interface LLMPromptLogPayload {
-  engine: 'Ollama' | 'LMStudio' | 'Gemini' | 'Claude';
+  engine: string;
   model_name?: string;
   fired_at: string;
   prompt_text: string;
@@ -1781,6 +1910,8 @@ export class LLMReasoningService {
   private adapters: Record<LLMProviderId, ILLMAdapter> = {
     local_qwen: new QwenLocalAdapter(),
     gemini_pro: new GeminiStudioAdapter(),
+    claude_sonnet: new ClaudeSonnetAdapter(),
+    claude_haiku: new ClaudeHaikuAdapter(),
     claude: new ClaudeAdapter()
   };
 
@@ -1790,15 +1921,18 @@ export class LLMReasoningService {
     const result = await adapter.generateReasoning(context);
 
     // Map provider to engine name
-    const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
+    const engineMap: Record<LLMProviderId, string> = {
       local_qwen: 'Ollama',
       gemini_pro: 'Gemini',
-      claude: 'Claude'
+      claude_sonnet: 'Claude Sonnet',
+      claude_haiku: 'Claude Haiku',
+      claude: 'Claude Sonnet'
     };
     const engine = (engineMap as any)[providerId] || 'Ollama';
     const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
       providerId === 'gemini_pro' ? 'gemini-3.8-flash' :
-      providerId === 'claude' ? 'claude-3-5-sonnet' :
+      providerId === 'claude_haiku' ? 'claude-3-5-haiku-20241022' :
+      (providerId === 'claude_sonnet' || providerId === 'claude') ? 'claude-3-5-sonnet-20241022' :
       (context.selectedLocalModel || 'qwen2.5:7b-instruct')
     );
 

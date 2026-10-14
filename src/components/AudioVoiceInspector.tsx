@@ -33,7 +33,8 @@ import {
   Maximize2,
   Minimize2,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Key
 } from 'lucide-react';
 import {
   LLMProviderId,
@@ -141,6 +142,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [timeoutSeconds, setTimeoutSeconds] = useState<number>(() => {
     const saved = localStorage.getItem('astro_ollama_timeout_seconds');
     return saved ? parseInt(saved, 10) : 300;
+  });
+
+  const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
   });
 
   const [ollamaPingResult, setOllamaPingResult] = useState<{
@@ -265,7 +270,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         selectedLocalModel: localOllamaModel,
         customPromptOverride: promptToSend,
         enableTimeout,
-        timeoutSeconds
+        timeoutSeconds,
+        anthropicApiKey: anthropicApiKey.trim() || undefined
       });
       setNarrative(result);
       loadDbLogs().catch(() => {});
@@ -294,15 +300,18 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     if (!narrative) return;
     setRetryingInsert(true);
     try {
-      const engineMap: Record<LLMProviderId, 'Ollama' | 'Gemini' | 'Claude'> = {
+      const engineMap: Record<LLMProviderId, string> = {
         local_qwen: 'Ollama',
         gemini_pro: 'Gemini',
-        claude: 'Claude'
+        claude_sonnet: 'Claude Sonnet',
+        claude_haiku: 'Claude Haiku',
+        claude: 'Claude Sonnet'
       };
-      const engine = (engineMap as any)[activeProvider] || 'Ollama';
+      const engine = (engineMap as any)[activeProvider] || 'Claude';
       const modelName = narrative.ollamaStats?.model || (
         activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
-        activeProvider === 'claude' ? 'claude-3-5-sonnet' : localOllamaModel
+        activeProvider === 'claude_haiku' ? 'claude-3-5-haiku-20241022' :
+        (activeProvider === 'claude_sonnet' || activeProvider === 'claude') ? 'claude-3-5-sonnet-20241022' : localOllamaModel
       );
       const res = await persistLLMPromptLog({
         engine,
@@ -616,9 +625,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               Reasoning Engine:
             </span>
             <div className="flex items-center rounded-lg bg-slate-900 border border-slate-700/80 p-0.5">
-              {(Object.keys(LLM_PROVIDERS) as LLMProviderId[]).map(pid => {
+              {(['local_qwen', 'gemini_pro', 'claude_sonnet', 'claude_haiku'] as LLMProviderId[]).map(pid => {
                 const prov = LLM_PROVIDERS[pid];
-                const isActive = activeProvider === pid;
+                const isActive = activeProvider === pid || (pid === 'claude_sonnet' && activeProvider === 'claude');
                 return (
                   <button
                     key={pid}
@@ -711,6 +720,49 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     <option value="600">600s (10m)</option>
                   </select>
                 )}
+              </div>
+            )}
+
+            {/* Claude Model & Key Configurator */}
+            {(activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') && (
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
+                <span className="text-[10px] text-purple-300 font-mono font-bold flex items-center gap-1">
+                  <span>🧠</span>
+                  <span>{activeProvider === 'claude_haiku' ? 'Claude 3.5 Haiku / Fable' : 'Claude 3.5 Sonnet'}</span>
+                </span>
+                <div className="h-3.5 w-px bg-slate-700" />
+                <div className="flex items-center gap-1.5">
+                  <Key className="w-3 h-3 text-amber-400" />
+                  <input
+                    type="password"
+                    value={anthropicApiKey}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setAnthropicApiKey(val);
+                      localStorage.setItem('astro_anthropic_api_key', val);
+                    }}
+                    placeholder="Claude API Key (sk-ant-...)"
+                    className="bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-[10px] font-mono text-amber-200 focus:outline-none w-44 placeholder:text-slate-600"
+                    title="Enter Anthropic API Key (bypasses CORS via /api/llm/claude proxy, stored securely in local browser storage)"
+                  />
+                  {anthropicApiKey ? (
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5" title="API Key provided">
+                      <Check className="w-2.5 h-2.5" /> Key Saved
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-mono" title="If empty, will use ANTHROPIC_API_KEY from .env">
+                      (or .env)
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleGenerate()}
+                    className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition cursor-pointer shadow-sm ml-1"
+                    title="Test Claude live inference with this key"
+                  >
+                    Test Inference
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -810,10 +862,22 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   PRIVATE LLM ADAPTER (Local Fallback Active - Ollama offline)
                 </span>
               )
+            ) : (narrative?.providerUsed === 'claude_sonnet' || narrative?.providerUsed === 'claude_haiku' || narrative?.providerUsed === 'claude') ? (
+              narrative.connectionStatus === 'connected_live' ? (
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-bold">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                  LIVE ANTHROPIC CLAUDE ({narrative.providerUsed === 'claude_haiku' ? 'Haiku/Fable' : 'Sonnet'})
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  CLAUDE PARASHARA FALLBACK ({narrative.providerUsed === 'claude_haiku' ? 'Haiku/Fable' : 'Sonnet'})
+                </span>
+              )
             ) : (
               <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold">
                 <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                Cloud LLM ({LLM_PROVIDERS[activeProvider].name})
+                Cloud LLM ({LLM_PROVIDERS[activeProvider]?.name || 'Gemini'})
               </span>
             )}
 
@@ -1182,7 +1246,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                       <div>
                         <span className="text-slate-500 block">Engine &amp; Model</span>
-                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'} ({narrative.ollamaStats?.model || 'gemini-3.8-flash'})</span>
+                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? 'claude-3-5-sonnet-20241022' : 'qwen2.5:7b-instruct')})</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Time Taken</span>
@@ -1215,7 +1279,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                           </button>
                           <button
                             onClick={() => handleCopy(
-                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'}', '${narrative.ollamaStats?.model || 'gemini-3.8-flash'}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
+                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
                               'manual_sql_insert'
                             )}
                             className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[11px] font-mono flex items-center gap-1 transition cursor-pointer shadow-sm"
@@ -1226,7 +1290,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </div>
                       </div>
                       <pre className="p-2 bg-slate-900 rounded border border-slate-800 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-24 overflow-y-auto select-all">
-                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : 'Claude'}', '${narrative.ollamaStats?.model || 'gemini-3.8-flash'}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
+                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
                       </pre>
                     </div>
 
@@ -1920,10 +1984,17 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             </button>
                             <button
                               type="button"
-                              onClick={() => onChangeProvider('claude')}
+                              onClick={() => onChangeProvider('claude_sonnet')}
                               className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
                             >
-                              <span>🧠 Switch to Claude</span>
+                              <span>🧠 Switch to Claude Sonnet</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onChangeProvider('claude_haiku')}
+                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1 shadow transition cursor-pointer"
+                            >
+                              <span>📜 Switch to Claude Haiku / Fable</span>
                             </button>
                           </div>
                         </div>
@@ -1956,8 +2027,56 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </p>
                       </div>
                     </div>
+                  ) : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude_haiku' || narrative.providerUsed === 'claude') ? (
+                    /* 4. ANTHROPIC CLAUDE MISSING KEY OR QUOTA CARD */
+                    <div className="p-4 rounded-xl bg-purple-950/30 border border-purple-500/40 text-purple-200 text-xs space-y-2.5 shadow-md animate-fadeIn">
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                              <span>🧠 Anthropic Claude ({narrative.providerUsed === 'claude_haiku' ? 'Claude 3.5 Haiku / Fable' : 'Claude 3.5 Sonnet'})</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                                {narrative.connectionError?.includes('Credit balance') ? 'CREDITS NEEDED' : 'KEY REQUIRED'}
+                              </span>
+                            </span>
+                          </div>
+                          <p className="text-slate-300 text-xs leading-relaxed">
+                            {narrative.connectionError}
+                          </p>
+                          <div className="p-3 rounded-lg bg-slate-900/90 border border-purple-500/30 text-[11px] text-slate-300 space-y-2">
+                            <p className="font-bold text-purple-300">💡 How to test live Claude reasoning:</p>
+                            <ol className="list-decimal list-inside space-y-1 text-slate-300/90 pl-1">
+                              <li>Get an API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-amber-400 underline hover:text-white inline-flex items-center gap-0.5">console.anthropic.com/settings/keys <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
+                              <li>Enter it below or in your local <code className="text-slate-200">.env</code> as <code className="text-amber-300 bg-slate-950 px-1 py-0.5 rounded font-mono">ANTHROPIC_API_KEY="sk-ant-..."</code>.</li>
+                              <li>The app proxies requests through <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded font-mono">/api/llm/claude</code> to bypass browser CORS rules.</li>
+                            </ol>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <input
+                                type="password"
+                                value={anthropicApiKey}
+                                onChange={(e) => {
+                                  const val = e.target.value.trim();
+                                  setAnthropicApiKey(val);
+                                  localStorage.setItem('astro_anthropic_api_key', val);
+                                }}
+                                placeholder="Paste your Claude API Key (sk-ant-...)"
+                                className="bg-slate-950 border border-purple-500/50 rounded px-2.5 py-1 text-xs font-mono text-amber-200 focus:outline-none w-72 placeholder:text-slate-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleGenerate()}
+                                className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition cursor-pointer shadow"
+                              >
+                                Save Key &amp; Test Live
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    /* 4. GENERAL CONNECTION FALLBACK NOTICE */
+                    /* 5. GENERAL CONNECTION FALLBACK NOTICE */
                     <div className="p-3 rounded-xl bg-slate-900 border border-slate-700/80 text-slate-300 text-xs flex items-start gap-2.5 shadow-sm">
                       <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">

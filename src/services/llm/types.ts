@@ -2,7 +2,7 @@
  * Types & Interfaces for Astro Engine Multi-LLM Reasoning System (Milestone M4)
  */
 
-export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude';
+export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude';
 
 export interface LLMProviderConfig {
   id: LLMProviderId;
@@ -27,14 +27,32 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
     name: 'Google Gemini Pro',
     badgeLabel: '♊ Google Gemini Pro (gemini-3.1-pro)',
     model: 'gemini-3.1-pro-preview',
-    description: 'Google DeepMind flagship multimodal reasoning model with deep Vedic synthesis capabilities.'
+    description: 'Google DeepMind flagship multimodal reasoning model with deep Vedic synthesis capabilities.',
+    endpoint: '/api/llm/gemini'
+  },
+  claude_sonnet: {
+    id: 'claude_sonnet',
+    name: 'Anthropic Claude 3.5 Sonnet',
+    badgeLabel: '🧠 Claude 3.5 Sonnet (Anthropic)',
+    model: 'claude-3-5-sonnet-20241022',
+    description: 'Anthropic flagship reasoning model for nuanced astrological timing breakdowns and precision analysis.',
+    endpoint: '/api/llm/claude'
+  },
+  claude_haiku: {
+    id: 'claude_haiku',
+    name: 'Anthropic Claude 3.5 Haiku / Fable',
+    badgeLabel: '📜 Claude 3.5 Haiku / Fable (Anthropic)',
+    model: 'claude-3-5-haiku-20241022',
+    description: 'Anthropic high-speed narrative model for lyrical, mythic, and expressive Vedic storytelling.',
+    endpoint: '/api/llm/claude'
   },
   claude: {
     id: 'claude',
-    name: 'Anthropic Claude',
-    badgeLabel: '🧠 Anthropic Claude (claude-3-5-sonnet)',
+    name: 'Anthropic Claude 3.5 Sonnet',
+    badgeLabel: '🧠 Claude 3.5 Sonnet (Anthropic)',
     model: 'claude-3-5-sonnet-20241022',
-    description: 'Anthropic state-of-the-art reasoning model for nuanced astrological timing breakdowns.'
+    description: 'Anthropic state-of-the-art reasoning model for nuanced astrological timing breakdowns.',
+    endpoint: '/api/llm/claude'
   }
 };
 
@@ -196,6 +214,7 @@ export interface VedicHouseContext {
     significations: string;
     outletImpact: string;
   };
+  anthropicApiKey?: string;
 }
 
 export interface EmploymentStatusInference {

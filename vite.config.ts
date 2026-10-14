@@ -654,11 +654,112 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
   };
 }
 
+function claudeApiPlugin(env: Record<string, string>): Plugin {
+  return {
+    name: 'claude-api-plugin',
+    configureServer(server) {
+      server.middlewares.use('/api/llm/claude', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const { prompt, model: requestedModel } = JSON.parse(body || '{}');
+
+            // Header x-api-key sent by client UI, or server environment variables
+            const customHeaderKey = req.headers['x-api-key'] as string | undefined;
+            const rawKey = (
+              customHeaderKey ||
+              env.ANTHROPIC_API_KEY ||
+              process.env.ANTHROPIC_API_KEY ||
+              env.CLAUDE_API_KEY ||
+              process.env.CLAUDE_API_KEY ||
+              ''
+            ).trim();
+
+            const isPlaceholder = !rawKey || rawKey === 'MY_ANTHROPIC_API_KEY' || rawKey.includes('placeholder') || rawKey.includes('your_api_key');
+
+            if (isPlaceholder) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({
+                error: 'ANTHROPIC_API_KEY is not configured. Please set ANTHROPIC_API_KEY="sk-ant-..." in your .env file or enter your key in the UI Claude API Key field. (Get a key at https://console.anthropic.com).'
+              }));
+              return;
+            }
+
+            const model = requestedModel || 'claude-3-5-sonnet-20241022';
+
+            // Server-to-server call to Anthropic Messages API (completely overcomes CORS!)
+            const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': rawKey,
+                'anthropic-version': '2023-06-01'
+              },
+              body: JSON.stringify({
+                model,
+                max_tokens: 4096,
+                temperature: 0.25,
+                messages: [
+                  {
+                    role: 'user',
+                    content: prompt
+                  }
+                ]
+              })
+            });
+
+            const data: any = await anthropicResponse.json();
+
+            if (!anthropicResponse.ok) {
+              res.statusCode = anthropicResponse.status;
+              res.setHeader('Content-Type', 'application/json');
+              let errMsg = data?.error?.message || `Anthropic HTTP Error ${anthropicResponse.status}`;
+              if (errMsg.includes('credit balance is too low') || errMsg.includes('insufficient_quota')) {
+                errMsg = 'Anthropic Claude Error: Credit balance is too low. Please top up credits at https://console.anthropic.com/settings/plans.';
+              } else if (errMsg.includes('invalid x-api-key') || errMsg.includes('authentication_error')) {
+                errMsg = 'Anthropic Claude Error: Invalid API key (401). Please verify your ANTHROPIC_API_KEY at https://console.anthropic.com/settings/keys.';
+              }
+              res.end(JSON.stringify({ error: errMsg }));
+              return;
+            }
+
+            const text = data.content
+              ?.filter((c: any) => c.type === 'text')
+              ?.map((c: any) => c.text)
+              ?.join('\n') || '';
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              text,
+              model: data.model || model,
+              usage: data.usage
+            }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: err.message || 'Claude Generation Proxy Failed' }));
+          }
+        });
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react(), tailwindcss(), geminiApiPlugin(env), astroApiPlugin()],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

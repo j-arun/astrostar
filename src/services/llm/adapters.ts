@@ -1694,7 +1694,7 @@ async function callClaudeProxy(
     prompt,
     apiKey: customKey ? customKey.trim() : undefined,
     thinkingMode,
-    maxTokens: thinkingMode === 'enabled' ? 12000 : 8192
+    maxTokens: 16000
   };
 
   let connectionError: string | undefined;

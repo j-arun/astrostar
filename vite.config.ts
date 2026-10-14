@@ -703,149 +703,78 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               primaryModel = 'claude-haiku-5-5';
             }
 
-            // Build smart fallback cascade list based on requested model family
-            const candidates: string[] = [];
-            const addCandidate = (m: string) => { if (m && !candidates.includes(m)) candidates.push(m); };
+            // Effective token limit: Claude Sonnet 5.5 needs up to 16,000 tokens for comprehensive Vedic JSON synthesis
+            const effectiveMaxTokens = Math.max(maxTokens || 16000, 16000);
 
-            addCandidate(primaryModel);
-            if (primaryModel.includes('sonnet') || primaryModel.includes('5-5') || primaryModel === 'claude') {
-              addCandidate('claude-sonnet-5-5');
-              addCandidate('claude-5-5-sonnet');
-              addCandidate('claude-3-5-sonnet-latest');
-              addCandidate('claude-3-7-sonnet-latest');
-              addCandidate('claude-3-5-sonnet-20241022');
-              addCandidate('claude-haiku-5-5');
-              addCandidate('claude-3-5-haiku-latest');
-              addCandidate('claude-3-haiku-20240307');
-            } else if (primaryModel.includes('haiku') || primaryModel.includes('iq') || primaryModel.includes('fable')) {
-              addCandidate('claude-haiku-5-5');
-              addCandidate('claude-5-5-haiku');
-              addCandidate('claude-3-5-haiku-latest');
-              addCandidate('claude-3-haiku-20240307');
-              addCandidate('claude-sonnet-5-5');
-            } else {
-              addCandidate('claude-sonnet-5-5');
-              addCandidate('claude-haiku-5-5');
-              addCandidate('claude-3-5-sonnet-latest');
-            }
-
-            let successfulData: any = null;
-            let finalModelUsed = primaryModel;
-            let lastStatus = 500;
-            let lastErrMsg = '';
-            const attemptedModels: string[] = [];
-
-            // Effective token limit: Claude Sonnet 5.5 can use up to 8192-16384 tokens
-            const effectiveMaxTokens = maxTokens || 8192;
-
-            // Attempt candidate models in sequence
-            for (const candidate of candidates) {
-              attemptedModels.push(candidate);
-              try {
-                const payload: any = {
-                  model: candidate,
-                  max_tokens: effectiveMaxTokens,
-                  messages: [
-                    {
-                      role: 'user',
-                      content: prompt
-                    }
-                  ]
-                };
-
-                // If user explicitly asks for thinking, enable it with budget
-                if (thinkingMode === 'enabled') {
-                  payload.thinking = { type: 'enabled', budget_tokens: budgetTokens || 2048 };
-                  payload.max_tokens = Math.max(effectiveMaxTokens, (payload.thinking.budget_tokens || 2048) + 4096);
-                } else if (thinkingMode === 'disabled') {
-                  // Explicitly disable thinking to ensure 100% of tokens are devoted to direct response text
-                  payload.thinking = { type: 'disabled' };
+            const payload: any = {
+              model: primaryModel,
+              max_tokens: effectiveMaxTokens,
+              messages: [
+                {
+                  role: 'user',
+                  content: prompt
                 }
+              ]
+            };
 
-                let anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': rawKey,
-                    'anthropic-version': '2023-06-01'
-                  },
-                  body: JSON.stringify(payload)
-                });
-
-                let data: any = await anthropicResponse.json();
-
-                // If thinking: { type: 'disabled' } returned a 400 (e.g. model rejects the thinking parameter), retry without thinking field
-                if (!anthropicResponse.ok && anthropicResponse.status === 400 && payload.thinking && JSON.stringify(data).includes('thinking')) {
-                  delete payload.thinking;
-                  payload.max_tokens = Math.max(effectiveMaxTokens, 8192);
-                  anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'x-api-key': rawKey,
-                      'anthropic-version': '2023-06-01'
-                    },
-                    body: JSON.stringify(payload)
-                  });
-                  data = await anthropicResponse.json();
-                }
-
-                if (anthropicResponse.ok) {
-                  successfulData = data;
-                  finalModelUsed = data.model || candidate;
-                  break;
-                }
-
-                lastStatus = anthropicResponse.status;
-                const errMessage = data?.error?.message || `HTTP ${anthropicResponse.status}`;
-
-                // If authentication error or invalid API key, no point in trying other models
-                if (anthropicResponse.status === 401 || errMessage.includes('invalid x-api-key') || errMessage.includes('authentication_error')) {
-                  lastErrMsg = 'Anthropic Claude Error: Invalid API key (401). Please verify your ANTHROPIC_API_KEY at https://console.anthropic.com/settings/keys.';
-                  break;
-                }
-
-                // If credit exhaustion, stop early with friendly message
-                if (errMessage.includes('credit balance is too low') || errMessage.includes('insufficient_quota')) {
-                  lastErrMsg = 'Anthropic Claude Error: Credit balance is too low. Please top up credits at https://console.anthropic.com/settings/plans.';
-                  break;
-                }
-
-                // If not found (404) or model-specific error, try next candidate
-                if (anthropicResponse.status === 404 || errMessage.includes('model:') || data?.error?.type === 'not_found_error') {
-                  lastErrMsg = `Model '${candidate}' not found or inaccessible for this API key tier (${errMessage}).`;
-                  continue;
-                }
-
-                lastErrMsg = errMessage;
-              } catch (subErr: any) {
-                lastErrMsg = subErr.message || 'Network fetch to Anthropic failed';
+            // Configure thinking parameter based on requested mode
+            if (thinkingMode === 'disabled') {
+              // Explicitly disable adaptive thinking so 100% of tokens go to direct text response
+              payload.thinking = { type: 'disabled' };
+            } else if (thinkingMode === 'enabled') {
+              if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5')) {
+                // Sonnet 5.5 / 5 uses output_config effort or adaptive thinking without budget_tokens
+                payload.output_config = { effort: 'medium' };
+              } else {
+                payload.thinking = { type: 'enabled', budget_tokens: budgetTokens || 2048 };
               }
             }
+            // If thinkingMode is 'auto', no thinking field is passed, allowing Anthropic default adaptive behavior
 
-            if (!successfulData) {
-              res.statusCode = lastStatus;
+            // 1. Log outgoing payload right before fetch (as requested)
+            console.log("SENT:", JSON.stringify({ ...payload, messages: "[omitted]" }));
+
+            const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': rawKey,
+                'anthropic-version': '2023-06-01'
+              },
+              body: JSON.stringify(payload)
+            });
+
+            const data: any = await anthropicResponse.json();
+
+            console.log("ANTHROPIC STATUS:", anthropicResponse.status);
+
+            // 2. No silent retry-without-field logic: if Anthropic rejects, log exact error and return to caller
+            if (!anthropicResponse.ok) {
+              console.error("ANTHROPIC ERROR RESPONSE:", JSON.stringify(data));
+              res.statusCode = anthropicResponse.status;
               res.setHeader('Content-Type', 'application/json');
-              const detailedError = lastErrMsg.includes('not found or inaccessible')
-                ? `Anthropic Claude Error: Model '${primaryModel}' is not provisioned or active for this API key account tier. Attempted models: [${attemptedModels.join(', ')}]. Root message: ${lastErrMsg}. Please verify plan tier at https://console.anthropic.com/settings/plans or test with Claude 3 Haiku.`
-                : lastErrMsg || `Anthropic Request Failed (HTTP ${lastStatus})`;
-              res.end(JSON.stringify({ error: detailedError, attemptedModels }));
+              const errMessage = data?.error?.message || `HTTP ${anthropicResponse.status}: ${JSON.stringify(data)}`;
+              res.end(JSON.stringify({
+                error: `Anthropic Claude Error: ${errMessage}`,
+                model: primaryModel,
+                raw: data
+              }));
               return;
             }
 
-            let text = successfulData.content
+            console.log("ANTHROPIC SUCCESS:", "Model:", data.model, "Usage:", JSON.stringify(data.usage));
+
+            let text = data.content
               ?.filter((c: any) => c.type === 'text')
               ?.map((c: any) => c.text)
               ?.join('\n') || '';
 
-            const thinkingText = successfulData.content
+            const thinkingText = data.content
               ?.filter((c: any) => c.type === 'thinking')
               ?.map((c: any) => c.thinking)
               ?.join('\n') || '';
 
-            // CRITICAL FIX: If text block is empty because the model spent its token budget in thinking,
-            // or if the model placed its analytical output in the thinking/scratchpad block,
-            // fallback to thinkingText so the user never gets an empty string ("")!
+            // Fallback to thinkingText if model placed reasoning in thinking block and text was empty
             if (!text.trim() && thinkingText.trim()) {
               text = thinkingText;
             }
@@ -855,11 +784,11 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             res.end(JSON.stringify({
               text,
               thinking: thinkingText,
-              model: finalModelUsed,
+              model: data.model || primaryModel,
               requestedModel: primaryModel,
-              attemptedModels,
-              stop_reason: successfulData.stop_reason,
-              usage: successfulData.usage
+              attemptedModels: [primaryModel],
+              stop_reason: data.stop_reason,
+              usage: data.usage
             }));
           } catch (err: any) {
             res.statusCode = 500;

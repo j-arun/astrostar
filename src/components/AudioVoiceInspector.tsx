@@ -28,6 +28,8 @@ import {
   ChevronUp,
   Cpu,
   FileText,
+  Globe,
+  FileCode,
   Layers,
   Database,
   Maximize2,
@@ -43,7 +45,12 @@ import {
   LLMThreePartNarrative
 } from '../services/llm/types';
 import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog } from '../services/llm/adapters';
-import { generateVedicPdfReport } from '../services/pdfReportGenerator';
+import {
+  generateVedicPdfReport,
+  generateVedicHtmlReport,
+  generateVedicWordReport,
+  exportAllVedicReports
+} from '../services/reportExportService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -507,6 +514,33 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     }
   };
 
+  const handleDownloadHtml = () => {
+    if (!narrative || !context) return;
+    try {
+      generateVedicHtmlReport(context, narrative);
+    } catch (err) {
+      console.error('HTML export error:', err);
+    }
+  };
+
+  const handleDownloadWord = () => {
+    if (!narrative || !context) return;
+    try {
+      generateVedicWordReport(context, narrative);
+    } catch (err) {
+      console.error('Word export error:', err);
+    }
+  };
+
+  const handleDownloadAll = () => {
+    if (!narrative || !context) return;
+    try {
+      exportAllVedicReports(context, narrative);
+    } catch (err) {
+      console.error('Batch export error:', err);
+    }
+  };
+
   const handleDownloadReport = () => {
     if (!narrative || !context) return;
     const blob = new Blob([JSON.stringify({ context, narrative }, null, 2)], {
@@ -594,15 +628,38 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadPdf}
-              disabled={isGenerating || !narrative || isExportingPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow disabled:opacity-40 cursor-pointer"
-              title="Download Astrological Predictions Report (PDF) - prompt excluded, all 5-domain predictions included"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download Predictions PDF'}</span>
-            </button>
+            {/* Multi-Format Export Group: PDF, HTML, Word */}
+            <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 shadow-sm">
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isGenerating || !narrative || isExportingPdf}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow disabled:opacity-40 cursor-pointer"
+                title="Download Astrological Predictions Report as PDF"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>{isExportingPdf ? 'Exporting...' : 'PDF'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadHtml}
+                disabled={isGenerating || !narrative}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white font-bold transition text-xs disabled:opacity-40 cursor-pointer"
+                title="Download Standalone Printable HTML Report"
+              >
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>HTML</span>
+              </button>
+
+              <button
+                onClick={handleDownloadWord}
+                disabled={isGenerating || !narrative}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white font-bold transition text-xs disabled:opacity-40 cursor-pointer"
+                title="Download Editable Word Document (.doc)"
+              >
+                <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Word</span>
+              </button>
+            </div>
 
             <button
               onClick={() => setIsFullScreen(!isFullScreen)}
@@ -2628,27 +2685,59 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                 </div>
               )}
 
-              {/* PDF EXPORT BANNER */}
-              <div className="p-3 bg-slate-950/80 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+              {/* MULTI-FORMAT EXPORT DOSSIER BANNER: PDF, HTML & WORD */}
+              <div className="p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
                 <div className="flex items-center gap-2.5 text-slate-300">
                   <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
                     <FileText className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="font-bold text-amber-300 text-xs">Download 3-Page Astrological Inference & Prompt Audit Report (PDF)</span>
+                    <span className="font-bold text-amber-300 text-xs">Download Full Astrological Predictions Dossier</span>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Standardized 3-Page Dossier: <strong>Page 1 = Exact Dispatched Prompt</strong> (audit Gemini vs Claude prompt stream), <strong>Pages 2 &amp; 3 = Complete Model Synthesis &amp; 5-Domain Karakatwa Response</strong>.
+                      Complete report with all 5 life domains, Dasha triad, planetary alignment, dual natal/transit evaluation, and Parashara synthesis. Available in PDF, HTML, and Word formats.
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleDownloadPdf}
-                  disabled={!narrative || isExportingPdf}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold transition text-xs shadow-md disabled:opacity-40 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{isExportingPdf ? 'Generating PDF...' : 'Download Predictions PDF Report'}</span>
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={!narrative || isExportingPdf}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold transition text-xs shadow-md disabled:opacity-40 cursor-pointer"
+                    title="Download Clean PDF Dossier"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{isExportingPdf ? 'Exporting...' : 'PDF'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadHtml}
+                    disabled={!narrative}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 font-bold transition text-xs shadow cursor-pointer disabled:opacity-40"
+                    title="Download Standalone Printable HTML Report"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>HTML</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadWord}
+                    disabled={!narrative}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/40 font-bold transition text-xs shadow cursor-pointer disabled:opacity-40"
+                    title="Download Editable Word Document (.doc)"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Word (.doc)</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadAll}
+                    disabled={!narrative}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold transition text-xs cursor-pointer disabled:opacity-40"
+                    title="Download all 3 formats (PDF + HTML + Word) in one click"
+                  >
+                    <span>All 3</span>
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -2689,15 +2778,35 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
             <span>Latency: {narrative?.executionTimeMs || 0}ms</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleDownloadPdf}
               disabled={!narrative || isExportingPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-50 shadow cursor-pointer"
-              title="Download Astrological Predictions Report (PDF) - prompt excluded, all 5-domain predictions included"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-50 shadow cursor-pointer text-xs"
+              title="Download Astrological Predictions Report as PDF"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Exporting...' : 'Download Predictions PDF'}</span>
+              <span>{isExportingPdf ? 'Exporting...' : 'PDF'}</span>
+            </button>
+
+            <button
+              onClick={handleDownloadHtml}
+              disabled={!narrative}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 font-bold transition disabled:opacity-50 shadow cursor-pointer text-xs"
+              title="Download Printable HTML Version"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>HTML</span>
+            </button>
+
+            <button
+              onClick={handleDownloadWord}
+              disabled={!narrative}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold transition disabled:opacity-50 shadow cursor-pointer text-xs"
+              title="Download Editable Word Document (.doc)"
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Word</span>
             </button>
 
             <button

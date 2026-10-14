@@ -279,7 +279,54 @@ export function generateVedicPdfReport(
   doc.setFontSize(6.5);
   doc.text(`Active: ${narrative.peakDateRange || 'Entire Month'}`, margin + 6.5 + dColW * 2, currentY + 13.2);
 
-  currentY += dCardH + 5;
+  currentY += dCardH + 4;
+
+  // Planetary Grahas Strip (Natal & Transit)
+  if ((context.natalOccupants && context.natalOccupants.length > 0) || (context.transitOccupants && context.transitOccupants.length > 0)) {
+    const halfW = (contentWidth - 4) / 2;
+    const natalText = context.natalOccupants && context.natalOccupants.length > 0
+      ? context.natalOccupants.map(o => `${o.body_name.split(' ')[0]}${o.degree_sputa ? ` (${o.degree_sputa})` : ''}`).join(', ')
+      : 'Empty / Unoccupied';
+    const transitText = context.transitOccupants && context.transitOccupants.length > 0
+      ? context.transitOccupants.map(t => `${t.graha_key}${t.degree_sputa ? ` (${t.degree_sputa})` : ''}${t.is_retrograde ? ' [R]' : ''}`).join(', ')
+      : 'Governed via Drishti';
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    const nLines = doc.splitTextToSize(natalText, halfW - 6);
+    const tLines = doc.splitTextToSize(transitText, halfW - 6);
+    const grahaBoxH = Math.max(12, Math.max(nLines.length, tLines.length) * 3.4 + 6.5);
+
+    ensureSpace(grahaBoxH + 3);
+
+    // Natal Grahas Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, currentY, halfW, grahaBoxH, 1, 1, 'FD');
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.text('NATAL GRAHAS (BIRTH GRID)', margin + 3, currentY + 4);
+    doc.setTextColor(51, 65, 85);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.text(nLines, margin + 3, currentY + 7.8);
+
+    // Transit Grahas Box
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(margin + halfW + 4, currentY, halfW, grahaBoxH, 1, 1, 'FD');
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.text('TRANSIT GRAHAS (GOCHARA EPHEMERIS)', margin + halfW + 7, currentY + 4);
+    doc.setTextColor(51, 65, 85);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.text(tLines, margin + halfW + 7, currentY + 7.8);
+
+    currentY += grahaBoxH + 4;
+  }
 
   // ========================================================================
   // SECTION 2: BOTTOM-LINE SYNTHESIS & NATAL PROMISE EVALUATION

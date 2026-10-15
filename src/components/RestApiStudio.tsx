@@ -368,7 +368,7 @@ print(prompt_markdown[:400])
 
 # Ready to pass to Google Gemini or Anthropic Claude:
 # gemini_response = client.models.generate_content(
-#     model="gemini-2.5-flash",
+#     model="gemini-3.8-flash",
 #     contents=[f"Astrological Data:\\n{prompt_markdown}\\n\\nTask: Analyze career & financial triggers between 2005 and 2010."]
 # )
 `;

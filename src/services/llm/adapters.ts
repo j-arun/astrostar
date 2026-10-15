@@ -3,6 +3,7 @@
  * Implements QwenLocalAdapter, GeminiStudioAdapter, and ClaudeAdapter
  */
 import { GoogleGenAI } from '@google/genai';
+import { GEMINI_PRIMARY_MODEL, getPreferredGeminiModel } from './geminiModels';
 import {
   LLMProviderId,
   VedicHouseContext,
@@ -1606,8 +1607,7 @@ export class GeminiStudioAdapter implements ILLMAdapter {
 
     const geminiModel = (
       (context as any).geminiModel ||
-      (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') ||
-      'gemini-2.5-flash'
+      getPreferredGeminiModel()
     ).trim();
 
     const requestBody: any = {
@@ -2029,7 +2029,7 @@ export class LLMReasoningService {
     };
     const engine = (engineMap as any)[providerId] || 'Ollama';
     const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
-      providerId === 'gemini_pro' ? (context.geminiModel || 'gemini-2.5-flash') :
+      providerId === 'gemini_pro' ? (context.geminiModel || GEMINI_PRIMARY_MODEL) :
       providerId === 'claude_haiku' ? (context.anthropicModel || 'claude-haiku-5-5') :
       (providerId === 'claude_sonnet' || providerId === 'claude') ? (context.anthropicModel || 'claude-sonnet-5-5') :
       (context.selectedLocalModel || 'qwen2.5:7b-instruct')

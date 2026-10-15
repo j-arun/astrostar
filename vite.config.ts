@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import pg from 'pg';
 import { defineConfig, loadEnv, Plugin } from 'vite';
+import { GEMINI_FALLBACK_MODEL, GEMINI_PRIMARY_MODEL } from './src/services/llm/geminiModels.ts';
 
 function astroApiPlugin(): Plugin {
   return {
@@ -608,7 +609,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
 
             const { GoogleGenAI } = await import('@google/genai');
             const ai = new GoogleGenAI({ apiKey: rawKey });
-            const targetModel = requestedModel || 'gemini-2.5-flash';
+            const targetModel = requestedModel || GEMINI_PRIMARY_MODEL;
 
             // If this is a lightweight test ping to verify key health
             if (isTestPing || prompt === 'ping' || prompt === 'hi') {
@@ -659,17 +660,23 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                   responseMimeType: 'application/json'
                 }
               });
-            } catch (e: any) {
-              // Fallback to gemini-2.5-flash or gemini-1.5-flash if requestedModel encountered an issue
-              usedModel = targetModel === 'gemini-2.5-pro' ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
-              response = await ai.models.generateContent({
-                model: usedModel,
-                contents: prompt,
-                config: {
-                  temperature: 0.2,
-                  responseMimeType: 'application/json'
-                }
-              });
+            } catch (primaryError: any) {
+              usedModel = GEMINI_FALLBACK_MODEL;
+              try {
+                response = await ai.models.generateContent({
+                  model: usedModel,
+                  contents: prompt,
+                  config: {
+                    temperature: 0.2,
+                    responseMimeType: 'application/json'
+                  }
+                });
+              } catch (fallbackError: any) {
+                throw new Error(
+                  `Primary model '${targetModel}' failed: ${primaryError.message}. ` +
+                  `Fallback model '${usedModel}' failed: ${fallbackError.message}`
+                );
+              }
             }
 
             res.statusCode = 200;

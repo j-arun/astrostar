@@ -3,6 +3,7 @@
  * Allows users to test their Gemini, Claude, or Ollama connections directly
  * with lightweight pings before running full Vedic synthesis reports.
  */
+import { getPreferredGeminiModel } from './llm/geminiModels';
 
 export interface KeyTestResult {
   isChecking: boolean;
@@ -15,7 +16,7 @@ export interface KeyTestResult {
 
 export async function testGeminiConnection(apiKey?: string, model?: string): Promise<KeyTestResult> {
   const keyToUse = (apiKey || localStorage.getItem('astro_gemini_api_key') || '').trim();
-  const modelToUse = (model || localStorage.getItem('astro_gemini_model') || 'gemini-2.5-flash').trim();
+  const modelToUse = (model || getPreferredGeminiModel()).trim();
   try {
     const res = await fetch('/api/llm/gemini', {
       method: 'POST',

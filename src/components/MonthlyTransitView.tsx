@@ -31,6 +31,7 @@ import {
   Key
 } from 'lucide-react';
 import { testGeminiConnection } from '../services/apiHealthService';
+import { getPreferredGeminiModel } from '../services/llm/geminiModels';
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import { ingestedPersonsRegistry, ALL_DASHA_TIMELINE } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
@@ -972,7 +973,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, undefined, flattenedD1)
       ],
       geminiApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || undefined,
-      geminiModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') || 'gemini-2.5-flash',
+      geminiModel: getPreferredGeminiModel(),
       anthropicApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined,
       anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5'
     };

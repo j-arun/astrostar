@@ -1,6 +1,7 @@
 /**
  * Types & Interfaces for Astro Engine Multi-LLM Reasoning System (Milestone M4)
  */
+import { GEMINI_PRIMARY_MODEL } from './geminiModels';
 
 export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude';
 
@@ -25,8 +26,8 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   gemini_pro: {
     id: 'gemini_pro',
     name: 'Google Gemini Pro',
-    badgeLabel: '♊ Google Gemini (gemini-2.5-flash / pro)',
-    model: 'gemini-2.5-flash',
+    badgeLabel: `♊ Google Gemini (${GEMINI_PRIMARY_MODEL})`,
+    model: GEMINI_PRIMARY_MODEL,
     description: 'Google DeepMind flagship multimodal reasoning model with deep Vedic synthesis capabilities.',
     endpoint: '/api/llm/gemini'
   },

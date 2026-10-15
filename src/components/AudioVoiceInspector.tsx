@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GEMINI_FALLBACK_MODEL, GEMINI_PRIMARY_MODEL, getPreferredGeminiModel } from '../services/llm/geminiModels';
 import {
   Volume2,
   VolumeX,
@@ -185,7 +186,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
   });
   const [geminiModel, setGeminiModel] = useState<string>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') || 'gemini-2.5-flash';
+    return getPreferredGeminiModel();
   });
   const [showKeySettings, setShowKeySettings] = useState<boolean>(false);
   const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
@@ -900,10 +901,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   className="bg-slate-950 border border-cyan-500/40 rounded px-1.5 py-0.5 text-[10px] font-mono text-cyan-200 focus:outline-none cursor-pointer"
                   title="Select Google Gemini Model"
                 >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default &amp; Recommended)</option>
+                  <option value={GEMINI_PRIMARY_MODEL}>Gemini 3.8 Flash (Default &amp; Recommended)</option>
+                  <option value={GEMINI_FALLBACK_MODEL}>Gemini 3.1 Flash Lite (Fallback)</option>
                   <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Reasoning)</option>
                   <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fastest)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy)</option>
                 </select>
                 <div className="h-3.5 w-px bg-slate-700" />
                 <div className="flex items-center gap-1.5">

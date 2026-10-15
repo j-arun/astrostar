@@ -27,8 +27,10 @@ import {
   GripVertical,
   Move,
   Download,
-  AlertCircle
+  AlertCircle,
+  Key
 } from 'lucide-react';
+import { testGeminiConnection } from '../services/apiHealthService';
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import { ingestedPersonsRegistry, ALL_DASHA_TIMELINE } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
@@ -550,6 +552,32 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [selectedLlmProvider, setSelectedLlmProvider] = useState<LLMProviderId>('local_qwen');
   const [inspectorHouseContext, setInspectorHouseContext] = useState<VedicHouseContext | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
+  const [reportAutoRunTimestamp, setReportAutoRunTimestamp] = useState<number | undefined>(undefined);
+
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
+  });
+  const [isTestingGemini, setIsTestingGemini] = useState<boolean>(false);
+  const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestGeminiInHeader = async () => {
+    setIsTestingGemini(true);
+    setGeminiTestFeedback(null);
+    try {
+      const res = await testGeminiConnection(geminiKeyInput);
+      setGeminiTestFeedback({
+        success: !!res.success,
+        message: res.success ? 'Active & Connected' : (res.error ? (res.error.includes('401') ? '401 Service Account Deleted/Disabled' : res.error.slice(0, 35) + '...') : 'Failed')
+      });
+    } catch (e: any) {
+      setGeminiTestFeedback({
+        success: false,
+        message: 'Ping Failed'
+      });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
 
   // Compute Moon (Chandra) 2.25-day sign progression across the selected month
   const monthlyMoonSpans = useMemo(() => {
@@ -813,7 +841,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     setIsInspectorOpen(true);
   };
 
-  const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId) => {
+  const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId, autoRun: boolean = true) => {
     if (overrideProvider) {
       setSelectedLlmProvider(overrideProvider);
     }
@@ -942,18 +970,25 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         generateDashaLordDossier('Mahadasha (MD)', activeDashaHierarchy.mahadasha, natalLagnaIdx, undefined, flattenedD1),
         generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, undefined, flattenedD1),
         generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, undefined, flattenedD1)
-      ]
+      ],
+      geminiApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || undefined,
+      geminiModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_model') : '') || 'gemini-2.5-flash',
+      anthropicApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined,
+      anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5'
     };
 
     setInspectorHouseContext(ctx);
     setViewMode('report');
     setIsInspectorOpen(false);
+    if (autoRun) {
+      setReportAutoRunTimestamp(Date.now());
+    }
   };
 
-  // Auto-build report context if user entered in report mode
+  // Auto-build report context if user entered in report mode (do NOT auto-run on initial passive tab toggle)
   useEffect(() => {
     if (viewMode === 'report' && !inspectorHouseContext) {
-      handleOpenMonthlyReport();
+      handleOpenMonthlyReport(undefined, false);
     }
   }, [viewMode, inspectorHouseContext]);
 
@@ -1189,9 +1224,50 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               </select>
             </div>
 
+            {/* Quick Gemini Key Bar when Gemini Pro is selected */}
+            {selectedLlmProvider === 'gemini_pro' && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-purple-500/40 text-[11px] shadow-inner">
+                <Key className="w-3 h-3 text-amber-400" />
+                <input
+                  type="password"
+                  value={geminiKeyInput}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setGeminiKeyInput(val);
+                    localStorage.setItem('astro_gemini_api_key', val);
+                  }}
+                  placeholder="Paste Gemini API Key..."
+                  className="bg-transparent text-amber-200 w-32 focus:outline-none font-mono text-[10px] placeholder:text-slate-600"
+                  title="Enter your Google Gemini API Key from aistudio.google.com/apikey"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestGeminiInHeader}
+                  disabled={isTestingGemini}
+                  className="px-2 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[10px] transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                  title="Fire a test query ping to verify your Gemini API key"
+                >
+                  {isTestingGemini ? <RotateCcw className="w-2.5 h-2.5 animate-spin" /> : <span>⚡</span>}
+                  <span>{isTestingGemini ? 'Testing...' : 'Test Key'}</span>
+                </button>
+                {geminiTestFeedback && (
+                  <span
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      geminiTestFeedback.success
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                    }`}
+                    title={geminiTestFeedback.message}
+                  >
+                    {geminiTestFeedback.message}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* BUTTON 1: SEND PROMPT TO LLM (Primary Single Execution Button) */}
             <button
-              onClick={() => handleOpenMonthlyReport()}
+              onClick={() => handleOpenMonthlyReport(selectedLlmProvider, true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-extrabold transition shadow-md shadow-amber-500/20 text-xs cursor-pointer active:scale-95"
               title={`Send prompt to LLM for ${MONTH_NAMES[selectedMonth]} ${selectedYear} using ${LLM_PROVIDERS[selectedLlmProvider].name}`}
             >
@@ -1556,8 +1632,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               </div>
 
               <button
-                onClick={() => handleOpenMonthlyReport()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer"
+                onClick={() => handleOpenMonthlyReport(selectedLlmProvider, true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm text-xs cursor-pointer active:scale-95"
                 title="Send prompt to LLM to run full monthly predictions"
               >
                 <Sparkles className="w-3.5 h-3.5 fill-current" />
@@ -1573,9 +1649,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             onClose={() => setViewMode('grid')}
             context={inspectorHouseContext}
             activeProvider={selectedLlmProvider}
+            runTriggerTimestamp={reportAutoRunTimestamp}
             onChangeProvider={(newProv) => {
               setSelectedLlmProvider(newProv);
-              handleOpenMonthlyReport(newProv);
+              handleOpenMonthlyReport(newProv, false);
             }}
           />
         </div>
@@ -1971,18 +2048,6 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                       >
                         H{houseNum}
                       </span>
-
-                      {/* Audio Voice Inspector Trigger Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenHouseInspector(signDef.index);
-                        }}
-                        className="p-0.5 rounded bg-slate-800/80 hover:bg-amber-400 hover:text-slate-950 text-slate-400 transition"
-                        title={`Inspect House ${houseNum} (${signDef.eng.split(' ')[0]}) with ${LLM_PROVIDERS[selectedLlmProvider].name} Audio Voice`}
-                      >
-                        <Volume2 className="w-2.5 h-2.5" />
-                      </button>
                     </div>
                   </div>
 

@@ -1454,6 +1454,14 @@ export class QwenLocalAdapter implements ILLMAdapter {
     const controller = new AbortController();
     let timeoutTimer: any = null;
 
+    if (context.abortSignal) {
+      if (context.abortSignal.aborted) {
+        controller.abort();
+      } else {
+        context.abortSignal.addEventListener('abort', () => controller.abort());
+      }
+    }
+
     if (enableTimeout && configuredTimeoutSec > 0) {
       timeoutTimer = setTimeout(() => {
         controller.abort();
@@ -1522,6 +1530,23 @@ export class QwenLocalAdapter implements ILLMAdapter {
     } catch (err: any) {
       if (timeoutTimer) {
         clearTimeout(timeoutTimer);
+      }
+      if (context.abortSignal?.aborted) {
+        connectionError = 'Prompt generation cancelled abruptly by user.';
+        return {
+          ...synthesizeAnalyticalVedicNarrative(context, 'local_qwen', startMs),
+          endpointUsed: endpoint,
+          connectionStatus: 'cancelled',
+          connectionError,
+          isPrivateLocal: true,
+          promptSent: prompt,
+          rawRequestBody: requestBody,
+          executionTimeMs: Date.now() - startMs,
+          rawResponseBody: {
+            status: 'CANCELLED',
+            fallback_reason: 'User cancelled prompt inference before completion.'
+          }
+        };
       }
       const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
       if (err.name === 'AbortError' || controller.signal.aborted) {
@@ -1600,7 +1625,8 @@ export class GeminiStudioAdapter implements ILLMAdapter {
           'Content-Type': 'application/json',
           ...(geminiKey ? { 'x-goog-api-key': geminiKey, 'x-api-key': geminiKey } : {})
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: context.abortSignal
       });
 
       if (res.ok) {
@@ -1652,13 +1678,32 @@ ${parsed.part3_microTimingWindow}
           if (parsed?.error?.message) rawErr = parsed.error.message;
         } catch {}
 
-        if (rawErr.includes('API key not valid') || rawErr.includes('API_KEY_INVALID')) {
-          connectionError = 'Google Gemini Error: API Key Invalid (400). Please check GEMINI_API_KEY in your .env file or Windows environment variables with a valid key from https://aistudio.google.com/apikey and restart the dev server.';
+        if (rawErr.includes('bound service account is deleted or disabled') || rawErr.includes('ACCOUNT_STATE_INVALID') || res.status === 401) {
+          connectionError = 'Google Gemini Error (401 UNAUTHENTICATED): The service account bound to this key is deleted or disabled. Please paste your active Gemini API key in the Gemini Settings panel or click "⚡ Test Key".';
+        } else if (rawErr.includes('API key not valid') || rawErr.includes('API_KEY_INVALID') || res.status === 400) {
+          connectionError = 'Google Gemini Error: API Key Invalid (400). Please check GEMINI_API_KEY in your .env file or enter a valid key from https://aistudio.google.com/apikey in the Gemini Key field.';
+        } else if (res.status === 429 || rawErr.includes('RESOURCE_EXHAUSTED') || rawErr.includes('quota')) {
+          connectionError = 'Google Gemini Error: Quota Exceeded (429 RESOURCE_EXHAUSTED). Please check project billing at https://aistudio.google.com/apikey.';
         } else {
-          connectionError = rawErr;
+          connectionError = `Google Gemini Error (${res.status}): ${rawErr}`;
         }
       }
     } catch (err: any) {
+      if (err.name === 'AbortError' || context.abortSignal?.aborted) {
+        return {
+          ...synthesizeAnalyticalVedicNarrative(context, 'gemini_pro', startMs),
+          endpointUsed: 'Google Gemini Cloud API (/api/llm/gemini)',
+          connectionStatus: 'cancelled',
+          connectionError: 'Prompt generation cancelled abruptly by user.',
+          isPrivateLocal: false,
+          promptSent: prompt,
+          rawRequestBody: requestBody,
+          rawResponseBody: {
+            status: 'CANCELLED',
+            fallback_reason: 'User cancelled prompt inference before completion.'
+          }
+        };
+      }
       connectionError = err.message || 'Failed to reach /api/llm/gemini proxy';
     }
 
@@ -1674,6 +1719,7 @@ ${parsed.part3_microTimingWindow}
       rawRequestBody: requestBody,
       rawResponseBody: {
         fallback_reason: connectionError,
+        error_details: connectionError,
         note: 'Executed deterministic Parashara heuristic engine because Gemini Cloud API returned an error.'
       }
     };
@@ -1726,7 +1772,8 @@ async function callClaudeProxy(
     const res = await fetch(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: context.abortSignal
     });
 
     if (res.ok) {
@@ -1792,6 +1839,21 @@ ${parsed.part3_microTimingWindow}
       }
     }
   } catch (err: any) {
+    if (err.name === 'AbortError' || context.abortSignal?.aborted) {
+      return {
+        ...synthesizeAnalyticalVedicNarrative(context, providerId, startMs),
+        endpointUsed: `Anthropic Claude API (${customModel})`,
+        connectionStatus: 'cancelled',
+        connectionError: 'Prompt generation cancelled abruptly by user.',
+        isPrivateLocal: false,
+        promptSent: prompt,
+        rawRequestBody: requestBody,
+        rawResponseBody: {
+          status: 'CANCELLED',
+          fallback_reason: 'User cancelled prompt inference before completion.'
+        }
+      };
+    }
     connectionError = err.message || 'Failed to reach /api/llm/claude proxy';
   }
 
@@ -1981,7 +2043,8 @@ export class LLMReasoningService {
       || '';
 
     const status = result.connectionStatus === 'connected_live' ? 'SUCCESS'
-      : (result.connectionStatus === 'connection_failed_fallback' ? 'FALLBACK' : 'SUCCESS');
+      : (result.connectionStatus === 'cancelled' ? 'CANCELLED'
+      : (result.connectionStatus === 'connection_failed_fallback' ? 'FALLBACK' : 'SUCCESS'));
 
     // Automatically fire write into the audit table immediately upon response
     try {
@@ -1993,7 +2056,12 @@ export class LLMReasoningService {
         response_text: typeof responseText === 'string' ? responseText : JSON.stringify(responseText),
         time_taken_ms: result.executionTimeMs || (Date.now() - startMs),
         status,
-        response_json: result.rawResponseBody
+        response_json: {
+          ...(typeof result.rawResponseBody === 'object' && result.rawResponseBody !== null ? result.rawResponseBody : {}),
+          connection_error: result.connectionError || null,
+          connection_status: result.connectionStatus,
+          endpoint_used: result.endpointUsed
+        }
       });
 
       if (logRes?.log_id) {

@@ -1,5 +1,18 @@
 [
   {
+    "log_id": "LOG-GEMINI-001-20261015071632",
+    "running_number": 1,
+    "engine": "Gemini",
+    "model_name": "",
+    "fired_at": "2026-10-15T07:16:32.175Z",
+    "prompt_text": "test",
+    "response_text": "test response",
+    "time_taken_ms": 120,
+    "status": "FALLBACK",
+    "response_json": null,
+    "created_at": "2026-10-15T07:16:32.175Z"
+  },
+  {
     "log_id": "LOG-GEMINI-001-20261010153731",
     "running_number": 1,
     "engine": "Gemini",

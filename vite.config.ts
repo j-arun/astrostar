@@ -680,9 +680,8 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
               usageMetadata: response.usageMetadata
             }));
           } catch (err: any) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
             let errorMsg = err.message || 'Gemini Generation Failed';
+            let statusCode = 500;
             try {
               const parsed = JSON.parse(errorMsg);
               if (parsed?.error?.message) {
@@ -690,13 +689,28 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
               }
             } catch {}
 
-            if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID')) {
-              errorMsg = 'Invalid Gemini API Key: Google Generative AI rejected the key with 400 INVALID_ARGUMENT. Please verify your GEMINI_API_KEY in your .env file or environment variables at https://aistudio.google.com/apikey and restart the dev server.';
+            if (
+              errorMsg.includes('bound service account is deleted or disabled') ||
+              errorMsg.includes('ACCOUNT_STATE_INVALID') ||
+              errorMsg.includes('401')
+            ) {
+              statusCode = 401;
+              errorMsg = 'Google Gemini Authentication Error (401 UNAUTHENTICATED): The service account bound to this API key is deleted or disabled. Please enter an active Gemini API Key from https://aistudio.google.com/apikey in the Gemini Key settings.';
+            } else if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('INVALID_ARGUMENT')) {
+              statusCode = 400;
+              errorMsg = 'Invalid Gemini API Key: Google Generative AI rejected the key with 400 INVALID_ARGUMENT. Please check your Gemini API key at https://aistudio.google.com/apikey and paste it into the Gemini Key input.';
             } else if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota') || errorMsg.includes('429')) {
-              errorMsg = 'Gemini Quota Exceeded (429 RESOURCE_EXHAUSTED): Rate limit or quota ceiling reached. If you are on a Paid Tier and using a paid API key, this happens because: 1) In Google AI Studio (aistudio.google.com/apikey), your API key must be created inside the exact Google Cloud Project that has billing enabled, not the default unbilled project; 2) Paid Tier 1 still enforces per-minute burst rate limits (RPM/TPM); 3) A Google Cloud billing budget cap or card verification hold is active. You can also switch immediately to Local 14B (LLM Studio / Bionic) or Local 7B (Ollama) in the inspector for unlimited, offline reasoning.';
+              statusCode = 429;
+              errorMsg = 'Gemini Quota Exceeded (429 RESOURCE_EXHAUSTED): Rate limit or quota ceiling reached. Verify that your API key is created inside a Google Cloud Project with billing enabled at https://aistudio.google.com/apikey.';
             }
 
-            res.end(JSON.stringify({ error: errorMsg }));
+            res.statusCode = statusCode;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({
+              error: errorMsg,
+              code: statusCode === 401 ? 'ACCOUNT_STATE_INVALID' : statusCode === 429 ? 'RESOURCE_EXHAUSTED' : 'API_ERROR',
+              statusCode
+            }));
           }
         });
       });

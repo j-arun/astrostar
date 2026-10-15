@@ -68,6 +68,7 @@ interface AudioVoiceInspectorProps {
   activeProvider: LLMProviderId;
   onChangeProvider: (provider: LLMProviderId) => void;
   inlineView?: boolean;
+  runTriggerTimestamp?: number;
 }
 
 const SAMPLE_QUICK_CHIPS = [
@@ -122,7 +123,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   context,
   activeProvider,
   onChangeProvider,
-  inlineView = false
+  inlineView = false,
+  runTriggerTimestamp
 }) => {
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [queryText, setQueryText] = useState<string>('');
@@ -195,6 +197,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
 
   // Recognition ref
   const recognitionRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Interactive Prompt Studio State
   const [editablePrompt, setEditablePrompt] = useState<string>('');
@@ -269,14 +272,12 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     }
   }, [isOpen, activeProvider]);
 
-  // Initialize synthesis when context changes or language changes
+  // Explicit user trigger from timeline "Send Prompt to LLM" button
   useEffect(() => {
-    if (isOpen && context) {
+    if (runTriggerTimestamp && isOpen) {
       handleGenerate();
-    } else {
-      stopSpeech();
     }
-  }, [isOpen, context?.houseNumber, context?.isComprehensiveMonthly, activeProvider, localOllamaModel, anthropicModel, selectedLanguage, enableTimeout, timeoutSeconds]);
+  }, [runTriggerTimestamp]);
 
   // Clean up speech when unmounting or closing
   useEffect(() => {
@@ -293,6 +294,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const handleGenerate = async (customQuery?: string, promptOverrideToUse?: string) => {
     if (!context) return;
     stopSpeech();
+
+    // Set up AbortController for cancel support
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
 
     try {
@@ -313,18 +318,31 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         geminiModel: geminiModel.trim() || undefined,
         anthropicApiKey: anthropicApiKey.trim() || undefined,
         anthropicModel: anthropicModel || undefined,
-        anthropicThinkingMode
+        anthropicThinkingMode,
+        abortSignal: controller.signal
       });
       setNarrative(result);
-      if (context) {
+      if (context && result.connectionStatus !== 'cancelled') {
         saveReportToServerDocs(context, result).catch(() => {});
       }
       loadDbLogs().catch(() => {});
-    } catch (e) {
-      console.error('LLM synthesis error:', e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('LLM synthesis error:', e);
+      }
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
+  };
+
+  const handleCancelPrompt = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setElapsedSeconds(0);
   };
 
   const loadDbLogs = async () => {
@@ -354,7 +372,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       };
       const engine = (engineMap as any)[activeProvider] || 'Claude';
       const modelName = narrative.ollamaStats?.model || (
-        activeProvider === 'gemini_pro' ? 'gemini-3.8-flash' :
+        activeProvider === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') :
         activeProvider === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') :
         (activeProvider === 'claude_sonnet' || activeProvider === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : localOllamaModel
       );
@@ -1282,6 +1300,49 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           </div>
         )}
 
+        {/* GEMINI FALLBACK & KEY DIAGNOSTIC BANNER */}
+        {narrative?.providerUsed === 'gemini_pro' && narrative?.connectionStatus === 'connection_failed_fallback' && (
+          <div className="px-5 py-3 bg-gradient-to-r from-purple-950/90 via-slate-900 to-amber-950/90 border-b border-purple-500/50 flex flex-wrap items-center justify-between gap-3 text-xs text-purple-200 animate-fadeIn">
+            <div className="flex items-start gap-2.5 flex-1 min-w-[280px]">
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-amber-300 text-sm">
+                    Gemini Pro: Inference Fell Back to Parashara Heuristic Engine
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    STATUS: FALLBACK
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-mono leading-relaxed">
+                  {narrative.connectionError}
+                </p>
+                <p className="text-[10.5px] text-purple-300">
+                  💡 <strong>How to resolve:</strong> Enter an active Gemini API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline text-amber-300 hover:text-white">Google AI Studio</a> in the key input above and click <strong>"⚡ Test Key"</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTestKeyHealth}
+                disabled={isTestingKey}
+                className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition text-xs shadow flex items-center gap-1 cursor-pointer"
+              >
+                {isTestingKey ? <RotateCcw className="w-3 h-3 animate-spin" /> : <span>⚡</span>}
+                <span>Test Gemini Key</span>
+              </button>
+              <button
+                onClick={() => handleGenerate()}
+                disabled={isGenerating}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Retry Gemini</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* EXPANDABLE PROMPT & WIRE TELEMETRY DRAWER */}
         {showWireLog && (
           <div className="bg-slate-950 border-b border-slate-800 p-4 space-y-3 animate-fadeIn text-xs">
@@ -1489,6 +1550,22 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                 {/* Current Active Run Card */}
                 {narrative?.logId ? (
                   <div className="space-y-2.5">
+                    {/* Fallback Diagnostic Callout */}
+                    {narrative.connectionStatus === 'connection_failed_fallback' && (
+                      <div className="p-3 bg-amber-950/70 border border-amber-500/60 rounded-xl space-y-1.5 text-xs">
+                        <div className="flex items-center gap-2 font-bold text-amber-300">
+                          <AlertCircle className="w-4 h-4 text-amber-400" />
+                          <span>Status: FALLBACK — Heuristic Engine Recorded in Audit Table</span>
+                        </div>
+                        <p className="text-slate-300 font-mono text-[11px] leading-relaxed">
+                          <strong>Reason cloud request did not reach Gemini:</strong> {narrative.connectionError}
+                        </p>
+                        <p className="text-purple-300 text-[10.5px]">
+                          <strong>Action:</strong> Paste your Gemini API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline text-amber-300 hover:text-white">Google AI Studio</a> into the Gemini Key input in the header and click "⚡ Test Key".
+                        </p>
+                      </div>
+                    )}
+
                     <div className="p-2.5 bg-slate-950 rounded-lg border border-emerald-500/30 grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px] font-mono">
                       <div>
                         <span className="text-slate-500 block">Current Log ID</span>
@@ -1500,7 +1577,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                       <div>
                         <span className="text-slate-500 block">Engine &amp; Model</span>
-                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : 'qwen2.5:7b-instruct')})</span>
+                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : 'qwen2.5:7b-instruct')})</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Time Taken</span>
@@ -1533,7 +1610,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                           </button>
                           <button
                             onClick={() => handleCopy(
-                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
+                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
                               'manual_sql_insert'
                             )}
                             className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[11px] font-mono flex items-center gap-1 transition cursor-pointer shadow-sm"
@@ -1544,7 +1621,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </div>
                       </div>
                       <pre className="p-2 bg-slate-900 rounded border border-slate-800 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-24 overflow-y-auto select-all">
-                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? 'gemini-3.8-flash' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
+                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
                       </pre>
                     </div>
 
@@ -1584,31 +1661,51 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                           <tr>
                             <th className="p-1.5">Seq</th>
                             <th className="p-1.5">Log ID</th>
-                            <th className="p-1.5">Engine</th>
+                            <th className="p-1.5">Engine &amp; Model</th>
                             <th className="p-1.5">Fired At</th>
                             <th className="p-1.5">Duration</th>
-                            <th className="p-1.5">Status</th>
+                            <th className="p-1.5">Status &amp; Diagnostic</th>
                             <th className="p-1.5">Prompt Preview</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
-                          {dbLogs.map((log: any, idx: number) => (
-                            <tr key={log.log_id || idx} className="hover:bg-slate-800/40">
-                              <td className="p-1.5 text-slate-400">#{log.running_number}</td>
-                              <td className="p-1.5 text-emerald-300 font-bold">{log.log_id}</td>
-                              <td className="p-1.5 text-amber-300">{log.engine}</td>
-                              <td className="p-1.5 text-slate-400">{log.fired_at ? new Date(log.fired_at).toLocaleTimeString() : '-'}</td>
-                              <td className="p-1.5 text-cyan-300">{log.time_taken_ms}ms</td>
-                              <td className="p-1.5">
-                                <span className={`px-1 py-0.5 rounded text-[9px] ${log.status === 'SUCCESS' ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>
-                                  {log.status || 'SUCCESS'}
-                                </span>
-                              </td>
-                              <td className="p-1.5 text-slate-400 max-w-xs truncate" title={log.prompt_text}>
-                                {log.prompt_text?.slice(0, 50)}...
-                              </td>
-                            </tr>
-                          ))}
+                          {dbLogs.map((log: any, idx: number) => {
+                            const connErr = log.response_json?.connection_error || log.response_json?.fallback_reason;
+                            return (
+                              <tr key={log.log_id || idx} className="hover:bg-slate-800/40">
+                                <td className="p-1.5 text-slate-400">#{log.running_number}</td>
+                                <td className="p-1.5 text-emerald-300 font-bold">{log.log_id}</td>
+                                <td className="p-1.5 text-amber-300">
+                                  <span>{log.engine}</span>
+                                  {log.model_name && <span className="text-slate-400 text-[9px] block">({log.model_name})</span>}
+                                </td>
+                                <td className="p-1.5 text-slate-400">{log.fired_at ? new Date(log.fired_at).toLocaleTimeString() : '-'}</td>
+                                <td className="p-1.5 text-cyan-300">{log.time_taken_ms}ms</td>
+                                <td className="p-1.5">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold w-fit ${
+                                      log.status === 'SUCCESS' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' :
+                                      log.status === 'CANCELLED' ? 'bg-slate-800 text-slate-300 border border-slate-700' :
+                                      'bg-amber-950 text-amber-300 border border-amber-500/40'
+                                    }`}>
+                                      {log.status || 'SUCCESS'}
+                                    </span>
+                                    {log.status === 'FALLBACK' && (
+                                      <span
+                                        className="text-[9px] text-rose-300 font-sans max-w-[200px] truncate cursor-help block"
+                                        title={connErr || 'Parashara deterministic heuristic engine executed'}
+                                      >
+                                        ⚠️ {connErr ? (connErr.includes('401') ? '401 Service Account Deleted/Disabled' : connErr.slice(0, 40) + '...') : 'Fallback Engaged'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-1.5 text-slate-400 max-w-xs truncate" title={log.prompt_text}>
+                                  {log.prompt_text?.slice(0, 50)}...
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

@@ -220,6 +220,7 @@ export interface VedicHouseContext {
   anthropicModel?: string;
   anthropicThinkingMode?: 'disabled' | 'enabled' | 'auto';
   anthropicBudgetTokens?: number;
+  abortSignal?: AbortSignal;
 }
 
 export interface EmploymentStatusInference {

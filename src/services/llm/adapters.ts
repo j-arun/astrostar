@@ -1894,7 +1894,8 @@ export class ClaudeHaikuAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    return callClaudeProxy(context, 'claude_haiku', 'claude-haiku-5-5', 'Anthropic Claude Haiku 5.5', startMs);
+    const modelToUse = context.anthropicModel || 'claude-fable-5-1';
+    return callClaudeProxy(context, 'claude_haiku', modelToUse, 'Anthropic Claude Haiku / Fable 5.1', startMs);
   }
 }
 
@@ -1917,7 +1918,7 @@ export interface LLMPromptLogPayload {
   prompt_text: string;
   response_text: string;
   time_taken_ms: number;
-  status: 'SUCCESS' | 'FALLBACK' | 'ERROR';
+  status: 'SUCCESS' | 'FALLBACK' | 'ERROR' | 'CANCELLED';
   response_json?: any;
 }
 

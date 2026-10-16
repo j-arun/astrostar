@@ -40,10 +40,10 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   },
   claude_haiku: {
     id: 'claude_haiku',
-    name: 'Anthropic Claude Haiku 5.5',
-    badgeLabel: '📜 Claude Haiku 5.5 (Anthropic)',
-    model: 'claude-haiku-5-5',
-    description: 'Anthropic high-speed narrative model for lyrical, mythic, and expressive Vedic storytelling.',
+    name: 'Anthropic Claude Haiku / Fable 5.1',
+    badgeLabel: '📜 Claude Haiku / Fable 5.1 (Anthropic)',
+    model: 'claude-fable-5-1',
+    description: 'Anthropic high-speed narrative model for lyrical, mythic Vedic storytelling and micro-timing (Claude Haiku 5.5 / Fable 5.1).',
     endpoint: '/api/llm/claude'
   },
   claude: {
@@ -334,7 +334,7 @@ export interface LLMThreePartNarrative {
 
   // Private LLM Verification & Wire Telemetry
   endpointUsed: string;
-  connectionStatus: 'connected_live' | 'connection_failed_fallback' | 'simulated';
+  connectionStatus: 'connected_live' | 'connection_failed_fallback' | 'simulated' | 'cancelled';
   connectionError?: string;
   isPrivateLocal: boolean;
   timeoutEnforced?: boolean;

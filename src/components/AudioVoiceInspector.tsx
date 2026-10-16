@@ -980,6 +980,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   title="Select Anthropic Claude Model"
                 >
                   <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
+                  <option value="claude-fable-5-1">Claude Fable 5.1 (Vedic Storytelling &amp; Micro-Timing)</option>
                   <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
                   <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
                   <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>

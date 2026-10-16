@@ -760,11 +760,13 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             }
 
             let primaryModel = requestedModel || 'claude-sonnet-5-5';
-            // Normalize any 5.5 / IQ variations
+            // Normalize any 5.5 / 5.1 / Fable / IQ variations
             if (primaryModel === 'claude-5-5-sonnet' || primaryModel === 'claude-sonnet-5.5' || primaryModel === 'claude') {
               primaryModel = 'claude-sonnet-5-5';
             } else if (primaryModel === 'claude-5-5-haiku' || primaryModel === 'claude-haiku-5.5' || primaryModel === 'claude-iq' || primaryModel === 'claude-5-5-iq') {
               primaryModel = 'claude-haiku-5-5';
+            } else if (primaryModel === 'claude-fable-5-1' || primaryModel === 'claude-5-1-fable' || primaryModel === 'fable-5-1' || primaryModel === 'fable-5.1' || primaryModel === 'claude-fable') {
+              primaryModel = 'claude-fable-5-1';
             }
 
             // Fast token limit for test ping, else 16,000 for full synthesis
@@ -784,16 +786,15 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
 
             // Configure thinking parameter based on requested mode
             if (thinkingMode === 'disabled') {
-              // On Sonnet 5.5 and Claude 5 models, Anthropic requires "between_tools" instead of "disabled" to turn thinking off
-              // (Error: 'To turn thinking off on this model, send "thinking": {"type": "between_tools"} instead of {"type": "disabled"}')
-              if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5') || primaryModel.includes('opus-5')) {
+              // On Sonnet 5.5, Fable 5.1 and Claude 5 models, Anthropic requires "between_tools" instead of "disabled" to turn thinking off
+              if (primaryModel.includes('5-5') || primaryModel.includes('5-1') || primaryModel.includes('fable') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5') || primaryModel.includes('opus-5')) {
                 payload.thinking = { type: 'between_tools' };
               } else {
                 payload.thinking = { type: 'disabled' };
               }
             } else if (thinkingMode === 'enabled') {
-              if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5')) {
-                // Sonnet 5.5 / 5 uses output_config effort or adaptive thinking without budget_tokens
+              if (primaryModel.includes('5-5') || primaryModel.includes('5-1') || primaryModel.includes('fable') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5')) {
+                // Sonnet 5.5 / Fable 5.1 uses output_config effort or adaptive thinking without budget_tokens
                 payload.output_config = { effort: 'medium' };
               } else {
                 payload.thinking = { type: 'enabled', budget_tokens: budgetTokens || 2048 };

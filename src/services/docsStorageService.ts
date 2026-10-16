@@ -49,9 +49,17 @@ export const STANDARD_REASONING_ENGINES = [
     color: 'emerald'
   },
   {
+    key: 'claude_fable',
+    name: 'Claude Fable 5.1',
+    categoryLabel: '2. Fable 5.1',
+    badge: '📜 Fable 5.1',
+    providerId: 'claude_fable' as LLMProviderId,
+    color: 'indigo'
+  },
+  {
     key: 'claude_sonnet',
     name: 'Claude Sonnet 5.5',
-    categoryLabel: '2. Sonnet',
+    categoryLabel: '3. Sonnet',
     badge: '🧠 Sonnet Engine',
     providerId: 'claude_sonnet' as LLMProviderId,
     color: 'amber'
@@ -59,16 +67,16 @@ export const STANDARD_REASONING_ENGINES = [
   {
     key: 'gemini_pro',
     name: 'Google Gemini Pro',
-    categoryLabel: '3. Gemini Pro',
+    categoryLabel: '4. Gemini Pro',
     badge: '♊ Gemini Pro',
     providerId: 'gemini_pro' as LLMProviderId,
     color: 'cyan'
   },
   {
     key: 'fable_ollama',
-    name: 'Fable / Ollama (Local 7B)',
-    categoryLabel: '4. Fable / Ollama',
-    badge: '🖥️ Fable / Ollama',
+    name: 'Local Ollama (Qwen 7B)',
+    categoryLabel: '5. Ollama 7B',
+    badge: '🖥️ Local 7B',
     providerId: 'local_qwen' as LLMProviderId,
     color: 'purple'
   }
@@ -76,10 +84,11 @@ export const STANDARD_REASONING_ENGINES = [
 
 export function mapProviderToEngineKey(providerId: LLMProviderId): string {
   if (providerId === 'claude_haiku') return 'claude_iq';
+  if (providerId === 'claude_fable') return 'claude_fable';
   if (providerId === 'claude_sonnet' || providerId === 'claude') return 'claude_sonnet';
   if (providerId === 'gemini_pro') return 'gemini_pro';
   if (providerId === 'local_qwen') return 'fable_ollama';
-  return 'claude_sonnet';
+  return 'claude_fable';
 }
 
 /**

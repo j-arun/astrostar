@@ -30,7 +30,7 @@ import {
   AlertCircle,
   Key
 } from 'lucide-react';
-import { testGeminiConnection } from '../services/apiHealthService';
+import { testGeminiConnection, testClaudeConnection } from '../services/apiHealthService';
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import { ingestedPersonsRegistry, ALL_DASHA_TIMELINE } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
@@ -576,6 +576,32 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       });
     } finally {
       setIsTestingGemini(false);
+    }
+  };
+
+  const [claudeKeyInput, setClaudeKeyInput] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
+  });
+  const [isTestingClaude, setIsTestingClaude] = useState<boolean>(false);
+  const [claudeTestFeedback, setClaudeTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestClaudeInHeader = async () => {
+    setIsTestingClaude(true);
+    setClaudeTestFeedback(null);
+    try {
+      const modelToTest = selectedLlmProvider === 'claude_fable' ? 'claude-fable-5-1' : selectedLlmProvider === 'claude_haiku' ? 'claude-haiku-5-5' : 'claude-sonnet-5-5';
+      const res = await testClaudeConnection(claudeKeyInput, modelToTest);
+      setClaudeTestFeedback({
+        success: !!res.success,
+        message: res.success ? 'Active & Connected' : (res.error ? (res.error.slice(0, 35) + '...') : 'Failed')
+      });
+    } catch (e: any) {
+      setClaudeTestFeedback({
+        success: false,
+        message: 'Ping Failed'
+      });
+    } finally {
+      setIsTestingClaude(false);
     }
   };
 
@@ -1215,6 +1241,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 <option value="gemini_pro" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.gemini_pro.badgeLabel}
                 </option>
+                <option value="claude_fable" className="bg-slate-900 text-white">
+                  {LLM_PROVIDERS.claude_fable.badgeLabel}
+                </option>
                 <option value="claude_sonnet" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.claude_sonnet.badgeLabel}
                 </option>
@@ -1260,6 +1289,47 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                     title={geminiTestFeedback.message}
                   >
                     {geminiTestFeedback.message}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Quick Claude / Fable Key Bar when Claude or Fable is selected */}
+            {(selectedLlmProvider === 'claude_fable' || selectedLlmProvider === 'claude_sonnet' || selectedLlmProvider === 'claude_haiku') && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-emerald-500/40 text-[11px] shadow-inner">
+                <Key className="w-3 h-3 text-emerald-400" />
+                <input
+                  type="password"
+                  value={claudeKeyInput}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setClaudeKeyInput(val);
+                    localStorage.setItem('astro_anthropic_api_key', val);
+                  }}
+                  placeholder={selectedLlmProvider === 'claude_fable' ? "Paste Claude / Fable Key..." : "Paste Claude API Key..."}
+                  className="bg-transparent text-emerald-200 w-36 focus:outline-none font-mono text-[10px] placeholder:text-slate-600"
+                  title="Enter Anthropic API Key (sk-ant-...) for Claude & Fable 5.1"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestClaudeInHeader}
+                  disabled={isTestingClaude}
+                  className="px-2 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                  title="Fire a test query ping to verify your Anthropic Claude / Fable key"
+                >
+                  {isTestingClaude ? <RotateCcw className="w-2.5 h-2.5 animate-spin" /> : <span>⚡</span>}
+                  <span>{isTestingClaude ? 'Testing...' : 'Test Key'}</span>
+                </button>
+                {claudeTestFeedback && (
+                  <span
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      claudeTestFeedback.success
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                    }`}
+                    title={claudeTestFeedback.message}
+                  >
+                    {claudeTestFeedback.message}
                   </span>
                 )}
               </div>

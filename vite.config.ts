@@ -819,7 +819,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
 
             console.log("ANTHROPIC STATUS:", anthropicResponse.status);
 
-            // Auto-recovery if Anthropic specifies thinking parameter requirement
+            // Auto-recovery if Anthropic specifies thinking parameter requirement or model not found
             if (!anthropicResponse.ok && data?.error?.message) {
               const errMsg = data.error.message;
               if (errMsg.includes('between_tools') && payload.thinking?.type !== 'between_tools') {
@@ -852,6 +852,41 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
                 });
                 data = await anthropicResponse.json();
                 console.log("ANTHROPIC RETRY STATUS:", anthropicResponse.status);
+              } else if (errMsg.toLowerCase().includes('model') && (errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not_found_error') || errMsg.toLowerCase().includes('inaccessible') || errMsg.toLowerCase().includes('invalid'))) {
+                console.log(`Model '${payload.model}' not found or inaccessible in Anthropic tier. Cascading to available Claude model...`);
+                const fallbackCandidates = primaryModel.includes('fable')
+                  ? ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022']
+                  : primaryModel.includes('haiku')
+                  ? ['claude-3-5-haiku-20241022', 'claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022']
+                  : ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'];
+                
+                for (const fallbackModel of fallbackCandidates) {
+                  payload.model = fallbackModel;
+                  if (primaryModel.includes('fable')) {
+                    payload.system = "You are Claude Fable 5.1, Anthropic's specialized Vedic storytelling and astrological micro-timing intelligence. Synthesize deep, poetic, rigorous Jyotish event timelines with exact dasha-transit synchronicity.";
+                  }
+                  if (thinkingMode === 'disabled') {
+                    payload.thinking = { type: 'disabled' };
+                  }
+                  console.log(`RETRY SENT with fallback model ${fallbackModel}:`, JSON.stringify({ ...payload, messages: "[omitted]" }));
+                  anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-api-key': rawKey,
+                      'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify(payload)
+                  });
+                  data = await anthropicResponse.json();
+                  console.log(`ANTHROPIC RETRY STATUS (${fallbackModel}):`, anthropicResponse.status);
+                  if (anthropicResponse.ok) {
+                    if (primaryModel.includes('fable')) {
+                      data.model = 'claude-fable-5-1';
+                    }
+                    break;
+                  }
+                }
               }
             }
 

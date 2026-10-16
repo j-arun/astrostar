@@ -1736,13 +1736,15 @@ async function callClaudeProxy(
   modelDisplayName: string,
   startMs: number
 ): Promise<LLMThreePartNarrative> {
-  let customModel = context.anthropicModel || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : null) || model || 'claude-sonnet-5-5';
+  let customModel = context.anthropicModel || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : null) || model || (providerId === 'claude_fable' ? 'claude-fable-5-1' : providerId === 'claude_haiku' ? 'claude-haiku-5-5' : 'claude-sonnet-5-5');
   
-  // Auto-upgrade legacy snapshot or normalize 5.5 aliases
+  // Auto-upgrade legacy snapshot or normalize 5.5 / 5.1 aliases
   if (customModel === 'claude-3-5-sonnet-20241022' || customModel === 'claude-5-5-sonnet' || customModel === 'claude-sonnet-5.5') {
-    customModel = providerId === 'claude_haiku' ? 'claude-haiku-5-5' : 'claude-sonnet-5-5';
+    customModel = providerId === 'claude_fable' ? 'claude-fable-5-1' : providerId === 'claude_haiku' ? 'claude-haiku-5-5' : 'claude-sonnet-5-5';
   } else if (customModel === 'claude-5-5-haiku' || customModel === 'claude-haiku-5.5' || customModel === 'claude-iq') {
     customModel = 'claude-haiku-5-5';
+  } else if (customModel === 'fable-5-1' || customModel === 'claude-5-1-fable') {
+    customModel = 'claude-fable-5-1';
   }
 
   const prompt = buildVedicPrompt(context, modelDisplayName);
@@ -1887,15 +1889,28 @@ export class ClaudeSonnetAdapter implements ILLMAdapter {
 }
 
 /**
- * 3b. Anthropic Claude Haiku 5.5 Storyteller Adapter
+ * 3b. Anthropic Claude Fable 5.1 Storyteller & Astrological Micro-Timing Adapter
+ */
+export class ClaudeFableAdapter implements ILLMAdapter {
+  id: LLMProviderId = 'claude_fable';
+
+  async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
+    const startMs = Date.now();
+    const modelToUse = context.anthropicModel || 'claude-fable-5-1';
+    return callClaudeProxy(context, 'claude_fable', modelToUse, 'Anthropic Claude Fable 5.1', startMs);
+  }
+}
+
+/**
+ * 3c. Anthropic Claude Haiku 5.5 Storyteller Adapter
  */
 export class ClaudeHaikuAdapter implements ILLMAdapter {
   id: LLMProviderId = 'claude_haiku';
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const modelToUse = context.anthropicModel || 'claude-fable-5-1';
-    return callClaudeProxy(context, 'claude_haiku', modelToUse, 'Anthropic Claude Haiku / Fable 5.1', startMs);
+    const modelToUse = context.anthropicModel || 'claude-haiku-5-5';
+    return callClaudeProxy(context, 'claude_haiku', modelToUse, 'Anthropic Claude Haiku 5.5', startMs);
   }
 }
 
@@ -2011,6 +2026,7 @@ export class LLMReasoningService {
     local_qwen: new QwenLocalAdapter(),
     gemini_pro: new GeminiStudioAdapter(),
     claude_sonnet: new ClaudeSonnetAdapter(),
+    claude_fable: new ClaudeFableAdapter(),
     claude_haiku: new ClaudeHaikuAdapter(),
     claude: new ClaudeAdapter()
   };
@@ -2025,12 +2041,14 @@ export class LLMReasoningService {
       local_qwen: 'Ollama',
       gemini_pro: 'Gemini',
       claude_sonnet: 'Claude Sonnet',
+      claude_fable: 'Claude Fable 5.1',
       claude_haiku: 'Claude Haiku',
       claude: 'Claude Sonnet'
     };
     const engine = (engineMap as any)[providerId] || 'Ollama';
     const modelName = result.ollamaStats?.model || result.rawResponseBody?.model || (
       providerId === 'gemini_pro' ? (context.geminiModel || 'gemini-2.5-flash') :
+      providerId === 'claude_fable' ? (context.anthropicModel || 'claude-fable-5-1') :
       providerId === 'claude_haiku' ? (context.anthropicModel || 'claude-haiku-5-5') :
       (providerId === 'claude_sonnet' || providerId === 'claude') ? (context.anthropicModel || 'claude-sonnet-5-5') :
       (context.selectedLocalModel || 'qwen2.5:7b-instruct')

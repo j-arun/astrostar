@@ -46,6 +46,9 @@ function escapeHtml(str: string | undefined | null): string {
 }
 
 function getReadableEngineName(providerId: string, modelName?: string): string {
+  if (providerId === 'claude_fable') {
+    return 'Claude Fable 5.1';
+  }
   if (providerId === 'claude_sonnet' || providerId === 'claude') {
     return 'Claude Sonnet 5.5';
   }
@@ -59,6 +62,7 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
     return 'Ollama (Qwen 2.5 7B)';
   }
   if (modelName) {
+    if (modelName.toLowerCase().includes('fable')) return 'Claude Fable 5.1';
     if (modelName.toLowerCase().includes('sonnet')) return 'Claude Sonnet 5.5';
     if (modelName.toLowerCase().includes('haiku')) return 'Claude Haiku 5.5';
     if (modelName.toLowerCase().includes('gemini')) return 'Google Gemini Pro';
@@ -563,6 +567,8 @@ export function generateVedicWordReport(
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
     providerTag = 'Ollama-7B';
+  } else if (narrative.providerUsed === 'claude_fable') {
+    providerTag = 'Claude-Fable';
   } else if (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') {
     providerTag = 'Claude-Sonnet';
   } else if (narrative.providerUsed === 'claude_haiku') {

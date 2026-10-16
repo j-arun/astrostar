@@ -2,7 +2,7 @@
  * Types & Interfaces for Astro Engine Multi-LLM Reasoning System (Milestone M4)
  */
 
-export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude';
+export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_fable' | 'claude_haiku' | 'claude';
 
 export interface LLMProviderConfig {
   id: LLMProviderId;
@@ -38,12 +38,20 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
     description: 'Anthropic flagship reasoning model for nuanced astrological timing breakdowns and precision analysis.',
     endpoint: '/api/llm/claude'
   },
+  claude_fable: {
+    id: 'claude_fable',
+    name: 'Claude Fable 5.1',
+    badgeLabel: '📜 Claude Fable 5.1 (Anthropic)',
+    model: 'claude-fable-5-1',
+    description: 'Anthropic Claude Fable 5.1 storytelling and astrological timing model.',
+    endpoint: '/api/llm/claude'
+  },
   claude_haiku: {
     id: 'claude_haiku',
-    name: 'Anthropic Claude Haiku / Fable 5.1',
-    badgeLabel: '📜 Claude Haiku / Fable 5.1 (Anthropic)',
-    model: 'claude-fable-5-1',
-    description: 'Anthropic high-speed narrative model for lyrical, mythic Vedic storytelling and micro-timing (Claude Haiku 5.5 / Fable 5.1).',
+    name: 'Anthropic Claude Haiku 5.5',
+    badgeLabel: '⚡ Claude Haiku 5.5 (Anthropic)',
+    model: 'claude-haiku-5-5',
+    description: 'Anthropic high-speed narrative model for rapid Vedic calculations.',
     endpoint: '/api/llm/claude'
   },
   claude: {

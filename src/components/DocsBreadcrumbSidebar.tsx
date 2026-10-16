@@ -341,6 +341,8 @@ export const DocsBreadcrumbSidebar: React.FC<DocsBreadcrumbSidebarProps> = ({
               const borderColor =
                 engine.key === 'claude_iq'
                   ? 'border-emerald-500/40 hover:border-emerald-400'
+                  : engine.key === 'claude_fable'
+                  ? 'border-indigo-500/40 hover:border-indigo-400'
                   : engine.key === 'claude_sonnet'
                   ? 'border-amber-500/40 hover:border-amber-400'
                   : engine.key === 'gemini_pro'
@@ -350,6 +352,8 @@ export const DocsBreadcrumbSidebar: React.FC<DocsBreadcrumbSidebarProps> = ({
               const badgeColor =
                 engine.key === 'claude_iq'
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : engine.key === 'claude_fable'
+                  ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
                   : engine.key === 'claude_sonnet'
                   ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                   : engine.key === 'gemini_pro'

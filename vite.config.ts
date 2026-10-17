@@ -789,8 +789,13 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               ]
             };
 
-            // Configure thinking parameter based on requested mode
-            if (thinkingMode === 'disabled') {
+            // Fable requires adaptive thinking; effort controls its depth.
+            if (primaryModel === 'claude-fable-5-1') {
+              payload.thinking = { type: 'adaptive' };
+              payload.output_config = {
+                effort: thinkingMode === 'enabled' ? 'high' : thinkingMode === 'auto' ? 'medium' : 'low'
+              };
+            } else if (thinkingMode === 'disabled') {
               // On Sonnet 5.5 and Claude 5 models, Anthropic requires "between_tools" instead of "disabled" to turn thinking off
               // (Error: 'To turn thinking off on this model, send "thinking": {"type": "between_tools"} instead of {"type": "disabled"}')
               if (primaryModel.includes('5-5') || primaryModel.includes('sonnet-5') || primaryModel.includes('haiku-5') || primaryModel.includes('opus-5')) {

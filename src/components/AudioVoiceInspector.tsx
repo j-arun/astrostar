@@ -1006,9 +1006,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-cyan-300 focus:outline-none cursor-pointer"
                   title="Claude Thinking Mode: Direct Output (Thinking OFF) prevents token depletion, while Extended Thinking generates deep scratchpad reasoning"
                 >
-                  <option value="disabled">⚡ Direct Output (Thinking OFF)</option>
-                  <option value="enabled">🧠 Extended Thinking (ON)</option>
-                  <option value="auto">🔄 Auto Adaptive</option>
+                  <option value="disabled">{activeProvider === 'claude_fable' ? 'Adaptive Low Effort (Fable)' : '⚡ Direct Output (Thinking OFF)'}</option>
+                  <option value="enabled">{activeProvider === 'claude_fable' ? 'Adaptive High Effort (Fable)' : '🧠 Extended Thinking (ON)'}</option>
+                  <option value="auto">{activeProvider === 'claude_fable' ? 'Adaptive Medium Effort (Fable)' : '🔄 Auto Adaptive'}</option>
                 </select>
                 <div className="h-3.5 w-px bg-slate-700" />
                 <div className="flex items-center gap-1.5">

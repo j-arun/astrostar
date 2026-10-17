@@ -5,6 +5,7 @@ import fs from 'fs';
 import pg from 'pg';
 import { defineConfig, loadEnv, Plugin } from 'vite';
 import { GEMINI_FALLBACK_MODEL, GEMINI_PRIMARY_MODEL } from './src/services/llm/geminiModels.ts';
+import { createReportFilenameTimestamp } from './src/services/reportFilename.ts';
 
 function astroApiPlugin(): Plugin {
   return {
@@ -1006,12 +1007,14 @@ function docsServerPlugin(): Plugin {
 
               const docsDir = path.resolve(__dirname, 'docs', String(year), String(month), String(engineKey));
               const publicDocsDir = path.resolve(__dirname, 'public/docs', String(year), String(month), String(engineKey));
+              const savedAt = new Date();
+              const timestamp = createReportFilenameTimestamp(savedAt);
 
               [docsDir, publicDocsDir].forEach(d => {
                 if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
               });
 
-              const fileBase = `Tamil_Vedic_Report_${month}_${year}_${engineKey}`;
+              const fileBase = `Tamil_Vedic_Report_${month}_${year}_${engineKey}_${timestamp}`;
               const htmlFilename = `${fileBase}.html`;
               const docFilename = `${fileBase}.doc`;
               const pdfFilename = `${fileBase}.pdf`;
@@ -1047,7 +1050,7 @@ function docsServerPlugin(): Plugin {
                 monthIndex,
                 engineKey,
                 engineName,
-                savedAt: new Date().toISOString(),
+                savedAt: savedAt.toISOString(),
                 summarySentence,
                 context,
                 narrative
@@ -1090,7 +1093,7 @@ function docsServerPlugin(): Plugin {
                 htmlUrl,
                 pdfUrl,
                 docUrl,
-                timestamp: new Date().toISOString(),
+                timestamp: savedAt.toISOString(),
                 hasNarrative: true,
                 summarySentence: summarySentence || narrative?.summarySentence || ''
               };

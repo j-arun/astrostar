@@ -1,4 +1,6 @@
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
+import { getStructuredPayloadReportSections } from './structuredPayloadReport';
+import { createReportFilenameTimestamp } from './reportFilename';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -619,6 +621,14 @@ export function buildVedicHtmlContent(
       margin-bottom: 4px;
     }
 
+    .payload-intro { color: var(--slate-600); margin-bottom: 12px; }
+    .payload-card { border: 1px solid var(--slate-200); border-radius: 6px; padding: 12px; margin: 10px 0; page-break-inside: avoid; }
+    .payload-title { color: var(--slate-900); font-size: 14px; margin-bottom: 3px; }
+    .payload-subtitle { color: var(--slate-500); font-size: 11px; margin-bottom: 8px; }
+    .payload-row { display: grid; grid-template-columns: minmax(150px, 0.8fr) 2fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--slate-100); font-size: 11px; overflow-wrap: anywhere; }
+    .payload-row strong { color: var(--slate-700); }
+    .payload-empty { color: var(--slate-500); font-size: 11px; font-style: italic; }
+
     /* Footer */
     .report-footer {
       border-top: 1px solid var(--slate-200);
@@ -948,11 +958,28 @@ export function buildVedicHtmlContent(
       }).join('')}
     </section>
 
-    <!-- SECTION 5: CLAUDE EXTENDED REASONING SCRATCHPAD (IF AVAILABLE) -->
+    <section class="section structured-payload-section">
+      <div class="section-header">
+        <h2 class="section-title">5. STRUCTURED DATA PAYLOADS (FOLD 2)</h2>
+        <span class="section-subtitle">Deterministic Parashara Data</span>
+      </div>
+      <p class="payload-intro">Pre-calculated ground-truth data used by the reasoning engine.</p>
+      ${getStructuredPayloadReportSections(context).map(section => `
+        <article class="payload-card">
+          <h3 class="payload-title">${escapeHtml(section.title)}</h3>
+          ${section.subtitle ? `<p class="payload-subtitle">${escapeHtml(section.subtitle)}</p>` : ''}
+          ${section.rows.length > 0 ? section.rows.map(row => `
+            <div class="payload-row"><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.value)}</span></div>
+          `).join('') : `<p class="payload-empty">${escapeHtml(section.emptyMessage || 'No payload data available.')}</p>`}
+        </article>
+      `).join('')}
+    </section>
+
+    <!-- SECTION 6: CLAUDE EXTENDED REASONING SCRATCHPAD (IF AVAILABLE) -->
     ${narrative.thinkingContent ? `
     <section class="section">
       <div class="section-header">
-        <h2 class="section-title">5. EXTENDED REASONING AUDIT LOG</h2>
+        <h2 class="section-title">6. EXTENDED REASONING AUDIT LOG</h2>
         <span class="section-subtitle">Deep Ephemeris Chain of Thought</span>
       </div>
       <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 8px; padding: 14px; font-family: monospace; font-size: 11px; color: var(--slate-700); white-space: pre-wrap; max-height: 350px; overflow-y: auto;">
@@ -984,6 +1011,7 @@ export function generateVedicHtmlReport(
 
   const monthName = MONTH_NAMES[context.selectedMonth] || `Month${context.selectedMonth + 1}`;
   const year = context.selectedYear;
+  const timestamp = createReportFilenameTimestamp();
 
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
@@ -1000,9 +1028,9 @@ export function generateVedicHtmlReport(
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${monthName}_${year}_${providerTag}_AstroPredictions.html`;
+  a.download = `${monthName}_${year}_${providerTag}_${timestamp}_AstroPredictions.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

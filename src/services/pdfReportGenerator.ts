@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
+import { getStructuredPayloadReportSections } from './structuredPayloadReport';
+import { createReportFilenameTimestamp } from './reportFilename';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -739,6 +741,55 @@ export function buildVedicPdfDoc(
     currentY += totalDomainH + 4;
   });
 
+  renderSectionHeader('5. STRUCTURED DATA PAYLOADS (FOLD 2)', 'Deterministic Parashara Data');
+  const payloadLabelWidth = 50;
+  getStructuredPayloadReportSections(context).forEach(section => {
+    const titleLines = doc.splitTextToSize(section.title, contentWidth - 8);
+    ensureSpace(titleLines.length * 4 + 8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text(titleLines, margin + 2, currentY + 3.5);
+    currentY += titleLines.length * 4 + 2;
+
+    if (section.subtitle) {
+      const subtitleLines = doc.splitTextToSize(section.subtitle, contentWidth - 8);
+      ensureSpace(subtitleLines.length * 3.5 + 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(subtitleLines, margin + 2, currentY + 3);
+      currentY += subtitleLines.length * 3.5 + 2;
+    }
+
+    const rows = section.rows.length > 0
+      ? section.rows
+      : [{ label: '', value: section.emptyMessage || 'No payload data available.' }];
+
+    rows.forEach(row => {
+      const labelLines = doc.splitTextToSize(row.label, payloadLabelWidth - 8);
+      const valueLines = doc.splitTextToSize(row.value, contentWidth - payloadLabelWidth - 8);
+      const rowHeight = Math.max(8, Math.max(labelLines.length, valueLines.length) * 3.4 + 4);
+      ensureSpace(rowHeight + 1);
+
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.25);
+      doc.roundedRect(margin, currentY, contentWidth, rowHeight, 1, 1, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.setTextColor(71, 85, 105);
+      if (labelLines.length > 0) doc.text(labelLines, margin + 3, currentY + 4.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(30, 41, 59);
+      doc.text(valueLines, margin + payloadLabelWidth, currentY + 4.5);
+      currentY += rowHeight + 1.5;
+    });
+
+    currentY += 3;
+  });
+
   // ========================================================================
   // FINAL PASS: SUBTLE FOOTERS ON ALL PAGES (NO TELEMETRY BLACK BOXES, NO GOLDEN CLIPPING BORDERS)
   // ========================================================================
@@ -803,7 +854,7 @@ export function generateVedicPdfReport(
     providerTag = narrative.isPrivateLocal ? 'LocalLLM' : 'Gemini';
   }
 
-  const filename = `${monthName}_${year}_${providerTag}_AstroPredictions.pdf`;
+  const filename = `${monthName}_${year}_${providerTag}_${createReportFilenameTimestamp()}_AstroPredictions.pdf`;
   doc.save(filename);
 }
 

@@ -635,6 +635,22 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   };
 
   const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const narrativeResponseRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!narrative || isGenerating) return;
+
+    const frame = requestAnimationFrame(() => {
+      const container = bodyScrollRef.current;
+      const response = narrativeResponseRef.current;
+      if (!container || !response) return;
+
+      const top = response.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 12;
+      container.scrollTo({ top, behavior: 'smooth' });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [narrative, isGenerating]);
 
   const scrollToBottom = () => {
     if (bodyScrollRef.current) {
@@ -2276,7 +2292,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
 
           {/* 3-PART SYNTHESIZED NARRATIVE DISPLAY */}
           {isGenerating ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div ref={narrativeResponseRef} className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
               <RotateCcw className="w-8 h-8 text-amber-400 animate-spin" />
               <div className="text-center space-y-1">
                 <p className="text-xs font-mono font-bold text-white">
@@ -2319,7 +2335,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               </div>
             </div>
           ) : narrative ? (
-            <div className="space-y-3.5">
+            <div ref={narrativeResponseRef} className="space-y-3.5">
               {/* CONTEXTUAL ERROR & QUOTA BANNERS */}
               {narrative.connectionError && (
                 <>

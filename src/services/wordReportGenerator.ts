@@ -1,4 +1,5 @@
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
+import { createReportFilenameTimestamp } from './reportFilename';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -578,7 +579,7 @@ export function generateVedicWordReport(
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${monthName}_${year}_${providerTag}_AstroPredictions.doc`;
+  a.download = `${monthName}_${year}_${providerTag}_${createReportFilenameTimestamp()}_AstroPredictions.doc`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

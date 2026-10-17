@@ -369,11 +369,13 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         gemini_pro: 'Gemini',
         claude_sonnet: 'Claude Sonnet',
         claude_haiku: 'Claude Haiku',
+        claude_fable: 'Claude Fable 5.1',
         claude: 'Claude Sonnet'
       };
       const engine = (engineMap as any)[activeProvider] || 'Claude';
       const modelName = narrative.ollamaStats?.model || (
         activeProvider === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') :
+        activeProvider === 'claude_fable' ? 'claude-fable-5-1' :
         activeProvider === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') :
         (activeProvider === 'claude_sonnet' || activeProvider === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : localOllamaModel
       );
@@ -449,10 +451,11 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           success: !!res.success,
           message: res.message
         });
-      } else if (activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') {
-        const res = await testClaudeConnection(anthropicApiKey, anthropicModel);
+      } else if (activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude_fable' || activeProvider === 'claude') {
+        const testModel = activeProvider === 'claude_fable' ? 'claude-fable-5-1' : anthropicModel;
+        const res = await testClaudeConnection(anthropicApiKey, testModel);
         setKeyHealthStatus({
-          provider: 'Anthropic Claude',
+          provider: activeProvider === 'claude_fable' ? 'Claude Fable 5.1' : 'Anthropic Claude',
           success: !!res.success,
           message: res.message
         });
@@ -785,7 +788,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
               Reasoning Engine:
             </span>
             <div className="flex items-center rounded-lg bg-slate-900 border border-slate-700/80 p-0.5">
-              {(['local_qwen', 'gemini_pro', 'claude_sonnet', 'claude_haiku'] as LLMProviderId[]).map(pid => {
+              {(['local_qwen', 'gemini_pro', 'claude_sonnet', 'claude_haiku', 'claude_fable'] as LLMProviderId[]).map(pid => {
                 const prov = LLM_PROVIDERS[pid];
                 const isActive = activeProvider === pid || (pid === 'claude_sonnet' && activeProvider === 'claude');
                 return (
@@ -963,31 +966,35 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 </button>
               </div>
             )}
-            {(activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude') && (
+            {(activeProvider === 'claude_sonnet' || activeProvider === 'claude_haiku' || activeProvider === 'claude_fable' || activeProvider === 'claude') && (
               <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-lg">
                 <span className="text-[10px] text-purple-300 font-mono font-bold flex items-center gap-1">
                   <span>🧠</span>
-                  <span>{activeProvider === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'}</span>
+                  <span>{activeProvider === 'claude_fable' ? 'Claude Fable 5.1' : activeProvider === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'}</span>
                 </span>
                 <div className="h-3.5 w-px bg-slate-700" />
-                <select
-                  value={anthropicModel}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setAnthropicModel(val);
-                    localStorage.setItem('astro_anthropic_model', val);
-                  }}
-                  className="bg-slate-950 border border-purple-500/40 rounded px-1.5 py-0.5 text-[10px] font-mono text-purple-200 focus:outline-none cursor-pointer"
-                  title="Select Anthropic Claude Model"
-                >
-                  <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
-                  <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
-                  <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
-                  <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
-                  <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
-                  <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
-                  <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
-                </select>
+                {activeProvider === 'claude_fable' ? (
+                  <span className="text-[10px] font-mono text-purple-200">claude-fable-5-1</span>
+                ) : (
+                  <select
+                    value={anthropicModel}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAnthropicModel(val);
+                      localStorage.setItem('astro_anthropic_model', val);
+                    }}
+                    className="bg-slate-950 border border-purple-500/40 rounded px-1.5 py-0.5 text-[10px] font-mono text-purple-200 focus:outline-none cursor-pointer"
+                    title="Select Anthropic Claude Model"
+                  >
+                    <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
+                    <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
+                    <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
+                    <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
+                    <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+                    <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
+                    <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
+                  </select>
+                )}
                 <div className="h-3.5 w-px bg-slate-700" />
                 <select
                   value={anthropicThinkingMode}
@@ -1135,16 +1142,16 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                   PRIVATE LLM ADAPTER (Local Fallback Active - Ollama offline)
                 </span>
               )
-            ) : (narrative?.providerUsed === 'claude_sonnet' || narrative?.providerUsed === 'claude_haiku' || narrative?.providerUsed === 'claude') ? (
+            ) : (narrative?.providerUsed === 'claude_sonnet' || narrative?.providerUsed === 'claude_haiku' || narrative?.providerUsed === 'claude_fable' || narrative?.providerUsed === 'claude') ? (
               narrative.connectionStatus === 'connected_live' ? (
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-bold">
                   <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                  LIVE ANTHROPIC CLAUDE ({narrative.providerUsed === 'claude_haiku' ? 'Haiku/Fable' : 'Sonnet'})
+                  LIVE ANTHROPIC CLAUDE ({narrative.providerUsed === 'claude_fable' ? 'Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Haiku' : 'Sonnet'})
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">
                   <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  CLAUDE PARASHARA FALLBACK ({narrative.providerUsed === 'claude_haiku' ? 'Haiku/Fable' : 'Sonnet'})
+                  CLAUDE PARASHARA FALLBACK ({narrative.providerUsed === 'claude_fable' ? 'Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Haiku' : 'Sonnet'})
                 </span>
               )
             ) : (
@@ -1578,7 +1585,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                       <div>
                         <span className="text-slate-500 block">Engine &amp; Model</span>
-                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : 'qwen2.5:7b-instruct')})</span>
+                        <span className="text-amber-300 font-bold truncate block">{narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_fable' ? 'Claude Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'} ({narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_fable' ? 'claude-fable-5-1' : narrative.providerUsed === 'claude_haiku' ? (anthropicModel || 'claude-haiku-5-5') : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') ? (anthropicModel || 'claude-sonnet-5-5') : 'qwen2.5:7b-instruct')})</span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Time Taken</span>
@@ -1611,7 +1618,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                           </button>
                           <button
                             onClick={() => handleCopy(
-                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
+                              narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_fable' ? 'Claude Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_fable' ? 'claude-fable-5-1' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''")}', '${(narrative.part1_probabilityAndScope || '').replace(/'/g, "''")}', ${narrative.executionTimeMs || 0}, 'SUCCESS');`,
                               'manual_sql_insert'
                             )}
                             className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[11px] font-mono flex items-center gap-1 transition cursor-pointer shadow-sm"
@@ -1622,7 +1629,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </div>
                       </div>
                       <pre className="p-2 bg-slate-900 rounded border border-slate-800 text-[10px] text-slate-300 font-mono whitespace-pre-wrap max-h-24 overflow-y-auto select-all">
-                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
+                        {narrative.sqlInsert || `INSERT INTO llm_prompt_logs (log_id, running_number, engine, model_name, fired_at, prompt_text, response_text, time_taken_ms, status) VALUES ('${narrative.logId || 'LOG-RUN-001'}', ${narrative.runningNumber || 1}, '${narrative.providerUsed === 'local_qwen' ? 'Ollama' : narrative.providerUsed === 'gemini_pro' ? 'Gemini' : narrative.providerUsed === 'claude_fable' ? 'Claude Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku' : 'Claude Sonnet'}', '${narrative.ollamaStats?.model || (narrative.providerUsed === 'gemini_pro' ? (geminiModel || 'gemini-2.5-flash') : narrative.providerUsed === 'claude_fable' ? 'claude-fable-5-1' : narrative.providerUsed === 'claude_haiku' ? 'claude-3-5-haiku-20241022' : 'claude-3-5-sonnet-20241022')}', NOW(), '${(narrative.promptSent || '').replace(/'/g, "''").slice(0, 100)}...', ..., ${narrative.executionTimeMs || 0}, 'SUCCESS');`}
                       </pre>
                     </div>
 
@@ -2393,7 +2400,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         </p>
                       </div>
                     </div>
-                  ) : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude_haiku' || narrative.providerUsed === 'claude') ? (
+                  ) : (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude_haiku' || narrative.providerUsed === 'claude_fable' || narrative.providerUsed === 'claude') ? (
                     /* 4. ANTHROPIC CLAUDE MISSING KEY, QUOTA, OR MODEL ISSUE CARD */
                     <div className="p-4 rounded-xl bg-purple-950/30 border border-purple-500/40 text-purple-200 text-xs space-y-2.5 shadow-md animate-fadeIn">
                       <div className="flex items-start gap-2.5">
@@ -2401,7 +2408,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         <div className="space-y-1.5 flex-1">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
-                              <span>🧠 Anthropic Claude ({narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'})</span>
+                              <span>🧠 Anthropic Claude ({narrative.providerUsed === 'claude_fable' ? 'Claude Fable 5.1' : narrative.providerUsed === 'claude_haiku' ? 'Claude Haiku 5.5' : 'Claude Sonnet 5.5'})</span>
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
                                 {narrative.connectionError?.includes('Credit balance') ? 'CREDITS NEEDED' : narrative.connectionError?.includes('Model') || narrative.connectionError?.includes('snapshot') ? 'MODEL AVAILABILITY' : 'KEY REQUIRED'}
                               </span>
@@ -2418,23 +2425,27 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                               <li>Enter your API key below or in your local <code className="text-slate-200">.env</code> as <code className="text-amber-300 bg-slate-950 px-1 py-0.5 rounded font-mono">ANTHROPIC_API_KEY="sk-ant-..."</code>.</li>
                             </ol>
                             <div className="flex flex-wrap items-center gap-2 pt-1">
-                              <select
-                                value={anthropicModel}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setAnthropicModel(val);
-                                  localStorage.setItem('astro_anthropic_model', val);
-                                }}
-                                className="bg-slate-950 border border-purple-500/60 rounded px-2 py-1 text-xs font-mono text-purple-200 focus:outline-none cursor-pointer"
-                              >
-                                <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
-                                <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
-                                <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
-                                <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
-                                <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
-                                <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
-                                <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
-                              </select>
+                              {narrative.providerUsed === 'claude_fable' ? (
+                                <span className="px-2 py-1 text-xs font-mono text-purple-200">claude-fable-5-1</span>
+                              ) : (
+                                <select
+                                  value={anthropicModel}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setAnthropicModel(val);
+                                    localStorage.setItem('astro_anthropic_model', val);
+                                  }}
+                                  className="bg-slate-950 border border-purple-500/60 rounded px-2 py-1 text-xs font-mono text-purple-200 focus:outline-none cursor-pointer"
+                                >
+                                  <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (Default &amp; Recommended)</option>
+                                  <option value="claude-haiku-5-5">Claude Haiku 5.5 (Fast &amp; Low Cost)</option>
+                                  <option value="claude-opus-5-5">Claude Opus 5.5 (Flagship Deep Reasoning)</option>
+                                  <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Legacy)</option>
+                                  <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+                                  <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Legacy)</option>
+                                  <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy Tier 1)</option>
+                                </select>
+                              )}
                               <input
                                 type="password"
                                 value={anthropicApiKey}

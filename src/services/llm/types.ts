@@ -3,7 +3,7 @@
  */
 import { GEMINI_PRIMARY_MODEL } from './geminiModels';
 
-export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude';
+export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude_fable' | 'claude';
 
 export interface LLMProviderConfig {
   id: LLMProviderId;
@@ -45,6 +45,14 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
     badgeLabel: '📜 Claude Haiku 5.5 (Anthropic)',
     model: 'claude-haiku-5-5',
     description: 'Anthropic high-speed narrative model for lyrical, mythic, and expressive Vedic storytelling.',
+    endpoint: '/api/llm/claude'
+  },
+  claude_fable: {
+    id: 'claude_fable',
+    name: 'Claude Fable 5.1',
+    badgeLabel: '📜 Claude Fable 5.1',
+    model: 'claude-fable-5-1',
+    description: 'Claude Fable 5.1 cloud reasoning through the private Claude proxy.',
     endpoint: '/api/llm/claude'
   },
   claude: {

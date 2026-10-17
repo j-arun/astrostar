@@ -1222,6 +1222,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 <option value="claude_haiku" className="bg-slate-900 text-white">
                   {LLM_PROVIDERS.claude_haiku.badgeLabel}
                 </option>
+                <option value="claude_fable" className="bg-slate-900 text-white">
+                  {LLM_PROVIDERS.claude_fable.badgeLabel}
+                </option>
               </select>
             </div>
 

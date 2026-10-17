@@ -4,7 +4,7 @@ import { buildVedicWordContent } from './wordReportGenerator';
 import { getVedicPdfBase64 } from './pdfReportGenerator';
 
 export interface DocReportEntry {
-  engineKey: string; // 'claude_iq' | 'claude_sonnet' | 'gemini_pro' | 'fable_ollama'
+  engineKey: string; // 'claude_iq' | 'claude_sonnet' | 'claude_fable' | 'gemini_pro' | 'fable_ollama'
   engineName: string;
   categoryLabel: string;
   badge: string;
@@ -57,9 +57,17 @@ export const STANDARD_REASONING_ENGINES = [
     color: 'amber'
   },
   {
+    key: 'claude_fable',
+    name: 'Claude Fable 5.1',
+    categoryLabel: '3. Claude Fable 5.1',
+    badge: '📜 Fable Engine',
+    providerId: 'claude_fable' as LLMProviderId,
+    color: 'rose'
+  },
+  {
     key: 'gemini_pro',
     name: 'Google Gemini Pro',
-    categoryLabel: '3. Gemini Pro',
+    categoryLabel: '4. Gemini Pro',
     badge: '♊ Gemini Pro',
     providerId: 'gemini_pro' as LLMProviderId,
     color: 'cyan'
@@ -67,7 +75,7 @@ export const STANDARD_REASONING_ENGINES = [
   {
     key: 'fable_ollama',
     name: 'Fable / Ollama (Local 7B)',
-    categoryLabel: '4. Fable / Ollama',
+    categoryLabel: '5. Fable / Ollama',
     badge: '🖥️ Fable / Ollama',
     providerId: 'local_qwen' as LLMProviderId,
     color: 'purple'
@@ -76,6 +84,7 @@ export const STANDARD_REASONING_ENGINES = [
 
 export function mapProviderToEngineKey(providerId: LLMProviderId): string {
   if (providerId === 'claude_haiku') return 'claude_iq';
+  if (providerId === 'claude_fable') return 'claude_fable';
   if (providerId === 'claude_sonnet' || providerId === 'claude') return 'claude_sonnet';
   if (providerId === 'gemini_pro') return 'gemini_pro';
   if (providerId === 'local_qwen') return 'fable_ollama';

@@ -43,6 +43,9 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
   if (providerId === 'claude_haiku') {
     return 'Claude Haiku 5.5';
   }
+  if (providerId === 'claude_fable') {
+    return 'Claude Fable 5.1';
+  }
   if (providerId === 'gemini_pro') {
     return 'Google Gemini Pro';
   }
@@ -792,6 +795,8 @@ export function generateVedicPdfReport(
     providerTag = 'Claude-Sonnet';
   } else if (narrative.providerUsed === 'claude_haiku') {
     providerTag = 'Claude-Haiku';
+  } else if (narrative.providerUsed === 'claude_fable') {
+    providerTag = 'Claude-Fable-5.1';
   } else if (narrative.providerUsed === 'gemini_pro') {
     providerTag = 'Gemini';
   } else {

@@ -486,10 +486,10 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
   const personProfile = registered.profile;
   const natalPlacementsList = registered.placements;
   let dashaSource: [string, string, string, string, string][];
-  if (registered.dashaRecords && registered.dashaRecords.length > 50) {
-    dashaSource = registered.dashaRecords;
-  } else if (personId === '001ME') {
+  if (personId === '001ME') {
     dashaSource = getFullVimshottariTimeline();
+  } else if (registered.dashaRecords && registered.dashaRecords.length > 50) {
+    dashaSource = registered.dashaRecords;
   } else {
     dashaSource = calculateVimshottariTimelineForProfile(personProfile);
   }

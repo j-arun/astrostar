@@ -40,6 +40,7 @@ import {
   ApiFetchResult
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
+import { getFullVimshottariTimeline } from '../data/dashaCalculator';
 
 interface RestApiStudioProps {
   apiPersonId: string;
@@ -272,6 +273,27 @@ export default function RestApiStudio({
     );
   }, [apiResponse, dashaSearch]);
 
+  const dashaReferenceIntervals = useMemo((): DashaIntervalItem[] => {
+    if (!apiResponse) return [];
+    if (apiResponse.person_id !== '001ME') {
+      return apiResponse.vimshottari_dasha_intervals.intervals;
+    }
+
+    const dateOfBirth = apiResponse.person_profile.date_of_birth;
+    return getFullVimshottariTimeline()
+      .filter(([, , , , endDate]) => endDate >= dateOfBirth)
+      .map(([mahadasha, antardasha, pratyantardasha, startDate, endDate], index) => ({
+        sequence_index: index + 1,
+        mahadasha_lord_md: mahadasha,
+        antardasha_lord_ad: antardasha,
+        pratyantardasha_lord_pd: pratyantardasha,
+        full_lord_hierarchy: `MD: ${mahadasha} > AD: ${antardasha} > PD: ${pratyantardasha}`,
+        start_date: startDate,
+        end_date: endDate,
+        duration_days: Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))
+      }));
+  }, [apiResponse]);
+
   const dashaTree = useMemo(() => {
     const groups: Array<{
       lord: string;
@@ -285,7 +307,7 @@ export default function RestApiStudio({
       }>;
     }> = [];
 
-    for (const interval of apiResponse?.vimshottari_dasha_intervals.intervals ?? []) {
+    for (const interval of dashaReferenceIntervals) {
       let mahadasha = groups[groups.length - 1];
       if (!mahadasha || mahadasha.lord !== interval.mahadasha_lord_md) {
         mahadasha = {
@@ -314,7 +336,7 @@ export default function RestApiStudio({
     }
 
     return groups;
-  }, [apiResponse]);
+  }, [dashaReferenceIntervals]);
 
   const jsonString = useMemo(() => {
     return apiResponse ? JSON.stringify(apiResponse, null, 2) : '';
@@ -865,8 +887,8 @@ print(prompt_markdown[:400])
                     Granular Vimshottari Timeline Intervals (PD / Anthara Level)
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Complete stored coverage from <strong className="text-slate-200">{apiResponse.person_profile.date_of_birth}</strong> to{' '}
-                    <strong className="text-slate-200">{dashaTree[dashaTree.length - 1]?.endDate ?? 'latest available date'}</strong>. Every available PD interval is included sequentially.
+                    Request window: <strong className="text-slate-200">{apiResponse.requested_timeline.start_date}</strong> to{' '}
+                    <strong className="text-slate-200">{apiResponse.requested_timeline.end_date}</strong>. Every matching PD interval is included sequentially.
                   </p>
                 </div>
 
@@ -1976,7 +1998,7 @@ print(prompt_markdown[:400])
               <span className="block text-sm font-bold text-white">3. Complete Vimshottari Dasha Reference</span>
               <span className="block text-xs text-slate-400">
                 {apiResponse?.person_profile.date_of_birth ?? 'DOB unavailable'} to {dashaTree[dashaTree.length - 1]?.endDate ?? 'latest stored date'}
-                {' '}· {apiResponse?.vimshottari_dasha_intervals.total_intervals_count ?? 0} PD periods
+                {' '}· {dashaReferenceIntervals.length} PD periods
               </span>
             </span>
           </span>

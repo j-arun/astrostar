@@ -35,8 +35,7 @@ const MAHADASHAS = [
   { lord: "Moon (Chandra)", start: "2039-04-02", end: "2049-04-02", totalYears: 10 },
   { lord: "Mars (Sevvai)", start: "2049-04-02", end: "2056-04-02", totalYears: 7 },
   { lord: "Rahu", start: "2056-04-02", end: "2074-04-02", totalYears: 18 },
-  { lord: "Jupiter (Guru)", start: "2074-04-02", end: "2090-04-02", totalYears: 16 },
-  { lord: "Saturn (Sani)", start: "2090-04-02", end: "2109-04-02", totalYears: 19 }
+  { lord: "Jupiter (Guru)", start: "2074-04-02", end: "2090-04-02", totalYears: 16 }
 ];
 
 let cachedTimeline: [string, string, string, string, string][] | null = null;

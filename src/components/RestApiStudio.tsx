@@ -42,6 +42,7 @@ import {
   pingApiHealth,
   ApiFetchResult,
   fetchDashaEvaluations,
+  getCurrentMonthDateRange,
   getDashaEvaluationKey,
   saveDashaEvaluation
 } from '../data/apiService';
@@ -581,7 +582,7 @@ print(prompt_markdown[:400])
                 )}
               </div>
               <div className="text-xs text-slate-400">
-                Accepts ISO format (<code className="text-slate-300">1998-01-01</code>) or Natural Language (<code className="text-slate-300">January 1998</code>)
+                Enter dates as <code className="text-slate-300">YYYY-MM-DD</code> (for example, <code className="text-slate-300">2026-01-01</code>). Defaults to the current month.
               </div>
             </div>
           </div>
@@ -713,7 +714,7 @@ print(prompt_markdown[:400])
               type="text"
               value={apiStartDate}
               onChange={e => setApiStartDate(e.target.value)}
-              placeholder="1998-01-01 or January 1998"
+              placeholder="YYYY-MM-DD (e.g. 2026-01-01)"
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-cyan-400 font-mono focus:outline-none focus:border-cyan-400 transition"
             />
             <span className="text-[11px] text-slate-500 mt-1 block">Normalized to: {normalizeDateString(apiStartDate, false)}</span>
@@ -727,7 +728,7 @@ print(prompt_markdown[:400])
               type="text"
               value={apiEndDate}
               onChange={e => setApiEndDate(e.target.value)}
-              placeholder="2020-01-31 or January 2020"
+              placeholder="YYYY-MM-DD (e.g. 2026-01-31)"
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-rose-400 font-mono focus:outline-none focus:border-rose-400 transition"
             />
             <span className="text-[11px] text-slate-500 mt-1 block">Normalized to: {normalizeDateString(apiEndDate, true)}</span>
@@ -741,10 +742,25 @@ print(prompt_markdown[:400])
               <Clock className="w-3.5 h-3.5 text-slate-500" /> Presets:
             </span>
             <button
+              onClick={() => {
+                const range = getCurrentMonthDateRange();
+                void applyPreset(range.startDate, range.endDate);
+              }}
+              className="px-2.5 py-1 rounded text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition"
+            >
+              Current Month
+            </button>
+            <button
+              onClick={() => void applyPreset('2026-01-01', '2026-10-31')}
+              className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition"
+            >
+              Jan-Oct 2026
+            </button>
+            <button
               onClick={() => applyPreset('January 1998', 'January 2020')}
               className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition"
             >
-              ⭐ 1998 to 2020 (User Prompt Period)
+              Historical: 1998-2020
             </button>
             <button
               onClick={() => applyPreset('2000-01-01', '2005-12-31')}

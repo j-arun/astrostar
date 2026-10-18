@@ -20,6 +20,7 @@ import {
 } from './data/horoscopeData';
 import {
   executeHoroscopeTimelineQuery,
+  getCurrentMonthDateRange,
   HoroscopeApiResponse,
   getRegisteredPersonList,
   syncPersonsFromBackend,
@@ -109,11 +110,12 @@ export default function App() {
   const activeProfile = activeRecord.profile;
 
   // REST API Explorer States (Model 2)
+  const defaultApiDateRange = getCurrentMonthDateRange();
   const [apiPersonId, setApiPersonId] = useState<string>(activePersonId);
-  const [apiStartDate, setApiStartDate] = useState<string>('1998-01-01');
-  const [apiEndDate, setApiEndDate] = useState<string>('2020-01-31');
+  const [apiStartDate, setApiStartDate] = useState<string>(defaultApiDateRange.startDate);
+  const [apiEndDate, setApiEndDate] = useState<string>(defaultApiDateRange.endDate);
   const [apiResponse, setApiResponse] = useState<HoroscopeApiResponse | null>(() =>
-    executeHoroscopeTimelineQuery(activePersonId, '1998-01-01', '2020-01-31')
+    executeHoroscopeTimelineQuery(activePersonId, defaultApiDateRange.startDate, defaultApiDateRange.endDate)
   );
   // Single unified handler when native ID is chosen from person_master
   const handleSelectPerson = async (newId: string) => {

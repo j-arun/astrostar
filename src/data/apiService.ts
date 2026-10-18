@@ -610,6 +610,18 @@ export interface ApiFetchResult {
   endpointUsed?: string;
 }
 
+export function getCurrentMonthDateRange(referenceDate: Date = new Date()): { startDate: string; endDate: string } {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth() + 1;
+  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const lastDay = new Date(year, month, 0).getDate();
+
+  return {
+    startDate: `${yearMonth}-01`,
+    endDate: `${yearMonth}-${String(lastDay).padStart(2, '0')}`
+  };
+}
+
 /**
  * Returns ordered candidate base URLs to try.
  * Solves Windows IPv6 localhost resolution and Vite dev server proxy differences.

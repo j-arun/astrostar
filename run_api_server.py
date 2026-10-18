@@ -299,6 +299,9 @@ def ensure_tables_exist(conn):
 
         ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(200);
         ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
+        ALTER TABLE vimshottari_dasha_detail
+            ALTER COLUMN evaluation_rating TYPE SMALLINT
+            USING NULLIF(BTRIM(evaluation_rating::TEXT), '')::SMALLINT;
 
         DO $$
         BEGIN
@@ -1129,16 +1132,16 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "GEMINI_API_KEY not configured"}).encode())
                 return
 
-            import urllib.request
+            from urllib import request as urllib_request
             req_data = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
             }).encode('utf-8')
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
-            req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"}, method="POST")
+            req = urllib_request.Request(url, data=req_data, headers={"Content-Type": "application/json"}, method="POST")
             try:
-                with urllib.request.urlopen(req, timeout=15) as resp:
+                with urllib_request.urlopen(req, timeout=15) as resp:
                     resp_json = json.loads(resp.read().decode('utf-8'))
                     text = resp_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     self._set_headers(200)
@@ -1150,9 +1153,9 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                     return
             except Exception as e:
                 url2 = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={api_key}"
-                req2 = urllib.request.Request(url2, data=req_data, headers={"Content-Type": "application/json"}, method="POST")
+                req2 = urllib_request.Request(url2, data=req_data, headers={"Content-Type": "application/json"}, method="POST")
                 try:
-                    with urllib.request.urlopen(req2, timeout=15) as resp2:
+                    with urllib_request.urlopen(req2, timeout=15) as resp2:
                         resp_json2 = json.loads(resp2.read().decode('utf-8'))
                         text2 = resp_json2.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                         self._set_headers(200)

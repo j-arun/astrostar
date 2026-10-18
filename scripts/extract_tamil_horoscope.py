@@ -594,6 +594,12 @@ def ingest_to_postgres(db_params: Dict[str, Any],
             ON vimshottari_dasha_detail (
                 person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
             );
+
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(200);
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
+        ALTER TABLE vimshottari_dasha_detail
+            ALTER COLUMN evaluation_rating TYPE SMALLINT
+            USING NULLIF(BTRIM(evaluation_rating::TEXT), '')::SMALLINT;
         """)
 
         # 2. Ingest person_master (Upsert)

@@ -2,6 +2,10 @@ ALTER TABLE vimshottari_dasha_detail
     ADD COLUMN IF NOT EXISTS notes VARCHAR(200),
     ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
 
+ALTER TABLE vimshottari_dasha_detail
+    ALTER COLUMN evaluation_rating TYPE SMALLINT
+    USING NULLIF(BTRIM(evaluation_rating::TEXT), '')::SMALLINT;
+
 DO $$
 BEGIN
     IF NOT EXISTS (

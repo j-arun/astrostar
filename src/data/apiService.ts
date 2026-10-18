@@ -28,6 +28,42 @@ export interface DashaEvaluationRecord {
   evaluation_rating: DashaEvaluationRating | null;
 }
 
+export interface MahadashaNarrativeIdentity {
+  mahadasha_lord_md: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface CachedMahadashaNarrative {
+  narrative: string;
+  prompt: string;
+  model: string;
+  generated_at: string;
+}
+
+const MAHADASHA_NARRATIVE_CACHE_KEY = 'astro_md_narratives_v1';
+
+export function getMahadashaNarrativeKey(personId: string, period: MahadashaNarrativeIdentity): string {
+  return JSON.stringify([personId, period.mahadasha_lord_md, period.start_date, period.end_date]);
+}
+
+export function loadMahadashaNarratives(): Record<string, CachedMahadashaNarrative> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const cache = window.localStorage.getItem(MAHADASHA_NARRATIVE_CACHE_KEY);
+    return cache ? JSON.parse(cache) as Record<string, CachedMahadashaNarrative> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function storeMahadashaNarrative(key: string, narrative: CachedMahadashaNarrative): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const cache = loadMahadashaNarratives();
+  cache[key] = narrative;
+  window.localStorage.setItem(MAHADASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
+}
+
 export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {
   return JSON.stringify([
     personId,
@@ -813,6 +849,72 @@ export async function saveDashaEvaluation(
   }
 
   throw new Error(lastError || 'Could not save PD notes to PostgreSQL.');
+}
+
+function getNarrativeApiUrls(baseUrl: string, pathname: string): string[] {
+  return getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+    const base = candidate.replace(/\/+$/, '');
+    return base ? `${base}${pathname}` : pathname;
+  });
+}
+
+export async function previewMahadashaNarrativePrompt(
+  baseUrl: string,
+  personId: string,
+  period: MahadashaNarrativeIdentity
+): Promise<string> {
+  const params = new URLSearchParams({
+    person_id: personId,
+    mahadasha_lord_md: period.mahadasha_lord_md,
+    start_date: period.start_date,
+    end_date: period.end_date
+  });
+  let lastError = '';
+
+  for (const url of getNarrativeApiUrls(baseUrl, `/api/dasha/md-narrative/prompt?${params}`)) {
+    try {
+      const response = await fetch(url);
+      const result = await response.json();
+      if (response.ok && result.success && typeof result.prompt === 'string') return result.prompt;
+      lastError = result.error || `HTTP ${response.status} from ${url}`;
+    } catch (error: any) {
+      lastError = error?.message || 'Could not load the local LLM prompt.';
+    }
+  }
+
+  throw new Error(lastError || 'Could not preview the local LLM prompt.');
+}
+
+export async function generateMahadashaNarrative(
+  baseUrl: string,
+  personId: string,
+  period: MahadashaNarrativeIdentity
+): Promise<CachedMahadashaNarrative> {
+  let lastError = '';
+
+  for (const url of getNarrativeApiUrls(baseUrl, '/api/dasha/md-narrative')) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_id: personId, ...period })
+      });
+      const result = await response.json();
+      if (response.ok && result.success && typeof result.narrative === 'string' && typeof result.prompt === 'string') {
+        return {
+          narrative: result.narrative,
+          prompt: result.prompt,
+          model: result.model || 'Local Ollama',
+          generated_at: result.generated_at || new Date().toISOString()
+        };
+      }
+      lastError = result.error || `HTTP ${response.status} from ${url}`;
+    } catch (error: any) {
+      lastError = error?.message || 'Could not reach the local LLM service.';
+    }
+  }
+
+  throw new Error(lastError || 'Could not generate the MD narrative locally.');
 }
 
 /**

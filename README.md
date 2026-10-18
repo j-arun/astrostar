@@ -9,6 +9,8 @@ A dual-model Vedic astrology data engineering pipeline and REST API server desig
      - **Relative to Native's Lagna** (e.g. Jupiter in Katakam/Cancer = 8th house from Dhanus Lagna)
      - **Relative to Native's Janma Rashi / Moon Sign** (e.g. Jupiter in Katakam/Cancer = 9th house from Vrischigam Moon)
 
+**Latest project branch:** `copilot-branch`.
+
 ---
 
 ## 🏗️ Architecture: Two Operational Models
@@ -111,6 +113,20 @@ This parses the PDF and ingests:
 python run_api_server.py
 ```
 The REST API server will start on `http://localhost:5000`.
+
+### Private LLM for Mahadasha Narratives
+
+The app can run without a local LLM, but generating Mahadasha narratives requires **Ollama running locally**. This feature uses a private local model; it does not send Mahadasha prompts or notes to a cloud LLM provider.
+
+1. Install Ollama and start its local service: <https://ollama.com/download>.
+2. Download the model configured by default in `astro_engine.ini`:
+  ```bash
+  ollama pull qwen2.5:7b-instruct
+  ```
+3. Keep the configured endpoint available at `http://localhost:11434/api/generate`. If you change the model or endpoint, update the `[provider_local_qwen]` section in `astro_engine.ini`; the endpoint must remain a loopback address (`localhost`, `127.0.0.1`, or `::1`).
+4. Start PostgreSQL and the app's API and UI services. Open the **Dasha Reference** section, save PD notes or ratings for the Mahadasha, then use **Generate Narrative**. The narrative is generated from those saved observations, and the prompt editor's saved custom prompt is stored in the current browser.
+
+The API's `[system] default_provider` must remain `local_qwen` for this feature. The other app features do not require Ollama.
 
 #### Testing with cURL:
 

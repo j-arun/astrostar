@@ -623,10 +623,11 @@ def generate_md_narrative(
     person_id: str,
     mahadasha_lord: str,
     start_date: str,
-    end_date: str
+    end_date: str,
+    custom_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     observations = get_md_pd_observations(cfg, person_id, mahadasha_lord, start_date, end_date)
-    prompt = build_md_narrative_prompt(mahadasha_lord, start_date, end_date, observations)
+    prompt = custom_prompt.strip() if isinstance(custom_prompt, str) and custom_prompt.strip() else build_md_narrative_prompt(mahadasha_lord, start_date, end_date, observations)
     settings = get_local_ollama_settings()
     request_body = json.dumps({
         "model": settings["model"],
@@ -1333,7 +1334,10 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 self._set_headers(400)
             else:
                 try:
-                    result = generate_md_narrative(cfg, person_id, mahadasha_lord, start_date, end_date)
+                    result = generate_md_narrative(
+                        cfg, person_id, mahadasha_lord, start_date, end_date,
+                        data.get("custom_prompt")
+                    )
                     self._set_headers(200)
                 except ValueError as e:
                     result = {"success": False, "error": str(e)}

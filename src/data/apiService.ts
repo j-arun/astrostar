@@ -64,6 +64,32 @@ export function storeMahadashaNarrative(key: string, narrative: CachedMahadashaN
   window.localStorage.setItem(MAHADASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
 }
 
+const MAHADASHA_PROMPT_OVERRIDES_KEY = 'astro_md_prompt_overrides_v1';
+
+export function loadMahadashaPromptOverrides(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const overrides = window.localStorage.getItem(MAHADASHA_PROMPT_OVERRIDES_KEY);
+    return overrides ? JSON.parse(overrides) as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function storeMahadashaPromptOverride(key: string, prompt: string): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const overrides = loadMahadashaPromptOverrides();
+  overrides[key] = prompt;
+  window.localStorage.setItem(MAHADASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+export function removeMahadashaPromptOverride(key: string): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const overrides = loadMahadashaPromptOverrides();
+  delete overrides[key];
+  window.localStorage.setItem(MAHADASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
 export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {
   return JSON.stringify([
     personId,
@@ -888,7 +914,8 @@ export async function previewMahadashaNarrativePrompt(
 export async function generateMahadashaNarrative(
   baseUrl: string,
   personId: string,
-  period: MahadashaNarrativeIdentity
+  period: MahadashaNarrativeIdentity,
+  customPrompt?: string
 ): Promise<CachedMahadashaNarrative> {
   let lastError = '';
 
@@ -897,7 +924,7 @@ export async function generateMahadashaNarrative(
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person_id: personId, ...period })
+        body: JSON.stringify({ person_id: personId, ...period, custom_prompt: customPrompt })
       });
       const result = await response.json();
       if (response.ok && result.success && typeof result.narrative === 'string' && typeof result.prompt === 'string') {

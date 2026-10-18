@@ -49,8 +49,11 @@ import {
   getMahadashaNarrativeKey,
   getDashaEvaluationKey,
   loadMahadashaNarratives,
+  loadMahadashaPromptOverrides,
   previewMahadashaNarrativePrompt,
+  removeMahadashaPromptOverride,
   saveDashaEvaluation,
+  storeMahadashaPromptOverride,
   storeMahadashaNarrative
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
@@ -177,6 +180,7 @@ export default function RestApiStudio({
   const [mdNarratives, setMdNarratives] = useState<Record<string, CachedMahadashaNarrative>>(loadMahadashaNarratives);
   const [mdNarrativeStates, setMdNarrativeStates] = useState<Record<string, 'generating' | 'error'>>({});
   const [mdNarrativeErrors, setMdNarrativeErrors] = useState<Record<string, string>>({});
+  const [mdPromptOverrides, setMdPromptOverrides] = useState<Record<string, string>>(loadMahadashaPromptOverrides);
   const [mdPromptVisibility, setMdPromptVisibility] = useState<Record<string, boolean>>({});
   const [mdPromptLoading, setMdPromptLoading] = useState<Record<string, boolean>>({});
   const [mdPromptText, setMdPromptText] = useState<Record<string, string>>({});
@@ -406,7 +410,8 @@ export default function RestApiStudio({
     setMdNarrativeErrors(previous => ({ ...previous, [key]: '' }));
 
     try {
-      const generated = await generateMahadashaNarrative(apiBaseUrl, dashaPersonId, period);
+      const customPrompt = mdPromptText[key] || mdPromptOverrides[key];
+      const generated = await generateMahadashaNarrative(apiBaseUrl, dashaPersonId, period, customPrompt);
       setMdNarratives(previous => ({ ...previous, [key]: generated }));
       setMdPromptText(previous => ({ ...previous, [key]: generated.prompt }));
       try {
@@ -436,6 +441,10 @@ export default function RestApiStudio({
     }
 
     setMdPromptVisibility(previous => ({ ...previous, [key]: true }));
+    if (mdPromptOverrides[key]) {
+      setMdPromptText(previous => ({ ...previous, [key]: mdPromptOverrides[key] }));
+      return;
+    }
     setMdPromptLoading(previous => ({ ...previous, [key]: true }));
     setMdPromptErrors(previous => ({ ...previous, [key]: '' }));
     try {
@@ -443,6 +452,41 @@ export default function RestApiStudio({
       setMdPromptText(previous => ({ ...previous, [key]: prompt }));
     } catch (error: any) {
       setMdPromptErrors(previous => ({ ...previous, [key]: error.message || 'Could not load the local prompt.' }));
+    } finally {
+      setMdPromptLoading(previous => ({ ...previous, [key]: false }));
+    }
+  };
+
+  const handleSaveMdPrompt = (key: string) => {
+    const prompt = mdPromptText[key]?.trim();
+    if (!prompt) {
+      setMdPromptErrors(previous => ({ ...previous, [key]: 'Prompt cannot be empty.' }));
+      return;
+    }
+    try {
+      storeMahadashaPromptOverride(key, prompt);
+      setMdPromptOverrides(previous => ({ ...previous, [key]: prompt }));
+      setMdPromptText(previous => ({ ...previous, [key]: prompt }));
+      setMdPromptErrors(previous => ({ ...previous, [key]: '' }));
+    } catch (error: any) {
+      setMdPromptErrors(previous => ({ ...previous, [key]: error.message || 'Could not save this prompt.' }));
+    }
+  };
+
+  const handleResetMdPrompt = async (period: MahadashaNarrativeIdentity, key: string) => {
+    try {
+      removeMahadashaPromptOverride(key);
+      setMdPromptOverrides(previous => {
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+      setMdPromptLoading(previous => ({ ...previous, [key]: true }));
+      const prompt = await previewMahadashaNarrativePrompt(apiBaseUrl, dashaPersonId, period);
+      setMdPromptText(previous => ({ ...previous, [key]: prompt }));
+      setMdPromptErrors(previous => ({ ...previous, [key]: '' }));
+    } catch (error: any) {
+      setMdPromptErrors(previous => ({ ...previous, [key]: error.message || 'Could not restore the default prompt.' }));
     } finally {
       setMdPromptLoading(previous => ({ ...previous, [key]: false }));
     }
@@ -2250,14 +2294,31 @@ print(prompt_markdown[:400])
                     {mdNarrativeErrors[mdKey] && <p className="text-[11px] text-rose-300">{mdNarrativeErrors[mdKey]}</p>}
                     {mdPromptVisibility[mdKey] && (
                       <div className="border-t border-slate-700/70 pt-2">
-                        <h6 className="mb-1 text-[11px] font-semibold text-slate-300">Exact prompt for local Ollama</h6>
+                        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                          <h6 className="text-[11px] font-semibold text-slate-300">Prompt sent to local Ollama</h6>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => handleSaveMdPrompt(mdKey)} className="inline-flex items-center gap-1 rounded border border-emerald-500/40 px-2 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-500/10">
+                              <Save className="h-3 w-3" /> Save Prompt
+                            </button>
+                            <button type="button" onClick={() => void handleResetMdPrompt(mdIdentity, mdKey)} className="rounded border border-slate-700 px-2 py-1 text-[10px] font-semibold text-slate-300 hover:bg-slate-800">
+                              Reset Default
+                            </button>
+                          </div>
+                        </div>
                         {mdPromptLoading[mdKey] ? (
                           <p className="text-[11px] text-slate-400">Building prompt from the latest saved PD notes...</p>
                         ) : mdPromptErrors[mdKey] ? (
                           <p className="text-[11px] text-rose-300">{mdPromptErrors[mdKey]}</p>
                         ) : (
-                          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-slate-800 bg-slate-950 p-2.5 text-[10px] leading-relaxed text-slate-300">{mdPromptText[mdKey] || 'Prompt unavailable.'}</pre>
+                          <textarea
+                            aria-label={`Mahadasha prompt for ${mahadasha.lord}`}
+                            value={mdPromptText[mdKey] || ''}
+                            onChange={event => setMdPromptText(previous => ({ ...previous, [mdKey]: event.target.value }))}
+                            placeholder="Load the prompt, then edit it here..."
+                            className="max-h-96 min-h-64 w-full resize-y rounded border border-slate-800 bg-slate-950 p-2.5 font-mono text-[10px] leading-relaxed text-slate-300 focus:border-emerald-500 focus:outline-none"
+                          />
                         )}
+                        {mdPromptOverrides[mdKey] && <p className="mt-1 text-[10px] text-emerald-300">Saved custom prompt. It will be used for future generations of this Mahadasha.</p>}
                       </div>
                     )}
                   </section>

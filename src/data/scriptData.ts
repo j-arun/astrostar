@@ -430,8 +430,14 @@ CREATE TABLE IF NOT EXISTS vimshottari_dasha_detail (
     pratyantardasha_lord VARCHAR(50) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    rating_score VARCHAR(10),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    notes VARCHAR(200),
+    evaluation_rating SMALLINT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_vimshottari_evaluation_rating
+        CHECK (evaluation_rating IS NULL OR evaluation_rating IN (0, 5, 10)),
+    CONSTRAINT uq_vimshottari_dasha_period UNIQUE (
+        person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+    )
 );
 
 `;

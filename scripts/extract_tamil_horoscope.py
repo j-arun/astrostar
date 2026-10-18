@@ -580,8 +580,20 @@ def ingest_to_postgres(db_params: Dict[str, Any],
             pratyantardasha_lord VARCHAR(50) NOT NULL,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            notes VARCHAR(200),
+            evaluation_rating SMALLINT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT chk_vimshottari_evaluation_rating
+                CHECK (evaluation_rating IS NULL OR evaluation_rating IN (0, 5, 10)),
+            CONSTRAINT uq_vimshottari_dasha_period UNIQUE (
+                person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+            )
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_vimshottari_dasha_period
+            ON vimshottari_dasha_detail (
+                person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+            );
         """)
 
         # 2. Ingest person_master (Upsert)
@@ -634,7 +646,6 @@ def ingest_to_postgres(db_params: Dict[str, Any],
         )
 
         # 4. Ingest Dasha intervals
-        cur.execute("DELETE FROM vimshottari_dasha_detail WHERE person_id = %s;", (person["person_id"],))
         dasha_tuples = [
             (
                 d["person_id"], d["mahadasha_lord"], d["antardasha_lord"],
@@ -647,7 +658,9 @@ def ingest_to_postgres(db_params: Dict[str, Any],
             """
             INSERT INTO vimshottari_dasha_detail (
                 person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
-            ) VALUES %s;
+            ) VALUES %s
+            ON CONFLICT (person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date)
+            DO NOTHING;
             """,
             dasha_tuples
         )

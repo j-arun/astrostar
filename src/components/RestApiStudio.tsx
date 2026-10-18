@@ -27,17 +27,23 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
-  Layers
+  Layers,
+  Save
 } from 'lucide-react';
 import {
   HoroscopeApiResponse,
   DashaIntervalItem,
+  DashaEvaluationRating,
+  DashaEvaluationRecord,
   executeHoroscopeTimelineQuery,
   normalizeDateString,
   generateLlmMarkdown,
   fetchHoroscopeFromApi,
   pingApiHealth,
-  ApiFetchResult
+  ApiFetchResult,
+  fetchDashaEvaluations,
+  getDashaEvaluationKey,
+  saveDashaEvaluation
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
 import { getFullVimshottariTimeline } from '../data/dashaCalculator';
@@ -154,11 +160,45 @@ export default function RestApiStudio({
   const [pinging, setPinging] = useState(false);
   const [lastFetchMeta, setLastFetchMeta] = useState<{ source: 'live_server' | 'fallback_simulator'; statusCode: number; durationMs: number; error?: string; endpointUsed?: string } | null>(null);
   const [rawServerMarkdown, setRawServerMarkdown] = useState<string | null>(null);
+  const [dashaDatabaseRecords, setDashaDatabaseRecords] = useState<DashaEvaluationRecord[]>([]);
+  const [dashaEvaluations, setDashaEvaluations] = useState<Record<string, DashaEvaluationRecord>>({});
+  const [dashaLoadState, setDashaLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [dashaLoadError, setDashaLoadError] = useState<string | null>(null);
+  const [dashaSaveStates, setDashaSaveStates] = useState<Record<string, 'dirty' | 'saving' | 'saved' | 'error'>>({});
+  const [dashaSaveErrors, setDashaSaveErrors] = useState<Record<string, string>>({});
 
   // Collapsible section toggles for SAP Query Studio (3 Sections)
   const [expandQueryParams, setExpandQueryParams] = useState<boolean>(true);
   const [expandResponseStudio, setExpandResponseStudio] = useState<boolean>(true);
   const [expandDashaReference, setExpandDashaReference] = useState<boolean>(true);
+  const dashaPersonId = apiResponse?.person_id ?? apiPersonId;
+
+  useEffect(() => {
+    let isCurrent = true;
+    setDashaLoadState('loading');
+    setDashaLoadError(null);
+    setDashaDatabaseRecords([]);
+    setDashaEvaluations({});
+
+    fetchDashaEvaluations(apiBaseUrl, dashaPersonId)
+      .then(records => {
+        if (!isCurrent) return;
+        setDashaDatabaseRecords(records);
+        setDashaEvaluations(Object.fromEntries(
+          records.map(record => [getDashaEvaluationKey(dashaPersonId, record), record])
+        ));
+        setDashaLoadState('ready');
+      })
+      .catch(error => {
+        if (!isCurrent) return;
+        setDashaLoadError(error.message || 'Could not load PD notes from PostgreSQL.');
+        setDashaLoadState('error');
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [apiBaseUrl, dashaPersonId]);
 
   const handleExpandAll = () => {
     setExpandQueryParams(true);
@@ -275,24 +315,75 @@ export default function RestApiStudio({
 
   const dashaReferenceIntervals = useMemo((): DashaIntervalItem[] => {
     if (!apiResponse) return [];
-    if (apiResponse.person_id !== '001ME') {
-      return apiResponse.vimshottari_dasha_intervals.intervals;
+    const dateOfBirth = apiResponse.person_profile.date_of_birth;
+    const databasePeriodRecords = dashaDatabaseRecords.filter(record => record.end_date >= dateOfBirth);
+    let completeIntervals: DashaEvaluationRecord[];
+
+    if (databasePeriodRecords.length > 0) {
+      completeIntervals = databasePeriodRecords;
+    } else if (apiResponse.person_id === '001ME') {
+      completeIntervals = getFullVimshottariTimeline()
+        .filter(([, , , , endDate]) => endDate >= dateOfBirth)
+        .map(([mahadasha, antardasha, pratyantardasha, startDate, endDate]) => ({
+          mahadasha_lord_md: mahadasha,
+          antardasha_lord_ad: antardasha,
+          pratyantardasha_lord_pd: pratyantardasha,
+          start_date: startDate,
+          end_date: endDate,
+          notes: null,
+          evaluation_rating: null
+        }));
+    } else {
+      completeIntervals = apiResponse.vimshottari_dasha_intervals.intervals;
     }
 
-    const dateOfBirth = apiResponse.person_profile.date_of_birth;
-    return getFullVimshottariTimeline()
-      .filter(([, , , , endDate]) => endDate >= dateOfBirth)
-      .map(([mahadasha, antardasha, pratyantardasha, startDate, endDate], index) => ({
+    return completeIntervals.map((period, index) => {
+      const key = getDashaEvaluationKey(apiResponse.person_id, period);
+      const saved = dashaEvaluations[key] ?? period;
+      return {
         sequence_index: index + 1,
-        mahadasha_lord_md: mahadasha,
-        antardasha_lord_ad: antardasha,
-        pratyantardasha_lord_pd: pratyantardasha,
-        full_lord_hierarchy: `MD: ${mahadasha} > AD: ${antardasha} > PD: ${pratyantardasha}`,
-        start_date: startDate,
-        end_date: endDate,
-        duration_days: Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))
-      }));
-  }, [apiResponse]);
+        ...period,
+        full_lord_hierarchy: `MD: ${period.mahadasha_lord_md} > AD: ${period.antardasha_lord_ad} > PD: ${period.pratyantardasha_lord_pd}`,
+        duration_days: Math.round((new Date(period.end_date).getTime() - new Date(period.start_date).getTime()) / (1000 * 60 * 60 * 24)),
+        notes: saved.notes,
+        evaluation_rating: saved.evaluation_rating
+      };
+    });
+  }, [apiResponse, dashaDatabaseRecords, dashaEvaluations]);
+
+  const updateDashaEvaluation = (period: DashaIntervalItem, updates: Partial<DashaEvaluationRecord>) => {
+    if (!apiResponse) return;
+    const key = getDashaEvaluationKey(apiResponse.person_id, period);
+    setDashaEvaluations(previous => ({
+      ...previous,
+      [key]: { ...period, ...previous[key], ...updates }
+    }));
+    setDashaSaveStates(previous => ({ ...previous, [key]: 'dirty' }));
+    setDashaSaveErrors(previous => ({ ...previous, [key]: 'Unsaved changes' }));
+  };
+
+  const handleSaveDashaEvaluation = async (period: DashaIntervalItem) => {
+    if (!apiResponse) return;
+    const key = getDashaEvaluationKey(apiResponse.person_id, period);
+    const evaluation = dashaEvaluations[key] ?? period;
+    setDashaSaveStates(previous => ({ ...previous, [key]: 'saving' }));
+    setDashaSaveErrors(previous => ({ ...previous, [key]: '' }));
+
+    try {
+      const saved = await saveDashaEvaluation(apiBaseUrl, apiResponse.person_id, evaluation);
+      const savedRecord = { ...evaluation, ...saved };
+      setDashaEvaluations(previous => ({ ...previous, [key]: savedRecord }));
+      setDashaDatabaseRecords(previous => {
+        const index = previous.findIndex(record => getDashaEvaluationKey(apiResponse.person_id, record) === key);
+        if (index < 0) return [...previous, savedRecord];
+        return previous.map((record, recordIndex) => recordIndex === index ? savedRecord : record);
+      });
+      setDashaSaveStates(previous => ({ ...previous, [key]: 'saved' }));
+    } catch (error: any) {
+      setDashaSaveStates(previous => ({ ...previous, [key]: 'error' }));
+      setDashaSaveErrors(previous => ({ ...previous, [key]: error.message || 'Could not save this PD note.' }));
+    }
+  };
 
   const dashaTree = useMemo(() => {
     const groups: Array<{
@@ -2007,6 +2098,16 @@ print(prompt_markdown[:400])
 
         {expandDashaReference && (
           <div className="p-4 sm:p-5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3 text-xs">
+              <span className="text-slate-300">PD landmark notes and ratings are saved to PostgreSQL.</span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                <span className="flex items-center gap-1.5 text-rose-300"><i className="w-2 h-2 rounded-full bg-rose-400" />Red 0 · Bad</span>
+                <span className="flex items-center gap-1.5 text-amber-300"><i className="w-2 h-2 rounded-full bg-amber-400" />Yellow 5 · Average</span>
+                <span className="flex items-center gap-1.5 text-emerald-300"><i className="w-2 h-2 rounded-full bg-emerald-400" />Green 10 · Good</span>
+              </div>
+              {dashaLoadState === 'loading' && <span className="text-slate-500">Loading saved PD notes...</span>}
+              {dashaLoadState === 'error' && <span className="text-rose-300">Saved notes unavailable: {dashaLoadError}</span>}
+            </div>
             {dashaTree.length === 0 ? (
               <p className="py-6 text-center text-xs text-slate-400">No dasha periods are available for this native.</p>
             ) : dashaTree.map((mahadasha, mdIndex) => (
@@ -2023,18 +2124,96 @@ print(prompt_markdown[:400])
                         <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
                       </summary>
                       <div className="px-3 pb-2 space-y-1">
-                        {antardasha.intervals.map(interval => (
-                          <details key={interval.sequence_index} className="border-t border-slate-800/70">
-                            <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <span className="font-medium text-emerald-300">PD: {interval.pratyantardasha_lord_pd}</span>
-                              <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
-                            </summary>
-                            <div className="pb-2 text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                              <span>{interval.duration_days ?? '-'} days</span>
-                              <span>{interval.full_lord_hierarchy}</span>
-                            </div>
-                          </details>
-                        ))}
+                        {antardasha.intervals.map(interval => {
+                          const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
+                          const evaluation = dashaEvaluations[periodKey] ?? interval;
+                          const saveState = dashaSaveStates[periodKey];
+                          const hasDbRecord = dashaDatabaseRecords.some(record =>
+                            getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, record) === periodKey
+                          );
+                          const ratingOptions: { value: DashaEvaluationRating; label: string; selected: string; idle: string }[] = [
+                            { value: 0, label: 'Red 0', selected: 'bg-rose-500/20 text-rose-200 border-rose-400/60', idle: 'text-rose-300 border-rose-500/30 hover:bg-rose-500/10' },
+                            { value: 5, label: 'Yellow 5', selected: 'bg-amber-500/20 text-amber-100 border-amber-400/60', idle: 'text-amber-300 border-amber-500/30 hover:bg-amber-500/10' },
+                            { value: 10, label: 'Green 10', selected: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/60', idle: 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10' }
+                          ];
+                          const markerColor = evaluation.evaluation_rating === 10
+                            ? 'bg-emerald-400'
+                            : evaluation.evaluation_rating === 5
+                              ? 'bg-amber-400'
+                              : evaluation.evaluation_rating === 0
+                                ? 'bg-rose-400'
+                                : 'bg-slate-600';
+
+                          return (
+                            <details key={interval.sequence_index} className="border-t border-slate-800/70">
+                              <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <span className="flex items-center gap-2 font-medium text-emerald-300">
+                                  <i className={`w-2 h-2 rounded-full ${markerColor}`} />
+                                  PD: {interval.pratyantardasha_lord_pd}
+                                  {evaluation.evaluation_rating !== null && <span className="text-slate-400">({evaluation.evaluation_rating})</span>}
+                                </span>
+                                <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
+                              </summary>
+                              <div className="pb-3 space-y-3">
+                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                  <span>{interval.duration_days ?? '-'} days</span>
+                                  <span>{interval.full_lord_hierarchy}</span>
+                                </div>
+                                <label className="block space-y-1.5">
+                                  <span className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                                    <span>Landmark event</span>
+                                    <span className="font-mono text-slate-500">{(evaluation.notes ?? '').length}/200</span>
+                                  </span>
+                                  <textarea
+                                    maxLength={200}
+                                    rows={2}
+                                    value={evaluation.notes ?? ''}
+                                    onChange={event => updateDashaEvaluation(interval, { notes: event.target.value || null })}
+                                    placeholder="Record a notable event from this period..."
+                                    className="w-full resize-y rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                                  />
+                                </label>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="mr-1 text-[11px] font-semibold text-slate-300">Evaluation</span>
+                                  {ratingOptions.map(option => (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      aria-pressed={evaluation.evaluation_rating === option.value}
+                                      onClick={() => updateDashaEvaluation(interval, { evaluation_rating: option.value })}
+                                      className={`rounded border px-2.5 py-1 text-[11px] font-semibold transition ${evaluation.evaluation_rating === option.value ? option.selected : option.idle}`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                  {evaluation.evaluation_rating !== null && (
+                                    <button
+                                      type="button"
+                                      onClick={() => updateDashaEvaluation(interval, { evaluation_rating: null })}
+                                      className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <button
+                                    type="button"
+                                    disabled={saveState === 'saving' || dashaLoadState !== 'ready' || !hasDbRecord}
+                                    onClick={() => void handleSaveDashaEvaluation(interval)}
+                                    className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {saveState === 'saved' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Save className="h-3.5 w-3.5" />}
+                                    {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save note'}
+                                  </button>
+                                  {!hasDbRecord && dashaLoadState === 'ready' && <span className="text-[11px] text-amber-300">No matching PD row in PostgreSQL.</span>}
+                                  {saveState === 'error' && <span className="text-[11px] text-rose-300">{dashaSaveErrors[periodKey]}</span>}
+                                  {saveState === 'dirty' && <span className="text-[11px] text-amber-300">Unsaved changes</span>}
+                                </div>
+                              </div>
+                            </details>
+                          );
+                        })}
                       </div>
                     </details>
                   ))}

@@ -58,6 +58,9 @@ Continuous chronological timeline of Mahadasha, Antardasha (Bukthi), and Pratyan
 - `person_id VARCHAR(50) REFERENCES person_master(person_id)`
 - `mahadasha_lord VARCHAR(50)`, `antardasha_lord VARCHAR(50)`, `pratyantardasha_lord VARCHAR(50)`
 - `start_date DATE`, `end_date DATE`
+- `notes VARCHAR(200)` and `evaluation_rating SMALLINT` are nullable; ratings are `0` (Red/Bad), `5` (Yellow/Average), or `10` (Green/Good).
+
+For an existing database, run `psql -d <dbname> -f scripts/add_dasha_landmark_notes.sql` to add the PD annotation columns and constraints.
 
 ---
 

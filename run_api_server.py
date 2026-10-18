@@ -287,9 +287,36 @@ def ensure_tables_exist(conn):
             pratyantardasha_lord VARCHAR(50) NOT NULL,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
-            rating_score VARCHAR(10),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            notes VARCHAR(200),
+            evaluation_rating SMALLINT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT chk_vimshottari_evaluation_rating
+                CHECK (evaluation_rating IS NULL OR evaluation_rating IN (0, 5, 10)),
+            CONSTRAINT uq_vimshottari_dasha_period UNIQUE (
+                person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+            )
         );
+
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(200);
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
+
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'chk_vimshottari_evaluation_rating'
+                                    AND conrelid = 'vimshottari_dasha_detail'::regclass
+            ) THEN
+                ALTER TABLE vimshottari_dasha_detail
+                    ADD CONSTRAINT chk_vimshottari_evaluation_rating
+                    CHECK (evaluation_rating IS NULL OR evaluation_rating IN (0, 5, 10));
+            END IF;
+        END $$;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_vimshottari_dasha_period
+            ON vimshottari_dasha_detail (
+                person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+            );
 
         CREATE SEQUENCE IF NOT EXISTS llm_prompt_log_seq
             MINVALUE 1
@@ -389,6 +416,89 @@ def save_person_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, An
         return {"success": True, "message": f"Person '{pid}' committed to PostgreSQL database successfully!"}
     except Exception as e:
         if conn: conn.close()
+        return {"success": False, "error": str(e)}
+
+
+def get_dasha_evaluations_from_db(cfg: Dict[str, Any], person_id: str) -> Dict[str, Any]:
+    conn = get_db_connection(cfg)
+    if not conn:
+        return {"success": False, "error": "PostgreSQL is unavailable; dasha notes were not loaded."}
+    try:
+        ensure_tables_exist(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+              SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord,
+                  start_date, end_date
+            FROM vimshottari_dasha_detail
+            WHERE person_id = %s
+            ORDER BY start_date ASC;
+        """, (person_id,))
+        evaluations = cur.fetchall()
+        for evaluation in evaluations:
+            evaluation["start_date"] = str(evaluation["start_date"])
+            evaluation["end_date"] = str(evaluation["end_date"])
+        cur.close()
+        conn.close()
+        return {"success": True, "evaluations": evaluations}
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"success": False, "error": str(e)}
+
+
+def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+    person_id = data.get("person_id")
+    period = data.get("period", {})
+    notes = data.get("notes")
+    rating = data.get("evaluation_rating")
+
+    if not person_id or not all(period.get(key) for key in (
+        "mahadasha_lord_md", "antardasha_lord_ad", "pratyantardasha_lord_pd", "start_date", "end_date"
+    )):
+        return {"success": False, "error": "Person and complete PD identity are required."}
+    if notes is not None and (not isinstance(notes, str) or len(notes) > 200):
+        return {"success": False, "error": "Notes must be 200 characters or fewer."}
+    if rating is not None and (isinstance(rating, bool) or rating not in (0, 5, 10)):
+        return {"success": False, "error": "Evaluation rating must be 0, 5, 10, or null."}
+
+    conn = get_db_connection(cfg)
+    if not conn:
+        return {"success": False, "error": "PostgreSQL is unavailable; dasha notes were not saved."}
+    try:
+        ensure_tables_exist(conn)
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE vimshottari_dasha_detail
+            SET notes = %s, evaluation_rating = %s
+            WHERE person_id = %s
+              AND mahadasha_lord = %s
+              AND antardasha_lord = %s
+              AND pratyantardasha_lord = %s
+              AND start_date = %s
+              AND end_date = %s;
+        """, (
+            notes or None,
+            rating,
+            person_id,
+            period["mahadasha_lord_md"],
+            period["antardasha_lord_ad"],
+            period["pratyantardasha_lord_pd"],
+            period["start_date"],
+            period["end_date"]
+        ))
+        if cur.rowcount != 1:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return {"success": False, "error": "No matching dasha period exists in the database."}
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"success": True, "notes": notes or None, "evaluation_rating": rating}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         return {"success": False, "error": str(e)}
 
 
@@ -577,7 +687,8 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
 
                         # Include every stored dasha interval from the native's birth date onward.
             cur.execute("""
-                SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
+                  SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord,
+                      start_date, end_date, notes, evaluation_rating
                 FROM vimshottari_dasha_detail
                 WHERE person_id = %s
                                     AND end_date >= %s
@@ -598,7 +709,9 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
                     "full_lord_hierarchy": f"MD: {d['mahadasha_lord']} > AD: {d['antardasha_lord']} > PD: {d['pratyantardasha_lord']}",
                     "start_date": str(s_d),
                     "end_date": str(e_d),
-                    "duration_days": days
+                    "duration_days": days,
+                    "notes": None,
+                    "evaluation_rating": None
                 })
 
             timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -895,6 +1008,16 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"persons": persons}).encode())
             return
 
+        elif parsed.path == "/api/dasha/notes":
+            params = urllib.parse.parse_qs(parsed.query)
+            person_id = params.get("person_id", [""])[0]
+            result = get_dasha_evaluations_from_db(cfg, person_id) if person_id else {
+                "success": False, "error": "person_id is required."
+            }
+            self._set_headers(200 if result.get("success") else 503)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+            return
+
         elif parsed.path.startswith("/api/llm/logs"):
             params = urllib.parse.parse_qs(parsed.query)
             limit = int(params.get("limit", [50])[0])
@@ -1067,6 +1190,19 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             res = save_person_to_db(cfg, data)
             self._set_headers(200)
             self.wfile.write(json.dumps(res, indent=2).encode())
+            return
+
+        elif parsed.path == "/api/dasha/notes":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                data = json.loads(body_bytes.decode()) if body_bytes else {}
+            except Exception:
+                data = {}
+            result = save_dasha_evaluation_to_db(cfg, data)
+            status = 200 if result.get("success") else (503 if "unavailable" in result.get("error", "") else 400)
+            self._set_headers(status)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             return
 
         self._set_headers(404)

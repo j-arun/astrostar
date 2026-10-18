@@ -12,6 +12,31 @@ export interface DashaIntervalItem {
   start_date: string;
   end_date: string;
   duration_days: number | null;
+  notes: string | null;
+  evaluation_rating: DashaEvaluationRating | null;
+}
+
+export type DashaEvaluationRating = 0 | 5 | 10;
+
+export interface DashaEvaluationRecord {
+  mahadasha_lord_md: string;
+  antardasha_lord_ad: string;
+  pratyantardasha_lord_pd: string;
+  start_date: string;
+  end_date: string;
+  notes: string | null;
+  evaluation_rating: DashaEvaluationRating | null;
+}
+
+export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {
+  return JSON.stringify([
+    personId,
+    period.mahadasha_lord_md,
+    period.antardasha_lord_ad,
+    period.pratyantardasha_lord_pd,
+    period.start_date,
+    period.end_date
+  ]);
 }
 
 export interface HoroscopeApiResponse {
@@ -513,7 +538,9 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
       full_lord_hierarchy: `MD: ${md} > AD: ${ad} > PD: ${pd}`,
       start_date: s,
       end_date: e,
-      duration_days: days
+      duration_days: days,
+      notes: null,
+      evaluation_rating: null
     };
   });
 
@@ -711,6 +738,69 @@ export async function pingApiHealth(baseUrl: string): Promise<{ ok: boolean; sta
   }
 
   return { ok: false, statusText: `Offline: ${lastStatus}`, latencyMs: Math.round(performance.now() - t0), endpointUsed: candidates[0] || 'http://127.0.0.1:5000' };
+}
+
+export async function fetchDashaEvaluations(baseUrl: string, personId: string): Promise<DashaEvaluationRecord[]> {
+  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+    const base = candidate.replace(/\/+$/, '');
+    const query = `?person_id=${encodeURIComponent(personId)}`;
+    return base ? `${base}/api/dasha/notes${query}` : `/api/dasha/notes${query}`;
+  });
+  let lastError = '';
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      const result = await response.json();
+      if (response.ok && result.success && Array.isArray(result.evaluations)) {
+        return result.evaluations as DashaEvaluationRecord[];
+      }
+      lastError = result.error || `HTTP ${response.status} from ${url}`;
+    } catch (error: any) {
+      lastError = error?.message || 'Could not connect to the database API.';
+    }
+  }
+
+  throw new Error(lastError || 'Could not load PD notes from PostgreSQL.');
+}
+
+export async function saveDashaEvaluation(
+  baseUrl: string,
+  personId: string,
+  period: DashaEvaluationRecord
+): Promise<{ notes: string | null; evaluation_rating: DashaEvaluationRating | null }> {
+  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+    const base = candidate.replace(/\/+$/, '');
+    return base ? `${base}/api/dasha/notes` : '/api/dasha/notes';
+  });
+  let lastError = '';
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person_id: personId,
+          period,
+          notes: period.notes,
+          evaluation_rating: period.evaluation_rating
+        })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        return {
+          notes: result.notes ?? null,
+          evaluation_rating: result.evaluation_rating ?? null
+        };
+      }
+      lastError = result.error || `HTTP ${response.status} from ${url}`;
+    } catch (error: any) {
+      lastError = error?.message || 'Could not connect to the database API.';
+    }
+  }
+
+  throw new Error(lastError || 'Could not save PD notes to PostgreSQL.');
 }
 
 /**

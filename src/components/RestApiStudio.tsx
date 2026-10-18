@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Calendar,
   Clock,
-  Database,
   Sparkles,
   Code2,
   Search,
@@ -32,7 +31,7 @@ import {
 } from 'lucide-react';
 import {
   HoroscopeApiResponse,
-  UserQueryLog,
+  DashaIntervalItem,
   executeHoroscopeTimelineQuery,
   normalizeDateString,
   generateLlmMarkdown,
@@ -51,8 +50,6 @@ interface RestApiStudioProps {
   setApiEndDate: (d: string) => void;
   apiResponse: HoroscopeApiResponse | null;
   setApiResponse: (res: HoroscopeApiResponse) => void;
-  queryHistory: UserQueryLog[];
-  setQueryHistory: React.Dispatch<React.SetStateAction<UserQueryLog[]>>;
   copyToClipboard: (text: string, label: string) => void;
   copied: string | null;
   downloadFile: (filename: string, content: string, type: string) => void;
@@ -138,14 +135,12 @@ export default function RestApiStudio({
   setApiEndDate,
   apiResponse,
   setApiResponse,
-  queryHistory,
-  setQueryHistory,
   copyToClipboard,
   copied,
   downloadFile
 }: RestApiStudioProps) {
   const [loading, setLoading] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'natal' | 'transit' | 'markdown' | 'json' | 'clients' | 'audit'>('transit');
+  const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'natal' | 'transit' | 'markdown' | 'json' | 'clients'>('transit');
   const [dashaSearch, setDashaSearch] = useState('');
   const [selectedChartType, setSelectedChartType] = useState<'D1' | 'D9'>('D1');
   const [transitViewMode, setTransitViewMode] = useState<'timeline_events' | 'saturn_tracker' | 'snapshot_start' | 'snapshot_end'>('timeline_events');
@@ -162,18 +157,18 @@ export default function RestApiStudio({
   // Collapsible section toggles for SAP Query Studio (3 Sections)
   const [expandQueryParams, setExpandQueryParams] = useState<boolean>(true);
   const [expandResponseStudio, setExpandResponseStudio] = useState<boolean>(true);
-  const [expandAuditLog, setExpandAuditLog] = useState<boolean>(true);
+  const [expandDashaReference, setExpandDashaReference] = useState<boolean>(true);
 
   const handleExpandAll = () => {
     setExpandQueryParams(true);
     setExpandResponseStudio(true);
-    setExpandAuditLog(true);
+    setExpandDashaReference(true);
   };
 
   const handleCollapseAll = () => {
     setExpandQueryParams(false);
     setExpandResponseStudio(false);
-    setExpandAuditLog(false);
+    setExpandDashaReference(false);
   };
 
   // Resolved transit timeline: always guarantees 9 Grahas Gochara timeline for all views
@@ -228,18 +223,6 @@ export default function RestApiStudio({
           setApiBaseUrl(cleanBase);
         }
       }
-      setQueryHistory(prev => [
-        {
-          query_id: result.data.unique_response_id,
-          running_number: result.data.running_number,
-          person_id: result.data.person_id,
-          start_date: result.data.requested_timeline.start_date,
-          end_date: result.data.requested_timeline.end_date,
-          created_at: result.data.server_timestamp,
-          response_payload: result.data
-        },
-        ...prev.slice(0, 29)
-      ]);
     } finally {
       setLoading(false);
     }
@@ -268,18 +251,6 @@ export default function RestApiStudio({
           setApiBaseUrl(cleanBase);
         }
       }
-      setQueryHistory(prev => [
-        {
-          query_id: result.data.unique_response_id,
-          running_number: result.data.running_number,
-          person_id: result.data.person_id,
-          start_date: result.data.requested_timeline.start_date,
-          end_date: result.data.requested_timeline.end_date,
-          created_at: result.data.server_timestamp,
-          response_payload: result.data
-        },
-        ...prev.slice(0, 29)
-      ]);
     } finally {
       setLoading(false);
     }
@@ -300,6 +271,50 @@ export default function RestApiStudio({
         item.end_date.includes(q)
     );
   }, [apiResponse, dashaSearch]);
+
+  const dashaTree = useMemo(() => {
+    const groups: Array<{
+      lord: string;
+      startDate: string;
+      endDate: string;
+      antardashas: Array<{
+        lord: string;
+        startDate: string;
+        endDate: string;
+        intervals: DashaIntervalItem[];
+      }>;
+    }> = [];
+
+    for (const interval of apiResponse?.vimshottari_dasha_intervals.intervals ?? []) {
+      let mahadasha = groups[groups.length - 1];
+      if (!mahadasha || mahadasha.lord !== interval.mahadasha_lord_md) {
+        mahadasha = {
+          lord: interval.mahadasha_lord_md,
+          startDate: interval.start_date,
+          endDate: interval.end_date,
+          antardashas: []
+        };
+        groups.push(mahadasha);
+      }
+
+      let antardasha = mahadasha.antardashas[mahadasha.antardashas.length - 1];
+      if (!antardasha || antardasha.lord !== interval.antardasha_lord_ad) {
+        antardasha = {
+          lord: interval.antardasha_lord_ad,
+          startDate: interval.start_date,
+          endDate: interval.end_date,
+          intervals: []
+        };
+        mahadasha.antardashas.push(antardasha);
+      }
+
+      mahadasha.endDate = interval.end_date;
+      antardasha.endDate = interval.end_date;
+      antardasha.intervals.push(interval);
+    }
+
+    return groups;
+  }, [apiResponse]);
 
   const jsonString = useMemo(() => {
     return apiResponse ? JSON.stringify(apiResponse, null, 2) : '';
@@ -344,9 +359,7 @@ response = requests.post(url, json=payload)
 data = response.json()
 
 print(f"Unique Tag:    {data['unique_response_id']}")
-print(f"Running Num:   {data['running_number']} (Cycle 1..100)")
 print(f"Total PDs:     {data['vimshottari_dasha_intervals']['total_intervals_count']} intervals found")
-print(f"Stored in DB:  {data['persisted_in_database']['table']}")
 `;
 
   const pythonMarkdownClientCode = `import requests
@@ -405,15 +418,15 @@ print(prompt_markdown[:400])
             {expandResponseStudio ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
           <button
-            onClick={() => setExpandAuditLog(!expandAuditLog)}
+            onClick={() => setExpandDashaReference(!expandDashaReference)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-              expandAuditLog
-                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
+              expandDashaReference
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
                 : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
-            <span>3. Database Audit Log</span>
-            {expandAuditLog ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            <span>3. Dasha Reference</span>
+            {expandDashaReference ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
         </div>
 
@@ -748,9 +761,6 @@ print(prompt_markdown[:400])
                   <span className="text-xs font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
                     {apiResponse.unique_response_id}
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-mono font-bold border border-indigo-500/30">
-                    #{apiResponse.running_number}
-                  </span>
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
                   Vimshottari Dasha intervals, Natal D1/D9 houses, 9-Graha Gochara transits, LLM Markdown, and full JSON payload.
@@ -825,11 +835,6 @@ print(prompt_markdown[:400])
                 label: `cURL & Python Client Snippets`,
                 icon: Terminal
               },
-              {
-                id: 'audit',
-                label: `user_queries Transaction Log (${queryHistory.length})`,
-                icon: Database
-              }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeSubTab === tab.id;
@@ -856,13 +861,12 @@ print(prompt_markdown[:400])
               <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
                 <div>
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-purple-400" />
+                    <Calendar className="w-4 h-4 text-emerald-400" />
                     Granular Vimshottari Timeline Intervals (PD / Anthara Level)
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Spanning <strong className="text-slate-200">{apiResponse.requested_timeline.start_date}</strong> to{' '}
-                    <strong className="text-slate-200">{apiResponse.requested_timeline.end_date}</strong>{' '}
-                    ({apiResponse.requested_timeline.span_years} years). Every single PD interval is included sequentially.
+                    Complete stored coverage from <strong className="text-slate-200">{apiResponse.person_profile.date_of_birth}</strong> to{' '}
+                    <strong className="text-slate-200">{dashaTree[dashaTree.length - 1]?.endDate ?? 'latest available date'}</strong>. Every available PD interval is included sequentially.
                   </p>
                 </div>
 
@@ -1951,160 +1955,73 @@ print(prompt_markdown[:400])
             </div>
           )}
 
-          {/* SUB-TAB 5: TRANSACTION AUDIT LOG (user_queries) */}
-          {activeSubTab === 'audit' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div>
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Database className="w-4 h-4 text-purple-400" />
-                    Transaction Audit Table: `user_queries`
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Stores the generated JSON response, requested time period, and cycling 1..100 running number for every API call.
-                  </p>
-                </div>
-                <span className="text-xs font-mono bg-purple-500/10 text-purple-300 px-2.5 py-1 rounded border border-purple-500/20">
-                  Cycling Sequence: user_query_seq (1..100)
-                </span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-800 text-slate-300 font-mono text-[11px] uppercase">
-                    <tr>
-                      <th className="py-2.5 px-3">Unique Query ID</th>
-                      <th className="py-2.5 px-3 text-center">Running #</th>
-                      <th className="py-2.5 px-3">Person ID</th>
-                      <th className="py-2.5 px-3">Start Date</th>
-                      <th className="py-2.5 px-3">End Date</th>
-                      <th className="py-2.5 px-3">Created Timestamp</th>
-                      <th className="py-2.5 px-3 text-center">Payload Saved</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-300">
-                    {queryHistory.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/40">
-                        <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
-                          {item.query_id}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono">
-                          <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                            #{item.running_number}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-300">{item.person_id}</td>
-                        <td className="py-2.5 px-3 font-mono text-cyan-400">{item.start_date}</td>
-                        <td className="py-2.5 px-3 font-mono text-rose-400">{item.end_date}</td>
-                        <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
-                          {item.created_at ? new Date(item.created_at).toLocaleString() : 'Just now'}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            JSONB Stored
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
             </div>
           )}
         </div>
       )}
 
-      {/* SECTION 3: Database Transaction Audit Table (user_queries) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
-        <div
-          onClick={() => setExpandAuditLog(!expandAuditLog)}
-          className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
+      {/* SECTION 3: COMPLETE DASHA REFERENCE */}
+      <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <button
+          type="button"
+          onClick={() => setExpandDashaReference(!expandDashaReference)}
+          className="w-full p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 text-left hover:bg-slate-800/40 border-b border-slate-800"
+          aria-expanded={expandDashaReference}
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-white">3. Database Transaction Audit Table (`user_queries`)</span>
-                <span className="text-xs font-mono bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded border border-purple-500/20">
-                  {queryHistory.length} Logged Queries
-                </span>
-              </div>
-              <div className="text-xs text-slate-400">
-                Stores generated JSON responses, time spans, and cycling 1..100 sequence numbers.
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-            <span className="text-xs font-mono text-slate-400 hidden sm:inline">
-              Sequence: user_query_seq (1..100)
+          <span className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <Calendar className="w-4 h-4" />
             </span>
-            <button
-              onClick={() => setExpandAuditLog(!expandAuditLog)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-              title={expandAuditLog ? "Minimize Section 3" : "Expand Section 3"}
-            >
-              {expandAuditLog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
+            <span>
+              <span className="block text-sm font-bold text-white">3. Complete Vimshottari Dasha Reference</span>
+              <span className="block text-xs text-slate-400">
+                {apiResponse?.person_profile.date_of_birth ?? 'DOB unavailable'} to {dashaTree[dashaTree.length - 1]?.endDate ?? 'latest stored date'}
+                {' '}· {apiResponse?.vimshottari_dasha_intervals.total_intervals_count ?? 0} PD periods
+              </span>
+            </span>
+          </span>
+          {expandDashaReference ? <ChevronUp className="w-4 h-4 text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
+        </button>
 
-        {expandAuditLog && (
-          <div className="p-4 sm:p-5">
-            <div className="overflow-x-auto border border-slate-800 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-800 text-slate-300 font-mono text-[11px] uppercase">
-                  <tr>
-                    <th className="py-2.5 px-3">Unique Query ID</th>
-                    <th className="py-2.5 px-3 text-center">Running #</th>
-                    <th className="py-2.5 px-3">Person ID</th>
-                    <th className="py-2.5 px-3">Start Date</th>
-                    <th className="py-2.5 px-3">End Date</th>
-                    <th className="py-2.5 px-3">Created Timestamp</th>
-                    <th className="py-2.5 px-3 text-center">Payload Saved</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-300">
-                  {queryHistory.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/40">
-                      <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
-                        {item.query_id}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-mono">
-                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                          #{item.running_number}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-slate-300">{item.person_id}</td>
-                      <td className="py-2.5 px-3 font-mono text-cyan-400">{item.start_date}</td>
-                      <td className="py-2.5 px-3 font-mono text-rose-400">{item.end_date}</td>
-                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
-                        {item.created_at ? new Date(item.created_at).toLocaleString() : 'Just now'}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          JSONB Stored
-                        </span>
-                      </td>
-                    </tr>
+        {expandDashaReference && (
+          <div className="p-4 sm:p-5 space-y-2">
+            {dashaTree.length === 0 ? (
+              <p className="py-6 text-center text-xs text-slate-400">No dasha periods are available for this native.</p>
+            ) : dashaTree.map((mahadasha, mdIndex) => (
+              <details key={`${mahadasha.lord}-${mahadasha.startDate}`} className="border border-slate-800 rounded-lg bg-slate-950/50">
+                <summary className="cursor-pointer list-none px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-amber-300">MD {mdIndex + 1}: {mahadasha.lord}</span>
+                  <span className="font-mono text-slate-400">{mahadasha.startDate} to {mahadasha.endDate}</span>
+                </summary>
+                <div className="px-3 pb-3 space-y-2">
+                  {mahadasha.antardashas.map((antardasha, adIndex) => (
+                    <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
+                      <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-cyan-300">AD {adIndex + 1}: {antardasha.lord}</span>
+                        <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
+                      </summary>
+                      <div className="px-3 pb-2 space-y-1">
+                        {antardasha.intervals.map(interval => (
+                          <details key={interval.sequence_index} className="border-t border-slate-800/70">
+                            <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <span className="font-medium text-emerald-300">PD: {interval.pratyantardasha_lord_pd}</span>
+                              <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
+                            </summary>
+                            <div className="pb-2 text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                              <span>{interval.duration_days ?? '-'} days</span>
+                              <span>{interval.full_lord_hierarchy}</span>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </details>
                   ))}
-                  {queryHistory.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-6 text-center text-slate-500 italic">
-                        No transactions recorded yet in user_queries table.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              </details>
+            ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

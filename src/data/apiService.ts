@@ -3,17 +3,6 @@ import { generateClientTransitTimeline, TransitEphemerisPayload } from './transi
 import { getFullVimshottariTimeline, calculateVimshottariTimelineForProfile } from './dashaCalculator';
 import storedPersonsData from './stored_persons.json';
 
-export interface UserQueryLog {
-  id?: number;
-  query_id: string;
-  running_number: number;
-  person_id: string;
-  start_date: string;
-  end_date: string;
-  created_at?: string;
-  response_payload: HoroscopeApiResponse;
-}
-
 export interface DashaIntervalItem {
   sequence_index: number;
   mahadasha_lord_md: string;
@@ -27,7 +16,6 @@ export interface DashaIntervalItem {
 
 export interface HoroscopeApiResponse {
   unique_response_id: string;
-  running_number: number;
   person_id: string;
   requested_timeline: {
     start_date: string;
@@ -53,11 +41,6 @@ export interface HoroscopeApiResponse {
   };
   transit_ephemeris_timeline: TransitEphemerisPayload;
   server_timestamp: string;
-  persisted_in_database: {
-    table: string;
-    running_number_cycle: string;
-    status: string;
-  };
 }
 
 // Master list of Vimshottari intervals covering 1976 through 2090
@@ -285,7 +268,6 @@ export const ALL_DASHA_TIMELINE: [string, string, string, string, string][] = [
   ["Venus (Sukra)", "Mars (Sevvai)", "Ketu", "2020-01-02", "2020-01-26"]
 ];
 
-let clientRunningCounter = 1;
 
 export function normalizeDateString(inputVal: string, defaultToEndOfMonth: boolean = false): string {
   if (!inputVal) return new Date().toISOString().slice(0, 10);
@@ -495,12 +477,9 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
   const normStart = normalizeDateString(startDateStr, false);
   const normEnd = normalizeDateString(endDateStr, true);
 
-  const runningNum = clientRunningCounter;
-  clientRunningCounter = clientRunningCounter >= 100 ? 1 : clientRunningCounter + 1;
-
   const now = new Date();
-  const timestampStr = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-  const uniqueResponseId = `Q-${personId}-${String(runningNum).padStart(3, '0')}-${timestampStr}`;
+  const timestampStr = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 17);
+  const uniqueResponseId = `Q-${personId}-${timestampStr}`;
 
   // Resolve person from ingested registry or fallback to 001ME
   const registered = ingestedPersonsRegistry[personId] || ingestedPersonsRegistry['001ME'];
@@ -515,8 +494,8 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
     dashaSource = calculateVimshottariTimelineForProfile(personProfile);
   }
 
-  // Filter overlapping periods: (start_date <= requested_end) AND (end_date >= requested_start)
-  const filtered = dashaSource.filter(([_, __, ___, s, e]) => s <= normEnd && e >= normStart);
+  const dashaStartDate = personProfile.date_of_birth || normStart;
+  const filtered = dashaSource.filter(([, , , , endDate]) => endDate >= dashaStartDate);
 
   const intervals: DashaIntervalItem[] = filtered.map(([md, ad, pd, s, e], idx) => {
     let days: number | null = null;
@@ -566,7 +545,6 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
 
   return {
     unique_response_id: uniqueResponseId,
-    running_number: runningNum,
     person_id: personId,
     requested_timeline: {
       start_date: normStart,
@@ -591,12 +569,7 @@ export function executeHoroscopeTimelineQuery(personId: string, startDateStr: st
       intervals
     },
     transit_ephemeris_timeline: generateClientTransitTimeline(normStart, normEnd, lagnaIdx, rashiIdx),
-    server_timestamp: now.toISOString(),
-    persisted_in_database: {
-      table: "user_queries",
-      running_number_cycle: `${runningNum}/100`,
-      status: "SAVED"
-    }
+    server_timestamp: now.toISOString()
   };
 }
 

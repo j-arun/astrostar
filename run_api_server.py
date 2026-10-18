@@ -13,8 +13,7 @@ Endpoints:
       }
     Response:
       {
-        "unique_response_id": "Q-001ME-014-20260928182000",
-        "running_number": 14,
+        "unique_response_id": "Q-001ME-20260928182000123456",
         "person_id": "001ME",
         "timeline": {
           "requested_start": "1998-01-01",
@@ -39,11 +38,7 @@ Endpoints:
           },
           ...
         ],
-        "stored_in_user_queries": true
       }
-
-  GET /api/user-queries/recent
-    Retrieves the transaction logs from the user_queries database table.
 
   GET /api/health
     Database connection and server status.
@@ -244,7 +239,7 @@ def normalize_date(input_val: str, default_to_end_of_month: bool = False) -> str
 
 
 # =============================================================================
-# 3. SCHEMA INITIALIZER (INCLUDING user_queries TABLE & 1-100 SEQUENCE)
+# 3. SCHEMA INITIALIZER
 # =============================================================================
 
 def ensure_tables_exist(conn):
@@ -293,24 +288,6 @@ def ensure_tables_exist(conn):
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
             rating_score VARCHAR(10),
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE SEQUENCE IF NOT EXISTS user_query_seq
-            MINVALUE 1
-            MAXVALUE 100
-            START WITH 1
-            INCREMENT BY 1
-            CYCLE;
-
-        CREATE TABLE IF NOT EXISTS user_queries (
-            id SERIAL PRIMARY KEY,
-            query_id VARCHAR(50) UNIQUE NOT NULL,
-            running_number INTEGER NOT NULL,
-            person_id VARCHAR(50) NOT NULL,
-            start_date DATE NOT NULL,
-            end_date DATE NOT NULL,
-            response_payload JSONB NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -598,16 +575,14 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
                 elif p["chart_type"] == "D9":
                     d9_placements.append(entry)
 
-            # 3. Fetch Vimshottari Dasha intervals overlapping the requested timeline
-            # Interval overlap: (start_date <= requested_end) AND (end_date >= requested_start)
+                        # Include every stored dasha interval from the native's birth date onward.
             cur.execute("""
                 SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
                 FROM vimshottari_dasha_detail
                 WHERE person_id = %s
-                  AND start_date <= %s
-                  AND end_date >= %s
+                                    AND end_date >= %s
                 ORDER BY start_date ASC;
-            """, (person_id, norm_end, norm_start))
+                        """, (person_id, person_row.get("date_of_birth") or norm_start))
             dasha_rows = cur.fetchall()
 
             dasha_intervals = []
@@ -626,12 +601,8 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
                     "duration_days": days
                 })
 
-            # 4. Generate next 1-100 cycling sequence number from PostgreSQL
-            cur.execute("SELECT nextval('user_query_seq') AS running_num;")
-            running_num = cur.fetchone()["running_num"]
-
-            timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S")
-            unique_response_id = f"Q-{person_id}-{running_num:03d}-{timestamp_str}"
+            timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S%f")
+            unique_response_id = f"Q-{person_id}-{timestamp_str}"
 
             # Calculate span in years
             try:
@@ -656,7 +627,6 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
             # Build final Response Payload ("One Punch" Natal + Transit)
             response_payload = {
                 "unique_response_id": unique_response_id,
-                "running_number": running_num,
                 "person_id": person_id,
                 "requested_timeline": {
                     "start_date": norm_start,
@@ -684,28 +654,8 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
                 "server_timestamp": datetime.now().isoformat()
             }
 
-            # 5. Persist into user_queries transaction table
-            cur.execute("""
-                INSERT INTO user_queries (
-                    query_id, running_number, person_id, start_date, end_date, response_payload
-                ) VALUES (%s, %s, %s, %s, %s, %s);
-            """, (
-                unique_response_id,
-                running_num,
-                person_id,
-                norm_start,
-                norm_end,
-                json.dumps(response_payload)
-            ))
-            conn.commit()
-
             cur.close()
             conn.close()
-            response_payload["persisted_in_database"] = {
-                "table": "user_queries",
-                "running_number_cycle": f"{running_num}/100",
-                "status": "SAVED"
-            }
             return response_payload
 
         except Exception as e:
@@ -953,36 +903,6 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"logs": logs}, indent=2).encode())
             return
 
-        elif parsed.path == "/api/user-queries/recent":
-            # Fetch recent queries from user_queries table
-            conn = get_db_connection(cfg)
-            if conn:
-                try:
-                    cur = conn.cursor(cursor_factory=RealDictCursor)
-                    cur.execute("""
-                        SELECT query_id, running_number, person_id, start_date, end_date, created_at
-                        FROM user_queries
-                        ORDER BY id DESC
-                        LIMIT 20;
-                    """)
-                    rows = cur.fetchall()
-                    for r in rows:
-                        r["start_date"] = str(r["start_date"])
-                        r["end_date"] = str(r["end_date"])
-                        r["created_at"] = str(r["created_at"])
-                    cur.close()
-                    conn.close()
-                    self._set_headers(200)
-                    self.wfile.write(json.dumps({"recent_queries": rows}, indent=2).encode())
-                    return
-                except Exception as e:
-                    if conn:
-                        conn.close()
-            # If DB offline
-            self._set_headers(200)
-            self.wfile.write(json.dumps({"recent_queries": [], "notice": "DB offline"}, indent=2).encode())
-            return
-
         elif parsed.path.startswith("/api/horoscope/query"):
             # Complete unified ("one punch") Natal + Transit payload
             params = urllib.parse.parse_qs(parsed.query)
@@ -1168,9 +1088,7 @@ def run_server(port: int = 5000):
     print(f" URL:                   http://localhost:{port}")
     print(f" Unified API (1-Punch): POST http://localhost:{port}/api/horoscope/query")
     print(f" Transit API (Gochara): POST http://localhost:{port}/api/transit/query")
-    print(f" History:               http://localhost:{port}/api/user-queries/recent")
     print(f" PostgreSQL:            {cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['dbname']}")
-    print(f" Audit Table:           user_queries (running_number cycle 1..100)")
     print(f" Ephemeris Engine:      Lahiri / Chitra Paksha (9 Grahas)")
     print("=" * 75)
     print("Press Ctrl+C to terminate.")

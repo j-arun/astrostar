@@ -62,19 +62,9 @@ try:
 except Exception:
     HAS_EPHEMERIS = False
 
-# Cycling fallback counter (1 to 100)
-_fallback_counter = 1
-
-def get_next_fallback_counter() -> int:
-    global _fallback_counter
-    val = _fallback_counter
-    _fallback_counter = 1 if _fallback_counter >= 100 else _fallback_counter + 1
-    return val
-
 def get_fallback_data(person_id: str, start_date: str, end_date: str):
-    running_num = get_next_fallback_counter()
-    timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S")
-    unique_response_id = f"Q-{person_id}-{running_num:03d}-{timestamp_str}"
+    timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    unique_response_id = f"Q-{person_id}-{timestamp_str}"
 
     norm_start = normalize_date(start_date, default_to_end_of_month=False)
     norm_end = normalize_date(end_date, default_to_end_of_month=True)
@@ -383,8 +373,9 @@ def get_fallback_data(person_id: str, start_date: str, end_date: str):
 
     filtered_intervals = []
     seq = 1
+    dasha_start_date = person_profile.get("date_of_birth") or start_date
     for maha, antar, praty, s_date, e_date in all_dasha_records:
-        if s_date <= end_date and e_date >= start_date:
+        if e_date >= dasha_start_date:
             try:
                 days = (datetime.strptime(e_date, "%Y-%m-%d") - datetime.strptime(s_date, "%Y-%m-%d")).days
             except Exception:
@@ -422,7 +413,6 @@ def get_fallback_data(person_id: str, start_date: str, end_date: str):
 
     return {
         "unique_response_id": unique_response_id,
-        "running_number": running_num,
         "person_id": person_id,
         "requested_timeline": {
             "start_date": norm_start,
@@ -447,10 +437,5 @@ def get_fallback_data(person_id: str, start_date: str, end_date: str):
             "intervals": filtered_intervals
         },
         "transit_ephemeris_timeline": transit_data,
-        "server_timestamp": datetime.now().isoformat(),
-        "persisted_in_database": {
-            "table": "user_queries",
-            "running_number_cycle": f"{running_num}/100",
-            "status": "FALLBACK_STANDALONE"
-        }
+        "server_timestamp": datetime.now().isoformat()
     }

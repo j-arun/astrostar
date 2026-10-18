@@ -21,7 +21,6 @@ import {
 import {
   executeHoroscopeTimelineQuery,
   HoroscopeApiResponse,
-  UserQueryLog,
   getRegisteredPersonList,
   syncPersonsFromBackend,
   fetchPersonDetailsFromBackend,
@@ -116,18 +115,6 @@ export default function App() {
   const [apiResponse, setApiResponse] = useState<HoroscopeApiResponse | null>(() =>
     executeHoroscopeTimelineQuery(activePersonId, '1998-01-01', '2020-01-31')
   );
-  const [queryHistory, setQueryHistory] = useState<UserQueryLog[]>([
-    {
-      query_id: `Q-${activePersonId}-001-20260928180000`,
-      running_number: 1,
-      person_id: activePersonId,
-      start_date: '1998-01-01',
-      end_date: '2020-01-31',
-      created_at: new Date().toISOString(),
-      response_payload: executeHoroscopeTimelineQuery(activePersonId, '1998-01-01', '2020-01-31')
-    }
-  ]);
-
   // Single unified handler when native ID is chosen from person_master
   const handleSelectPerson = async (newId: string) => {
     setActivePersonId(newId);
@@ -140,18 +127,6 @@ export default function App() {
     // 2. Query timeline for new person
     const res = executeHoroscopeTimelineQuery(newId, apiStartDate, apiEndDate);
     setApiResponse(res);
-    setQueryHistory(prev => [
-      {
-        query_id: res.unique_response_id,
-        running_number: res.running_number,
-        person_id: res.person_id,
-        start_date: apiStartDate,
-        end_date: apiEndDate,
-        created_at: new Date().toISOString(),
-        response_payload: res
-      },
-      ...prev
-    ]);
   };
 
   useEffect(() => {
@@ -317,8 +292,6 @@ export default function App() {
             setApiEndDate={setApiEndDate}
             apiResponse={apiResponse}
             setApiResponse={setApiResponse}
-            queryHistory={queryHistory}
-            setQueryHistory={setQueryHistory}
             copyToClipboard={copyToClipboard}
             copied={copied}
             downloadFile={downloadFile}

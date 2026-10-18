@@ -4,12 +4,10 @@ A dual-model Vedic astrology data engineering pipeline and REST API server desig
 1. **Model 1 (`run_ingestion.py`)**: Extract structured data from **Tamil Horoscope PDFs (ஜாதகம் / Jadhagam)** and load them directly into a normalized **PostgreSQL** schema (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`).
 2. **Model 2 (`run_api_server.py`)**: Serve a high-performance REST API that takes a `person_id` and date timeline (e.g., `January 1998` to `January 2020`), returns a **unified "One Punch" REST response** containing:
    - **Natal Chart Placements**: D1 (Rashi) and D9 (Navamsha) charts with degrees, houses relative to Lagna, nakshatras, padas, and retrograde flags.
-   - **Vimshottari Dasha Intervals**: Every sequential sub-period down to **Pratyantardasha (PD / Anthara)** level with duration and lord hierarchies.
+  - **Vimshottari Dasha Intervals**: Every stored sub-period from the native's date of birth through the latest available database date, down to **Pratyantardasha (PD / Anthara)** level.
    - **Transit Ephemeris (Gochara)**: Complete planetary transit data for the **standard 9 Grahas** (Jupiter, Saturn, Mars, Rahu, Ketu, Venus, Mercury, Sun, Moon) across the requested window, including sign name, exact minute sputa degrees, nakshatra, and pada (Graha Pada Chara), plus **dual relative house positions**:
      - **Relative to Native's Lagna** (e.g. Jupiter in Katakam/Cancer = 8th house from Dhanus Lagna)
      - **Relative to Native's Janma Rashi / Moon Sign** (e.g. Jupiter in Katakam/Cancer = 9th house from Vrischigam Moon)
-   - **1..100 Cycling Unique Sequence**: Auto-assigned sequence tag (`Q-001ME-014-20260928182000`) and cycling counter (1 to 100).
-   - **Audit Persistence**: Automatically records every query transaction into the `user_queries` table.
 
 ---
 
@@ -18,7 +16,7 @@ A dual-model Vedic astrology data engineering pipeline and REST API server desig
 | Model | Component Script | Execution | Primary Function |
 | :--- | :--- | :--- | :--- |
 | **Model 1** | `run_ingestion.py` | `python run_ingestion.py` | Parses `horoscope.pdf`, extracts birth metadata, D1/D9 grids, and 40 pages of Vimshottari dasha, then loads into PostgreSQL (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`). |
-| **Model 2** | `run_api_server.py` | `python run_api_server.py` | Starts REST API server on port 5000. Provides unified `POST /api/horoscope/query` (Natal + Transit in one punch) and dedicated `POST /api/transit/query`, cycles sequence 1..100, and logs into `user_queries`. |
+| **Model 2** | `run_api_server.py` | `python run_api_server.py` | Starts REST API server on port 5000. Provides unified `POST /api/horoscope/query` (Natal + Transit in one punch) and dedicated `POST /api/transit/query`; query responses are not persisted. |
 | **Ephemeris Engine** | `scripts/vedic_ephemeris.py` | Import or CLI | High-precision astronomical ephemeris (Lahiri / Chitra Paksha Ayanamsha) calculating 9 Grahas sidereal positions, minute sputa degrees, 27 nakshatras, 4 padas, retrograde motions, and relative houses from Lagna and Janma Rashi. |
 
 ---
@@ -28,16 +26,14 @@ A dual-model Vedic astrology data engineering pipeline and REST API server desig
 - **Automated PDF Parsing (Model 1)**: Analyzes 54-page Tamil horoscope PDFs, extracting personal birth details, planetary positions, D1 (Rashi) and D9 (Navamsha) charts, and 40 pages of Vimshottari Dasha intervals.
 - **Dual Tamil Font Encoding Engine**: Transparently handles both modern **UTF-8 Unicode Tamil** and legacy **8-bit Bamini/Vanavil ASCII glyphs** (such as `#hp` for சூரியன், `rdp` for சனி, and `jDR` for தனுசு).
 - **South Indian 4×4 Grid Translation**: Dynamically maps 12 zodiac signs and calculates sequential house numbers (**House 1 to 12 clockwise**) relative to the native's Lagna.
-- **Timeline Dasha Extractor (Model 2)**: For any given date window, extracts each and every sub-period down to **Pratyantardasha (PD / Anthara)** level with exact duration in days and lord hierarchies.
+- **Timeline Dasha Extractor (Model 2)**: Returns every stored sub-period from the native's date of birth through the latest available date, down to **Pratyantardasha (PD / Anthara)** level with duration and lord hierarchies.
 - **Unified "One-Punch" Response**: Merges Natal chart placements, Vimshottari Dasha intervals, and Transit Ephemeris into a single comprehensive JSON payload.
 - **Complete Gochara (Transit) Ephemeris**: Computes sidereal coordinates for all 9 Grahas using analytical Keplerian & VSOP87 orbital models with Lahiri Ayanamsha. Computes house relative to Lagna and Moon sign simultaneously.
-- **1..100 Cycling Unique Sequence**: Uses a dedicated cycling PostgreSQL sequence (`user_query_seq`) to assign a unique running number 1 to 100 for every query, alongside a timestamped unique tag (e.g., `Q-001ME-014-20260928182000`).
-- **Transaction Audit Logging**: Automatically records every generated JSON response, requested date range, and sequence number into the `user_queries` table.
 - **Config-Driven Execution**: Control database credentials, PDF paths, and API host/port in `config.ini`.
 
 ---
 
-## 🗄️ PostgreSQL Database Schema (4 Tables)
+## 🗄️ Core PostgreSQL Database Schema (3 Tables)
 
 ### 1. `person_master` (Primary Entity)
 Stores birth coordinates, Lagna, Rashi, Star, and initial starting Dasha balance.
@@ -62,16 +58,6 @@ Continuous chronological timeline of Mahadasha, Antardasha (Bukthi), and Pratyan
 - `person_id VARCHAR(50) REFERENCES person_master(person_id)`
 - `mahadasha_lord VARCHAR(50)`, `antardasha_lord VARCHAR(50)`, `pratyantardasha_lord VARCHAR(50)`
 - `start_date DATE`, `end_date DATE`
-
-### 4. `user_queries` (REST API Transaction Audit Table)
-Audit log automatically created and populated by Model 2 REST API.
-- `id SERIAL PRIMARY KEY`
-- `query_id VARCHAR(50) UNIQUE` (e.g. `Q-001ME-014-20260928182000`)
-- `running_number INTEGER` (Cycling 1 to 100 sequence)
-- `person_id VARCHAR(50) REFERENCES person_master(person_id)`
-- `start_date DATE`, `end_date DATE`
-- `response_payload JSONB` (The full generated JSON response)
-- `created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`
 
 ---
 
@@ -184,9 +170,7 @@ res = requests.post("http://localhost:5000/api/horoscope/query", json={
 data = res.json()
 
 print(f"Unique Tag:    {data['unique_response_id']}")
-print(f"Running Num:   {data['running_number']} (Cycle 1..100)")
 print(f"Total PDs:     {data['vimshottari_dasha_intervals']['total_intervals_count']} intervals")
-print(f"Stored in DB:  {data['persisted_in_database']['table']}")
 ```
 
 ---
@@ -195,8 +179,7 @@ print(f"Stored in DB:  {data['persisted_in_database']['table']}")
 
 ```json
 {
-  "unique_response_id": "Q-001ME-014-20260928182000",
-  "running_number": 14,
+  "unique_response_id": "Q-001ME-20260928182000123456",
   "person_id": "001ME",
   "requested_timeline": {
     "start_date": "1998-01-01",
@@ -311,12 +294,7 @@ print(f"Stored in DB:  {data['persisted_in_database']['table']}")
       ...
     ]
   },
-  "server_timestamp": "2026-09-28T18:20:00.123456",
-  "persisted_in_database": {
-    "table": "user_queries",
-    "running_number_cycle": "14/100",
-    "status": "SAVED"
-  }
+  "server_timestamp": "2026-09-28T18:20:00.123456"
 }
 ```
 
@@ -380,20 +358,6 @@ When requesting `format=llm_markdown` (or `markdown=true`), the REST API automat
 
 ---
 
-## 🔍 Verification Queries
-
-Verify transaction queries in PostgreSQL:
-```sql
--- View all recorded user queries
-SELECT query_id, running_number, person_id, start_date, end_date, created_at
-FROM user_queries
-ORDER BY id DESC;
-
--- Inspect response JSON payload
-SELECT query_id, running_number, response_payload->'vimshottari_dasha_intervals'->>'total_intervals_count' AS total_pds
-FROM user_queries;
-```
-
 ---
 
 ## 📁 Repository Structure
@@ -407,7 +371,7 @@ FROM user_queries;
 ├── scripts/
 │   ├── config.ini                # Secondary config backup
 │   ├── extract_tamil_horoscope.py# Core extraction & PostgreSQL ingestion engine
-│   ├── schema.sql                # PostgreSQL DDL with user_queries table & user_query_seq
+│   ├── schema.sql                # PostgreSQL DDL for native, placement, dasha, and LLM log data
 │   ├── extracted_001ME.sql       # Pre-generated complete SQL insert dump for 001ME
 │   ├── extracted_001ME.json      # Structured JSON export of all extracted data
 │   └── requirements.txt          # Python dependency list

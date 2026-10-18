@@ -13,8 +13,7 @@ Endpoints:
       }
     Response ("One Punch" Unified Natal + Transit Payload):
       {
-        "unique_response_id": "Q-001ME-014-20260928182000",
-        "running_number": 14,
+        "unique_response_id": "Q-001ME-20260928182000123456",
         "person_id": "001ME",
         "requested_timeline": {
           "start_date": "1998-01-01",
@@ -87,18 +86,10 @@ Endpoints:
           "transit_snapshot_end": [ ... ],
           "major_transits_timeline": [ ... ]
         },
-        "persisted_in_database": {
-          "table": "user_queries",
-          "running_number_cycle": "14/100",
-          "status": "SAVED"
-        }
       }
 
   POST /api/transit/query
     Dedicated Transit Ephemeris endpoint for the 9 Grahas.
-
-  GET /api/user-queries/recent
-    Retrieves recent transactions from user_queries table.
 
   GET /api/health
     Database connection and server status.
@@ -194,9 +185,9 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
             cur.execute("""
                 SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
                 FROM vimshottari_dasha_detail
-                WHERE person_id = %s AND start_date <= %s AND end_date >= %s
+                WHERE person_id = %s AND end_date >= %s
                 ORDER BY start_date ASC;
-            """, (person_id, norm_end, norm_start))
+            """, (person_id, person_row.get("date_of_birth") or norm_start))
             dashas = cur.fetchall()
             intervals = [{
                 "sequence_index": i + 1,
@@ -209,9 +200,7 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
                 "duration_days": (d["end_date"] - d["start_date"]).days
             } for i, d in enumerate(dashas)]
 
-            cur.execute("SELECT nextval('user_query_seq') AS running_num;")
-            running_num = cur.fetchone()["running_num"]
-            unique_id = f"Q-{person_id}-{running_num:03d}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            unique_id = f"Q-{person_id}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
 
             transit_data = None
             if HAS_EPHEMERIS:
@@ -223,22 +212,15 @@ def query_horoscope_and_timeline(cfg: Dict[str, Any], person_id: str, start_date
 
             payload = {
                 "unique_response_id": unique_id,
-                "running_number": running_num,
                 "person_id": person_id,
                 "requested_timeline": { "start_date": norm_start, "end_date": norm_end },
                 "person_profile": dict(person_row),
                 "natal_placements": { "D1_rashi_chart": { "count": len(d1), "bodies": d1 }, "D9_navamsha_chart": { "count": len(d9), "bodies": d9 } },
                 "vimshottari_dasha_intervals": { "total_intervals_count": len(intervals), "granularity": "Pratyantardasha (PD) Level", "intervals": intervals },
                 "transit_ephemeris_timeline": transit_data,
-                "server_timestamp": datetime.now().isoformat(),
-                "persisted_in_database": { "table": "user_queries", "running_number_cycle": f"{running_num}/100", "status": "SAVED" }
+                "server_timestamp": datetime.now().isoformat()
             }
 
-            cur.execute("""
-                INSERT INTO user_queries (query_id, running_number, person_id, start_date, end_date, response_payload)
-                VALUES (%s, %s, %s, %s, %s, %s);
-            """, (unique_id, running_num, person_id, norm_start, norm_end, json.dumps(payload, default=str)))
-            conn.commit()
             conn.close()
             return payload
         except Exception as e:
@@ -452,26 +434,6 @@ CREATE TABLE IF NOT EXISTS vimshottari_dasha_detail (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ===============================================================================
--- D. TABLE: user_queries (Transaction audit table with 1 to 100 cycling sequence)
--- ===============================================================================
-CREATE SEQUENCE IF NOT EXISTS user_query_seq
-    MINVALUE 1
-    MAXVALUE 100
-    START WITH 1
-    INCREMENT BY 1
-    CYCLE;
-
-CREATE TABLE IF NOT EXISTS user_queries (
-    id SERIAL PRIMARY KEY,
-    query_id VARCHAR(50) UNIQUE NOT NULL,      -- e.g. 'Q-001ME-014-20260928181500'
-    running_number INTEGER NOT NULL,           -- Cycling unique number 1 to 100
-    person_id VARCHAR(50) NOT NULL REFERENCES person_master(person_id) ON DELETE CASCADE,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    response_payload JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 `;
 
 export const START_CMD_TEXT = `@echo off

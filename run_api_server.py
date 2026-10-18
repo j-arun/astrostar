@@ -430,8 +430,10 @@ def get_dasha_evaluations_from_db(cfg: Dict[str, Any], person_id: str) -> Dict[s
         ensure_tables_exist(conn)
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("""
-              SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord,
-                  start_date, end_date
+            SELECT mahadasha_lord AS mahadasha_lord_md,
+                 antardasha_lord AS antardasha_lord_ad,
+                 pratyantardasha_lord AS pratyantardasha_lord_pd,
+                 start_date, end_date, notes, evaluation_rating
             FROM vimshottari_dasha_detail
             WHERE person_id = %s
             ORDER BY start_date ASC;

@@ -2165,8 +2165,9 @@ print(prompt_markdown[:400])
                               <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                                 <span className="flex items-center gap-2 font-medium text-emerald-300">
                                   <i className={`w-2 h-2 rounded-full ${markerColor}`} />
-                                  PD: {interval.pratyantardasha_lord_pd}
+                                  <span>PD: {interval.pratyantardasha_lord_pd}</span>
                                   {evaluation.evaluation_rating !== null && <span className="text-slate-400">({evaluation.evaluation_rating})</span>}
+                                  {evaluation.notes && <span className="max-w-[35rem] truncate font-normal text-slate-300" title={evaluation.notes}>· {evaluation.notes}</span>}
                                 </span>
                                 <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
                               </summary>

@@ -712,6 +712,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       allTransitPlacements: transitPlacements.map(t => {
         const rashiIdx = t.transit_rashi_index;
         const hFromLagna = ((rashiIdx - natalLagnaIdx + 12) % 12) + 1;
+        const hFromMoon = ((rashiIdx - natalRashiIdx + 12) % 12) + 1;
+        const savForSign = computeSarvashtakavarga(natalLagnaIdx, houseNum, flattenedD1).savTotalPoints[rashiIdx] || 28;
 
         let aspectsTarget = false;
         let aspectType = '';
@@ -747,17 +749,24 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           transit_rashi_name: t.transit_rashi_name,
           transit_rashi_tamil: t.transit_rashi_tamil,
           house_from_lagna: hFromLagna,
+          house_from_moon: hFromMoon,
+          house_from_moon_title: `House ${hFromMoon} from Moon (${RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Janma Rashi'})`,
           degree_sputa: t.degree_sputa,
           degree_in_sign_float: t.degree_in_sign_float,
           nakshatra_name: t.graha_pada_chara?.nakshatra_name || 'N/A',
           nakshatra_lord: t.graha_pada_chara?.nakshatra_lord || '',
           pada: t.graha_pada_chara?.pada || 1,
           is_retrograde: t.is_retrograde,
+          motion_type: t.motion_type || (t.is_retrograde ? 'Vakra' : 'Normal'),
+          motion_description: t.motion_description,
+          sav_points: savForSign,
           is_custom: !!(t as any).is_custom_user_adjusted,
           aspects_target_house: aspectsTarget,
           aspect_type: aspectType
         };
       }),
+      natalLagnaSignName: RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius',
+      natalMoonSignName: RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio',
       activeDasha: activeDashaHierarchy,
       selectedMonth,
       selectedYear,
@@ -887,6 +896,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       allTransitPlacements: transitPlacements.map(t => {
         const rashiIdx = t.transit_rashi_index;
         const hFromLagna = ((rashiIdx - natalLagnaIdx + 12) % 12) + 1;
+        const hFromMoon = ((rashiIdx - natalRashiIdx + 12) % 12) + 1;
+        const savForSign = computeSarvashtakavarga(natalLagnaIdx, undefined, flattenedD1).savTotalPoints[rashiIdx] || 28;
         return {
           graha_key: t.graha_key,
           graha_name: t.graha_name,
@@ -895,15 +906,22 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           transit_rashi_name: t.transit_rashi_name,
           transit_rashi_tamil: t.transit_rashi_tamil,
           house_from_lagna: hFromLagna,
+          house_from_moon: hFromMoon,
+          house_from_moon_title: `House ${hFromMoon} from Moon (${RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Janma Rashi'})`,
           degree_sputa: t.degree_sputa,
           degree_in_sign_float: t.degree_in_sign_float,
           nakshatra_name: t.graha_pada_chara?.nakshatra_name || 'N/A',
           nakshatra_lord: t.graha_pada_chara?.nakshatra_lord || '',
           pada: t.graha_pada_chara?.pada || 1,
           is_retrograde: t.is_retrograde,
+          motion_type: t.motion_type || (t.is_retrograde ? 'Vakra' : 'Normal'),
+          motion_description: t.motion_description,
+          sav_points: savForSign,
           is_custom: !!(t as any).is_custom_user_adjusted
         };
       }),
+      natalLagnaSignName: RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius',
+      natalMoonSignName: RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio',
       activeDasha: activeDashaHierarchy,
       selectedMonth,
       selectedYear,

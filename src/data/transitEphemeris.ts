@@ -32,6 +32,8 @@ export interface GrahaTransitPosition {
   };
   is_retrograde: boolean;
   motion_state: string;
+  motion_type: 'Normal' | 'Vakra' | 'Adisara';
+  motion_description: string;
 }
 
 export interface TransitTimelineEvent {
@@ -300,6 +302,26 @@ export function getGrahaTransitPosition(
     Saturn: "சனி", Rahu: "ராகு", Ketu: "கேது"
   };
 
+  let motionType: 'Normal' | 'Vakra' | 'Adisara' = 'Normal';
+  let motionDescription = 'Normal Direct Motion — Steady, organic unfolding.';
+
+  if (isRetrograde) {
+    motionType = 'Vakra';
+    if (planetKey === 'Saturn') {
+      motionDescription = 'Vakra (Retrograde) — Behaving abnormal to the normal; taking a contrarian direction against the standard flow/expectations; unconventional karmic settlement.';
+    } else if (planetKey === 'Jupiter') {
+      motionDescription = 'Vakra (Retrograde) — Introspective reassessment of dharma, wisdom, and beliefs; inner recalibration before external fruition.';
+    } else {
+      motionDescription = 'Vakra (Retrograde) — Non-linear, introspective transit motion.';
+    }
+  } else if (planetKey === 'Jupiter' && (diff * 4) > 0.12) {
+    motionType = 'Adisara';
+    motionDescription = 'Adisara (Accelerated / Fast Ingress) — Guru ceases gentle advising and forcefully pushes native to execute; impatient forward momentum to get the job done.';
+  } else if (planetKey === 'Saturn' && (diff * 4) > 0.055) {
+    motionType = 'Adisara';
+    motionDescription = 'Adisara (Accelerated Motion) — Rapid sign transit forcing urgent structural adjustments.';
+  }
+
   return {
     graha_key: planetKey,
     graha_name: names[planetKey] || planetKey,
@@ -328,7 +350,9 @@ export function getGrahaTransitPosition(
       chara_summary: `${nakName} (Pada ${pada})`
     },
     is_retrograde: isRetrograde,
-    motion_state: isRetrograde ? "Retrograde (வக்ரம்)" : "Direct (நேர்கதி)"
+    motion_state: isRetrograde ? "Retrograde (வக்ரம்)" : (motionType === 'Adisara' ? "Accelerated (அதிசாரம்)" : "Direct (நேர்கதி)"),
+    motion_type: motionType,
+    motion_description: motionDescription
   };
 }
 

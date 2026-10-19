@@ -98,18 +98,25 @@ export interface VedicHouseContext {
     graha_tamil?: string;
     transit_rashi_index: number;
     transit_rashi_name: string;
-    transit_rashi_tamil?: string;
     house_from_lagna: number;
+    house_from_moon: number;
+    house_from_moon_title?: string;
     degree_sputa: string;
     degree_in_sign_float?: number;
     nakshatra_name: string;
     nakshatra_lord?: string;
     pada: number;
     is_retrograde: boolean;
+    motion_type?: 'Normal' | 'Vakra' | 'Adisara';
+    motion_description?: string;
+    sav_points?: number;
+    bav_points?: number;
     is_custom?: boolean;
     aspects_target_house?: boolean;
     aspect_type?: string;
   }>;
+  natalLagnaSignName?: string;
+  natalMoonSignName?: string;
   activeDasha: {
     mahadasha: string;
     antardasha: string;

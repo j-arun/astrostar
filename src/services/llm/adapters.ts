@@ -332,17 +332,24 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} — ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
     : 'Standard D9 alignments align with natal grid';
 
-  // 3. Complete All-Graha Gochara Transits (Single unified ephemeris)
+  // 3. Complete All-Graha Gochara Transits (Reckoned STRICTLY from Janma Rashi / Moon)
   const allTransits = context.allTransitPlacements || [];
 
   const allTransitsTable = allTransits.length > 0
     ? allTransits.map(t => {
-        const aspectNote = t.aspects_target_house ? ` [Aspect: ${t.aspect_type}]` : '';
-        return `  ${toCleanEnglishPlanet(t.graha_key)} — ${toCleanEnglishSign(t.transit_rashi_name)} H${t.house_from_lagna} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}${t.is_retrograde ? ' [R]' : ''}${t.is_custom ? ' [Override]' : ''}${aspectNote}`;
+        const aspectNote = t.aspects_target_house ? ` [Aspect to Target House: ${t.aspect_type}]` : '';
+        const hMoon = t.house_from_moon || t.house_from_lagna;
+        const motionLabel = t.motion_type === 'Vakra'
+          ? `[VAKRA / RETROGRADE: ${t.motion_description || 'Unconventional, contrarian flow'}]`
+          : t.motion_type === 'Adisara'
+            ? `[ADISARA / ACCELERATED: ${t.motion_description || 'Impatient drive, pushing execution'}]`
+            : '[Direct / Normal Motion]';
+        const savBindus = t.sav_points ? ` [SAV: ${t.sav_points} Bindus]` : '';
+        return `  • ${toCleanEnglishPlanet(t.graha_key)} in ${toCleanEnglishSign(t.transit_rashi_name)} — House from Moon: ${hMoon}th House Gochara${savBindus} — Motion: ${motionLabel} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})${t.is_custom ? ' [Override]' : ''}${aspectNote}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
-        ? context.transitOccupants.map(t => `  ${toCleanEnglishPlanet(t.graha_key)} — ${cleanTargetSign} ${context.houseNumber ? `H${context.houseNumber}` : ''} — ${formatDegreeCompact(t.degree_sputa)} — ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
-        : '  Full planetary Gochara transits computed per ephemeris.');
+        ? context.transitOccupants.map(t => `  • ${toCleanEnglishPlanet(t.graha_key)} in ${cleanTargetSign} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})`).join('\n')
+        : '  Full planetary Gochara transits computed per ephemeris from Janma Rashi.');
 
   // 4. Moon 2.25-day Sign Progression Timeline
   const moonSpansTable = (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0)
@@ -431,14 +438,19 @@ ${rulesStr}`;
 
 ${horizonSection}
 
-### Natal Chart
-D1 Rasi:
+### Natal Chart (Ascendant / Lagna Reference Frame — Promise & Capacity Only)
+[NATAL PROMISE ONLY — Evaluates native capacity, house lordships, and inherent yogas. DO NOT calculate transits from Lagna.]
+Natal Lagna (Ascendant): ${context.natalLagnaSignName || 'Ascendant'}
+Janma Rashi (Natal Moon): ${context.natalMoonSignName || (context.natalJanmaStar?.rashi_name ? toCleanEnglishSign(context.natalJanmaStar.rashi_name) : 'Moon Sign')} — Janma Star: ${context.natalJanmaStar?.nakshatra_name || 'Anuradha'} (Pada ${context.natalJanmaStar?.pada || 2})
+
+D1 Rasi Placements:
 ${natalD1Table}
 
 D9 Navamsha:
   ${natalD9Table}
 
-### Transit Ephemeris — ${monthName} ${context.selectedYear}
+### Gochara Ephemeris — ${monthName} ${context.selectedYear} (STRICTLY Reckoned from Janma Rashi / Moon: ${context.natalMoonSignName || 'Moon Sign'})
+[CRITICAL PARASHARA LAW: Transits (Gochara) MUST be read strictly relative to the Natal Moon sign (Janma Rashi), which governs the current timeline, mind (Manas), and environmental receptivity in the sky. Do NOT conflate Gochara with Natal Lagna. Natal Lagna represents the promised capacity (chapati batter); transit from Moon represents the environmental precipitation and timing (dosa batter). Do not mix them.]
 ${allTransitsTable}
 
 ### Tara Bala
@@ -482,15 +494,23 @@ CRITICAL PLAIN TEXT REQUIREMENT FOR JSON PROSE FIELDS:
 - NEVER output raw JSON objects, key-value pairs, or code blocks inside these fields. Write clean, direct English sentences.
 
 REASONING DIRECTIVES:
-1. TRANSIT GRAHA PADA & DEGREES: Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon. Account for tight aspect orbs (< 5°-7°).
-2. TARA BALA: Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
-3. CHANDRA BALA: Flag 8th house Moon transits from Janma Rashi with clear cautions.
-${context.isComprehensiveMonthly || !context.houseNumber
-  ? `4. SAV BINDUS: Reference 12-house SAV distribution (>=28-32 strong stamina, <25 cautious conservation).
-5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and their overall Gochara activations across life domains.`
-  : `4. SAV BINDUS: Reference target house bindus (>=28-32 strong stamina, <25 cautious conservation).
-5. DASHA LORDS: Integrate Mahadasha, Antardasha, and Pratyantardasha lordships and direct connections to House ${context.houseNumber}.`
-}
+1. STRICT REFERENCE-FRAME SEPARATION (NO BATTER CONFLATION):
+   - All Gochara transits MUST be interpreted relative to Janma Rashi (Moon sign: ${context.natalMoonSignName || 'Moon'}).
+   - NEVER treat a transit planet's position relative to Natal Lagna as a Gochara house! For example, if Moon is in Scorpio and a planet is transiting Cancer, it is in the 9th house from Moon (favorable Gochara), NOT the 8th house from Dhanu Lagna.
+   - The ONLY permissible bridge between Natal Lagna and Gochara is the active Dasha Lord (MD / AD / PD): evaluate the Dasha Lord's natal portfolio (which houses it rules from Lagna and what capacity it holds), and examine how that portfolio is delivered through its current Gochara house from the Moon.
+2. ASHTAKAVARGA BINDUS (SAV & BAV SANCTION):
+   - Transits do not deliver in a vacuum. Evaluate Sarvashtakavarga (SAV) bindus for each transiting sign:
+     * >= 28 to 32+ Bindus: Abundant environmental backing, effortless fruition, collective support.
+     * < 25 Bindus: Environmental friction, drainage, resistance, lack of support even if house placement seems benefic.
+3. MOTION DYNAMICS — VAKRA (RETROGRADE) & ADISARA (ACCELERATED):
+   - SATURN VAKRA (Retrograde): 'Vakra' in classical Sanskrit literally means behaving abnormal to the normal, defying expected conventional flow, stubborn non-conformist behavior, refusing to follow standard protocols, and settling karmic accounts through unorthodox, non-linear ways. When Saturn is Vakra in transit, evaluate how it executes its natal portfolio through an unconventional, contrarian modality.
+   - JUPITER ADISARA vs VAKRA vs NORMAL: Normal Jupiter offers gentle, wise counsel and organic expansion. Adisara (accelerated motion/leap into next sign) stops being a gentle adviser and forces the native to 'push and do the job' with impatient urgency. Vakra Jupiter triggers deep internal re-evaluation of beliefs, ethics, and mentors.
+4. TARA BALA & CHANDRA BALA:
+   - Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
+   - Flag 8th house Moon transits from Janma Rashi (Chandrashtama) with clear cautions.
+5. DASHA LORDS' TRANSIT DELIVERY:
+   - Synthesize how Mahadasha, Antardasha, and Pratyantardasha lords deliver their natal agenda through their current Gochara positions from the Moon, modulated by their Vakra/Adisara motion and Ashtakavarga scores.
+   - Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon (< 5°-7° orbs).
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
@@ -499,7 +519,7 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     "natalPromiseScore": 0.85,
     "natalPromiseVerdict": "Natal foundation and karaka strength summary in English.",
     "transitDeliveryScore": 0.78,
-    "transitDeliveryVerdict": "Gochara transits and Dasha Triad delivery capacity.",
+    "transitDeliveryVerdict": "Gochara transits from Moon (Janma Rashi), motion states (Vakra/Adisara), and SAV delivery capacity.",
     "synthesisVerdict": "Combined fruition and manifestation verdict."
   },
   "part1_probabilityAndScope": "${context.isComprehensiveMonthly ? `Multi-paragraph English breakdown of comprehensive monthly event probabilities and overarching trajectory across core life domains for ${monthName} ${context.selectedYear}.` : `Multi-paragraph English breakdown of Event Probability & Scope based on House ${context.houseNumber} significations and active Pratyantardasha Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}).`}",

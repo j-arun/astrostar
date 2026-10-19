@@ -664,6 +664,135 @@ def generate_md_narrative(
     }
 
 
+def get_ad_pd_observations(
+    cfg: Dict[str, Any],
+    person_id: str,
+    mahadasha_lord: str,
+    antardasha_lord: str,
+    start_date: str,
+    end_date: str
+) -> List[Dict[str, Any]]:
+    conn = get_db_connection(cfg)
+    if not conn:
+        raise RuntimeError("PostgreSQL is unavailable; AD notes could not be loaded.")
+    try:
+        ensure_tables_exist(conn)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date,
+                   notes, evaluation_rating
+            FROM vimshottari_dasha_detail
+            WHERE person_id = %s
+              AND mahadasha_lord = %s
+              AND antardasha_lord = %s
+              AND start_date >= %s
+              AND end_date <= %s
+            ORDER BY start_date ASC;
+        """, (person_id, mahadasha_lord, antardasha_lord, start_date, end_date))
+        observations = cur.fetchall()
+        for observation in observations:
+            observation["start_date"] = str(observation["start_date"])
+            observation["end_date"] = str(observation["end_date"])
+        cur.close()
+        conn.close()
+        return observations
+    except Exception:
+        conn.rollback()
+        conn.close()
+        raise
+
+
+def build_ad_narrative_prompt(
+    mahadasha_lord: str,
+    antardasha_lord: str,
+    start_date: str,
+    end_date: str,
+    observations: List[Dict[str, Any]]
+) -> str:
+    rated_observations = [
+        obs for obs in observations
+        if (obs.get("notes") and str(obs["notes"]).strip())
+        or obs.get("evaluation_rating") is not None
+    ]
+    if not rated_observations:
+        raise ValueError("This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.")
+
+    rating_labels = {0: "BAD / DIFFICULT", 5: "AVERAGE / MIXED", 10: "GOOD / POSITIVE"}
+    observation_lines = []
+    for obs in rated_observations:
+        rating = obs.get("evaluation_rating")
+        rating_desc = rating_labels.get(rating, "NOT RATED")
+        note = str(obs.get("notes") or "").strip() or "No landmark note recorded."
+        observation_lines.append(
+            f"- {obs['start_date']} to {obs['end_date']} | "
+            f"PD: {obs['pratyantardasha_lord']} | "
+            f"Rating: {rating if rating is not None else 'none'} ({rating_desc}) | Note: {note}"
+        )
+
+    return "\n".join([
+        "Task: Synthesize a concise chronological personal-event narrative for the Antardasha period below, using only the supplied PD observations.",
+        f"Mahadasha: {mahadasha_lord}",
+        f"Antardasha: {antardasha_lord} (MD-AD Window: {start_date} to {end_date})",
+        "",
+        "Grounding and formatting rules:",
+        "- Ground solely on the recorded PD observations; do not speculate, diagnose, or invent events.",
+        "- Prefix each chronological milestone or sentence with the explicit Pratyantardasha Lord tag, e.g. [PD: Moon] or [PD: Mars], so the native can attribute each event to its specific PD sub-period.",
+        "- Rating interpretation: 0 = Bad/Difficult, 5 = Average/Mixed, 10 = Good/Positive.",
+        "- Write 3 to 7 short lines in clear, respectful plain text.",
+        "",
+        "PD observations:",
+        *observation_lines
+    ])
+
+
+def generate_ad_narrative(
+    cfg: Dict[str, Any],
+    person_id: str,
+    mahadasha_lord: str,
+    antardasha_lord: str,
+    start_date: str,
+    end_date: str,
+    custom_prompt: Optional[str] = None
+) -> Dict[str, Any]:
+    observations = get_ad_pd_observations(cfg, person_id, mahadasha_lord, antardasha_lord, start_date, end_date)
+    prompt = custom_prompt.strip() if isinstance(custom_prompt, str) and custom_prompt.strip() else build_ad_narrative_prompt(mahadasha_lord, antardasha_lord, start_date, end_date, observations)
+    settings = get_local_ollama_settings()
+    request_body = json.dumps({
+        "model": settings["model"],
+        "prompt": prompt,
+        "stream": False,
+        "keep_alive": 0,
+        "options": {
+            "temperature": settings["temperature"],
+            "num_predict": settings["max_tokens"]
+        }
+    }).encode("utf-8")
+    request = urllib_request.Request(
+        settings["endpoint"],
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+
+    with urllib_request.urlopen(request, timeout=300) as response:
+        ollama_result = json.loads(response.read().decode("utf-8"))
+    narrative = str(ollama_result.get("response", "")).strip()
+    narrative_lines = [line.strip() for line in narrative.splitlines() if line.strip()]
+    if not narrative_lines:
+        raise RuntimeError("The local LLM returned an empty narrative.")
+    narrative = "\n".join(narrative_lines[:8])
+
+    return {
+        "success": True,
+        "narrative": narrative,
+        "prompt": prompt,
+        "model": ollama_result.get("model", settings["model"]),
+        "generated_at": datetime.now().isoformat(),
+        "source_pd_count": len([item for item in observations if item.get("notes") or item.get("evaluation_rating") is not None])
+    }
+
+
+
 def save_llm_prompt_log_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
     engine = data.get("engine", "Gemini")
     model_name = data.get("model_name", "")
@@ -1218,6 +1347,35 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             return
 
+        elif parsed.path == "/api/dasha/ad-narrative/prompt":
+            if not self._is_loopback_client():
+                self._set_headers(403)
+                self.wfile.write(json.dumps({"success": False, "error": "AD narrative prompts are available only from this computer."}).encode())
+                return
+            params = urllib.parse.parse_qs(parsed.query)
+            person_id = params.get("person_id", [""])[0]
+            mahadasha_lord = params.get("mahadasha_lord_md", [""])[0]
+            antardasha_lord = params.get("antardasha_lord_ad", [""])[0]
+            start_date = params.get("start_date", [""])[0]
+            end_date = params.get("end_date", [""])[0]
+            if not all((person_id, mahadasha_lord, antardasha_lord, start_date, end_date)):
+                result = {"success": False, "error": "Person, Mahadasha, and complete AD identity are required."}
+                self._set_headers(400)
+            else:
+                try:
+                    observations = get_ad_pd_observations(cfg, person_id, mahadasha_lord, antardasha_lord, start_date, end_date)
+                    prompt = build_ad_narrative_prompt(mahadasha_lord, antardasha_lord, start_date, end_date, observations)
+                    result = {"success": True, "prompt": prompt}
+                    self._set_headers(200)
+                except ValueError as e:
+                    result = {"success": False, "error": str(e)}
+                    self._set_headers(400)
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
+                    self._set_headers(503)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+            return
+
         elif parsed.path.startswith("/api/llm/logs"):
             params = urllib.parse.parse_qs(parsed.query)
             limit = int(params.get("limit", [50])[0])
@@ -1348,6 +1506,43 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             return
 
+        elif parsed.path == "/api/dasha/ad-narrative":
+            if not self._is_loopback_client():
+                self._set_headers(403)
+                self.wfile.write(json.dumps({"success": False, "error": "AD narrative generation is available only from this computer."}).encode())
+                return
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                data = json.loads(body_bytes.decode()) if body_bytes else {}
+            except Exception:
+                data = {}
+
+            person_id = data.get("person_id", "")
+            mahadasha_lord = data.get("mahadasha_lord_md", "")
+            antardasha_lord = data.get("antardasha_lord_ad", "")
+            start_date = data.get("start_date", "")
+            end_date = data.get("end_date", "")
+            if not all((person_id, mahadasha_lord, antardasha_lord, start_date, end_date)):
+                result = {"success": False, "error": "Person, Mahadasha, and complete AD identity are required."}
+                self._set_headers(400)
+            else:
+                try:
+                    result = generate_ad_narrative(
+                        cfg, person_id, mahadasha_lord, antardasha_lord, start_date, end_date,
+                        data.get("custom_prompt")
+                    )
+                    self._set_headers(200)
+                except ValueError as e:
+                    result = {"success": False, "error": str(e)}
+                    self._set_headers(400)
+                except Exception as e:
+                    result = {"success": False, "error": f"Local AD narrative generation failed: {e}"}
+                    self._set_headers(503)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+            return
+
+
         elif parsed.path == "/api/llm/gemini":
             content_length = int(self.headers.get("Content-Length", 0))
             body_bytes = self.rfile.read(content_length)
@@ -1357,11 +1552,11 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 data = {}
 
             prompt = data.get("prompt", "")
-            api_key = os.environ.get("GEMINI_API_KEY", "")
+            api_key = (data.get("apiKey") or data.get("api_key") or os.environ.get("GEMINI_API_KEY", "")).strip()
 
             if not api_key:
-                self._set_headers(500)
-                self.wfile.write(json.dumps({"error": "GEMINI_API_KEY not configured"}).encode())
+                self._set_headers(400)
+                self.wfile.write(json.dumps({"error": "GEMINI_API_KEY not configured. Please enter your Gemini API key in the UI."}).encode())
                 return
 
             from urllib import request as urllib_request

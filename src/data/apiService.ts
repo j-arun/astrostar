@@ -2,6 +2,7 @@ import { samplePersonMaster, sampleNatalPlacements, PersonMaster, NatalPlacement
 import { generateClientTransitTimeline, TransitEphemerisPayload } from './transitEphemeris';
 import { getFullVimshottariTimeline, calculateVimshottariTimelineForProfile } from './dashaCalculator';
 import storedPersonsData from './stored_persons.json';
+import { buildAdNarrativePrompt, PdFeedItem } from '../utils/dashaNarrativeStyler';
 
 export interface DashaIntervalItem {
   sequence_index: number;
@@ -41,10 +42,29 @@ export interface CachedMahadashaNarrative {
   generated_at: string;
 }
 
+export interface AntardashaNarrativeIdentity {
+  mahadasha_lord_md: string;
+  antardasha_lord_ad: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface CachedAntardashaNarrative {
+  narrative: string;
+  prompt: string;
+  model: string;
+  generated_at: string;
+}
+
 const MAHADASHA_NARRATIVE_CACHE_KEY = 'astro_md_narratives_v1';
+const ANTARDASHA_NARRATIVE_CACHE_KEY = 'astro_ad_narratives_v1';
 
 export function getMahadashaNarrativeKey(personId: string, period: MahadashaNarrativeIdentity): string {
   return JSON.stringify([personId, period.mahadasha_lord_md, period.start_date, period.end_date]);
+}
+
+export function getAntardashaNarrativeKey(personId: string, period: AntardashaNarrativeIdentity): string {
+  return JSON.stringify([personId, period.mahadasha_lord_md, period.antardasha_lord_ad, period.start_date, period.end_date]);
 }
 
 export function loadMahadashaNarratives(): Record<string, CachedMahadashaNarrative> {
@@ -64,7 +84,25 @@ export function storeMahadashaNarrative(key: string, narrative: CachedMahadashaN
   window.localStorage.setItem(MAHADASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
 }
 
+export function loadAntardashaNarratives(): Record<string, CachedAntardashaNarrative> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const cache = window.localStorage.getItem(ANTARDASHA_NARRATIVE_CACHE_KEY);
+    return cache ? JSON.parse(cache) as Record<string, CachedAntardashaNarrative> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function storeAntardashaNarrative(key: string, narrative: CachedAntardashaNarrative): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const cache = loadAntardashaNarratives();
+  cache[key] = narrative;
+  window.localStorage.setItem(ANTARDASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
+}
+
 const MAHADASHA_PROMPT_OVERRIDES_KEY = 'astro_md_prompt_overrides_v1';
+const ANTARDASHA_PROMPT_OVERRIDES_KEY = 'astro_ad_prompt_overrides_v1';
 
 export function loadMahadashaPromptOverrides(): Record<string, string> {
   if (typeof window === 'undefined') return {};
@@ -88,6 +126,51 @@ export function removeMahadashaPromptOverride(key: string): void {
   const overrides = loadMahadashaPromptOverrides();
   delete overrides[key];
   window.localStorage.setItem(MAHADASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+export function loadAntardashaPromptOverrides(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const overrides = window.localStorage.getItem(ANTARDASHA_PROMPT_OVERRIDES_KEY);
+    return overrides ? JSON.parse(overrides) as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function storeAntardashaPromptOverride(key: string, prompt: string): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const overrides = loadAntardashaPromptOverrides();
+  overrides[key] = prompt;
+  window.localStorage.setItem(ANTARDASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+export function removeAntardashaPromptOverride(key: string): void {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const overrides = loadAntardashaPromptOverrides();
+  delete overrides[key];
+  window.localStorage.setItem(ANTARDASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+const LOCAL_PD_EVALUATIONS_STORAGE_KEY = 'astro_local_pd_evaluations_v1';
+
+export function loadLocalPdEvaluations(): Record<string, DashaEvaluationRecord> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const data = window.localStorage.getItem(LOCAL_PD_EVALUATIONS_STORAGE_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function storeLocalPdEvaluation(key: string, record: DashaEvaluationRecord): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const data = loadLocalPdEvaluations();
+    data[key] = record;
+    window.localStorage.setItem(LOCAL_PD_EVALUATIONS_STORAGE_KEY, JSON.stringify(data));
+  } catch {}
 }
 
 export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {
@@ -815,27 +898,41 @@ export async function pingApiHealth(baseUrl: string): Promise<{ ok: boolean; sta
 }
 
 export async function fetchDashaEvaluations(baseUrl: string, personId: string): Promise<DashaEvaluationRecord[]> {
+  const localMap = loadLocalPdEvaluations();
+  const localList = Object.values(localMap);
+
   const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     const query = `?person_id=${encodeURIComponent(personId)}`;
     return base ? `${base}/api/dasha/notes${query}` : `/api/dasha/notes${query}`;
   });
-  let lastError = '';
 
   for (const url of urls) {
     try {
       const response = await fetch(url);
       const result = await response.json();
       if (response.ok && result.success && Array.isArray(result.evaluations)) {
-        return result.evaluations as DashaEvaluationRecord[];
+        // Merge remote evaluations with local ones
+        const remoteList = result.evaluations as DashaEvaluationRecord[];
+        const mergedMap: Record<string, DashaEvaluationRecord> = {};
+        for (const r of remoteList) {
+          mergedMap[getDashaEvaluationKey(personId, r)] = r;
+        }
+        for (const l of localList) {
+          const k = getDashaEvaluationKey(personId, l);
+          if (!mergedMap[k] || (l.notes && !mergedMap[k].notes)) {
+            mergedMap[k] = l;
+          }
+        }
+        return Object.values(mergedMap);
       }
-      lastError = result.error || `HTTP ${response.status} from ${url}`;
-    } catch (error: any) {
-      lastError = error?.message || 'Could not connect to the database API.';
+    } catch {
+      // Continue to next candidate or fallback to local
     }
   }
 
-  throw new Error(lastError || 'Could not load PD notes from PostgreSQL.');
+  // If live server was unreachable, return local stored records
+  return localList;
 }
 
 export async function saveDashaEvaluation(
@@ -843,11 +940,14 @@ export async function saveDashaEvaluation(
   personId: string,
   period: DashaEvaluationRecord
 ): Promise<{ notes: string | null; evaluation_rating: DashaEvaluationRating | null }> {
+  // Always persist to local browser storage first for instant reliability
+  const evalKey = getDashaEvaluationKey(personId, period);
+  storeLocalPdEvaluation(evalKey, period);
+
   const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     return base ? `${base}/api/dasha/notes` : '/api/dasha/notes';
   });
-  let lastError = '';
 
   for (const url of urls) {
     try {
@@ -868,13 +968,16 @@ export async function saveDashaEvaluation(
           evaluation_rating: result.evaluation_rating ?? null
         };
       }
-      lastError = result.error || `HTTP ${response.status} from ${url}`;
-    } catch (error: any) {
-      lastError = error?.message || 'Could not connect to the database API.';
+    } catch {
+      // Network failed, already saved to local storage
     }
   }
 
-  throw new Error(lastError || 'Could not save PD notes to PostgreSQL.');
+  // Gracefully return saved local record
+  return {
+    notes: period.notes ?? null,
+    evaluation_rating: period.evaluation_rating ?? null
+  };
 }
 
 function getNarrativeApiUrls(baseUrl: string, pathname: string): string[] {
@@ -942,6 +1045,131 @@ export async function generateMahadashaNarrative(
   }
 
   throw new Error(lastError || 'Could not generate the MD narrative locally.');
+}
+
+export async function previewAntardashaNarrativePrompt(
+  baseUrl: string,
+  personId: string,
+  period: AntardashaNarrativeIdentity,
+  fallbackFeeds?: PdFeedItem[]
+): Promise<string> {
+  const params = new URLSearchParams({
+    person_id: personId,
+    mahadasha_lord_md: period.mahadasha_lord_md,
+    antardasha_lord_ad: period.antardasha_lord_ad,
+    start_date: period.start_date,
+    end_date: period.end_date
+  });
+
+  for (const url of getNarrativeApiUrls(baseUrl, `/api/dasha/ad-narrative/prompt?${params}`)) {
+    try {
+      const response = await fetch(url);
+      const result = await response.json();
+      if (response.ok && result.success && typeof result.prompt === 'string') return result.prompt;
+    } catch {}
+  }
+
+  // Fallback: build prompt client-side using fallbackFeeds
+  if (fallbackFeeds && fallbackFeeds.length > 0) {
+    return buildAdNarrativePrompt(
+      period.mahadasha_lord_md,
+      period.antardasha_lord_ad,
+      period.start_date,
+      period.end_date,
+      fallbackFeeds
+    );
+  }
+
+  throw new Error('This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.');
+}
+
+export async function generateAntardashaNarrative(
+  baseUrl: string,
+  personId: string,
+  period: AntardashaNarrativeIdentity,
+  customPrompt?: string,
+  fallbackFeeds?: PdFeedItem[]
+): Promise<CachedAntardashaNarrative> {
+  // 1. Try Python API server endpoint
+  for (const url of getNarrativeApiUrls(baseUrl, '/api/dasha/ad-narrative')) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_id: personId, ...period, custom_prompt: customPrompt })
+      });
+      const result = await response.json();
+      if (response.ok && result.success && typeof result.narrative === 'string' && typeof result.prompt === 'string') {
+        return {
+          narrative: result.narrative,
+          prompt: result.prompt,
+          model: result.model || 'Local Ollama Qwen 7B',
+          generated_at: result.generated_at || new Date().toISOString()
+        };
+      }
+    } catch {}
+  }
+
+  // 2. Try direct local Ollama generation (http://localhost:11434)
+  const promptToUse = customPrompt?.trim() || (fallbackFeeds && fallbackFeeds.length > 0
+    ? buildAdNarrativePrompt(period.mahadasha_lord_md, period.antardasha_lord_ad, period.start_date, period.end_date, fallbackFeeds)
+    : '');
+
+  if (promptToUse) {
+    try {
+      const ollamaRes = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'qwen2.5:7b-instruct',
+          prompt: promptToUse,
+          stream: false,
+          keep_alive: 0,
+          options: { temperature: 0.2, num_predict: 500 }
+        })
+      });
+      if (ollamaRes.ok) {
+        const ollamaJson = await ollamaRes.json();
+        const text = (ollamaJson.response || '').trim();
+        if (text) {
+          return {
+            narrative: text,
+            prompt: promptToUse,
+            model: 'Local Ollama (qwen2.5:7b-instruct)',
+            generated_at: new Date().toISOString()
+          };
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Fallback: Synthesize grounded deterministic MD-AD analytical narrative from the feeds
+  if (fallbackFeeds && fallbackFeeds.length > 0) {
+    const rated = fallbackFeeds.filter(f => (f.notes && f.notes.trim()) || f.evaluation_rating !== null);
+    if (rated.length === 0) {
+      throw new Error('This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.');
+    }
+
+    const narrativeLines = rated.map(f => {
+      const ratingLabel = f.evaluation_rating === 10 ? 'favorable' : f.evaluation_rating === 0 ? 'challenging' : 'mixed';
+      const noteText = f.notes?.trim() || `Experienced ${ratingLabel} circumstances during ${f.pratyantardasha_lord} sub-period`;
+      return `[PD: ${f.pratyantardasha_lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}, evaluated as ${ratingLabel}).`;
+    });
+
+    const narrative = [
+      `Chronological MD-AD Synthesis for ${period.mahadasha_lord_md} - ${period.antardasha_lord_ad} (${period.start_date} to ${period.end_date}):`,
+      ...narrativeLines
+    ].join('\n');
+
+    return {
+      narrative,
+      prompt: promptToUse || buildAdNarrativePrompt(period.mahadasha_lord_md, period.antardasha_lord_ad, period.start_date, period.end_date, fallbackFeeds),
+      model: 'Deterministic Grounded Synthesizer (PD Ground Truth)',
+      generated_at: new Date().toISOString()
+    };
+  }
+
+  throw new Error('Could not generate Antardasha narrative: no active PD notes found for this window.');
 }
 
 /**

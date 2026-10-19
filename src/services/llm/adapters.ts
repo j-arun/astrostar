@@ -1679,9 +1679,9 @@ ${parsed.part3_microTimingWindow}
         } catch {}
 
         if (rawErr.includes('bound service account is deleted or disabled') || rawErr.includes('ACCOUNT_STATE_INVALID') || res.status === 401) {
-          connectionError = 'Google Gemini Error (401 UNAUTHENTICATED): The service account bound to this key is deleted or disabled. Please paste your active Gemini API key in the Gemini Settings panel or click "⚡ Test Key".';
+          connectionError = 'Google Gemini Authentication Required: The default server key is unavailable or expired. Please enter your active Gemini API key (from https://aistudio.google.com/apikey) into the Gemini Key input in the header bar or settings panel.';
         } else if (rawErr.includes('API key not valid') || rawErr.includes('API_KEY_INVALID') || res.status === 400) {
-          connectionError = 'Google Gemini Error: API Key Invalid (400). Please check GEMINI_API_KEY in your .env file or enter a valid key from https://aistudio.google.com/apikey in the Gemini Key field.';
+          connectionError = 'Google Gemini Error: API Key Invalid (400). Please check your Gemini API key from https://aistudio.google.com/apikey and paste it into the Gemini Key input.';
         } else if (res.status === 429 || rawErr.includes('RESOURCE_EXHAUSTED') || rawErr.includes('quota')) {
           connectionError = 'Google Gemini Error: Quota Exceeded (429 RESOURCE_EXHAUSTED). Please check project billing at https://aistudio.google.com/apikey.';
         } else {
@@ -1692,7 +1692,7 @@ ${parsed.part3_microTimingWindow}
       if (err.name === 'AbortError' || context.abortSignal?.aborted) {
         return {
           ...synthesizeAnalyticalVedicNarrative(context, 'gemini_pro', startMs),
-          endpointUsed: 'Google Gemini Cloud API (/api/llm/gemini)',
+          endpointUsed: `Google Gemini Cloud API (${geminiModel})`,
           connectionStatus: 'cancelled',
           connectionError: 'Prompt generation cancelled abruptly by user.',
           isPrivateLocal: false,
@@ -1704,14 +1704,16 @@ ${parsed.part3_microTimingWindow}
           }
         };
       }
-      connectionError = err.message || 'Failed to reach /api/llm/gemini proxy';
+      connectionError = (err.message && err.message.includes('Failed to fetch'))
+        ? 'Google Gemini Network Error: Could not reach the /api/llm/gemini proxy. Please enter an active Gemini API key in the top bar.'
+        : (err.message || 'Failed to reach /api/llm/gemini proxy');
     }
 
     // Graceful fallback to analytical synthesis if cloud API unreachable
     const fallback = synthesizeAnalyticalVedicNarrative(context, 'gemini_pro', startMs);
     return {
       ...fallback,
-      endpointUsed: 'Google Gemini Cloud API (/api/llm/gemini)',
+      endpointUsed: `Google Gemini Cloud API (${geminiModel})`,
       connectionStatus: 'connection_failed_fallback',
       connectionError,
       isPrivateLocal: false,
@@ -1931,7 +1933,7 @@ export interface LLMPromptLogPayload {
   prompt_text: string;
   response_text: string;
   time_taken_ms: number;
-  status: 'SUCCESS' | 'FALLBACK' | 'ERROR';
+  status: 'SUCCESS' | 'FALLBACK' | 'ERROR' | 'CANCELLED';
   response_json?: any;
 }
 

@@ -54,10 +54,18 @@ import {
   removeMahadashaPromptOverride,
   saveDashaEvaluation,
   storeMahadashaPromptOverride,
-  storeMahadashaNarrative
+  storeMahadashaNarrative,
+  AntardashaNarrativeIdentity,
+  CachedAntardashaNarrative,
+  getAntardashaNarrativeKey,
+  loadAntardashaNarratives,
+  loadAntardashaPromptOverrides,
+  storeAntardashaNarrative
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
 import { getFullVimshottariTimeline } from '../data/dashaCalculator';
+import { DashaAdNarrativeCard } from './DashaAdNarrativeCard';
+import { PdFeedItem } from '../utils/dashaNarrativeStyler';
 
 interface RestApiStudioProps {
   apiPersonId: string;
@@ -185,6 +193,8 @@ export default function RestApiStudio({
   const [mdPromptLoading, setMdPromptLoading] = useState<Record<string, boolean>>({});
   const [mdPromptText, setMdPromptText] = useState<Record<string, string>>({});
   const [mdPromptErrors, setMdPromptErrors] = useState<Record<string, string>>({});
+  const [adNarratives, setAdNarratives] = useState<Record<string, CachedAntardashaNarrative>>(loadAntardashaNarratives);
+  const [adPromptOverrides, setAdPromptOverrides] = useState<Record<string, string>>(loadAntardashaPromptOverrides);
 
   // Collapsible section toggles for SAP Query Studio (3 Sections)
   const [expandQueryParams, setExpandQueryParams] = useState<boolean>(true);
@@ -2322,107 +2332,156 @@ print(prompt_markdown[:400])
                       </div>
                     )}
                   </section>
-                  {mahadasha.antardashas.map((antardasha, adIndex) => (
-                    <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
-                      <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="font-semibold text-cyan-300">AD {adIndex + 1}: {antardasha.lord}</span>
-                        <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
-                      </summary>
-                      <div className="px-3 pb-2 space-y-1">
-                        {antardasha.intervals.map(interval => {
-                          const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
-                          const evaluation = dashaEvaluations[periodKey] ?? interval;
-                          const saveState = dashaSaveStates[periodKey];
-                          const hasDbRecord = dashaDatabaseRecords.some(record =>
-                            getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, record) === periodKey
-                          );
-                          const ratingOptions: { value: DashaEvaluationRating; label: string; selected: string; idle: string }[] = [
-                            { value: 0, label: 'Red 0', selected: 'bg-rose-500/20 text-rose-200 border-rose-400/60', idle: 'text-rose-300 border-rose-500/30 hover:bg-rose-500/10' },
-                            { value: 5, label: 'Yellow 5', selected: 'bg-amber-500/20 text-amber-100 border-amber-400/60', idle: 'text-amber-300 border-amber-500/30 hover:bg-amber-500/10' },
-                            { value: 10, label: 'Green 10', selected: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/60', idle: 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10' }
-                          ];
-                          const markerColor = evaluation.evaluation_rating === 10
-                            ? 'bg-emerald-400'
-                            : evaluation.evaluation_rating === 5
-                              ? 'bg-amber-400'
-                              : evaluation.evaluation_rating === 0
-                                ? 'bg-rose-400'
-                                : 'bg-slate-600';
+                  {mahadasha.antardashas.map((antardasha, adIndex) => {
+                    const adPdFeeds: PdFeedItem[] = antardasha.intervals.map(interval => {
+                      const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
+                      const evaluation = dashaEvaluations[periodKey] ?? interval;
+                      return {
+                        mahadasha_lord: interval.mahadasha_lord_md,
+                        antardasha_lord: interval.antardasha_lord_ad,
+                        pratyantardasha_lord: interval.pratyantardasha_lord_pd,
+                        start_date: interval.start_date,
+                        end_date: interval.end_date,
+                        notes: evaluation.notes ?? null,
+                        evaluation_rating: evaluation.evaluation_rating ?? null,
+                        duration_days: interval.duration_days ?? undefined
+                      };
+                    });
+                    const adIdentity: AntardashaNarrativeIdentity = {
+                      mahadasha_lord_md: mahadasha.lord,
+                      antardasha_lord_ad: antardasha.lord,
+                      start_date: antardasha.startDate,
+                      end_date: antardasha.endDate
+                    };
+                    const adKey = getAntardashaNarrativeKey(dashaPersonId, adIdentity);
+                    const adNarrative = adNarratives[adKey];
+                    const adCustomPrompt = adPromptOverrides[adKey];
 
-                          return (
-                            <details key={interval.sequence_index} className="border-t border-slate-800/70">
-                              <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <span className="flex items-center gap-2 font-medium text-emerald-300">
-                                  <i className={`w-2 h-2 rounded-full ${markerColor}`} />
-                                  <span>PD: {interval.pratyantardasha_lord_pd}</span>
-                                  {evaluation.evaluation_rating !== null && <span className="text-slate-400">({evaluation.evaluation_rating})</span>}
-                                  {evaluation.notes && <span className="max-w-[35rem] truncate font-normal text-slate-300" title={evaluation.notes}>· {evaluation.notes}</span>}
-                                </span>
-                                <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
-                              </summary>
-                              <div className="pb-3 space-y-3">
-                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                                  <span>{interval.duration_days ?? '-'} days</span>
-                                  <span>{interval.full_lord_hierarchy}</span>
-                                </div>
-                                <label className="block space-y-1.5">
-                                  <span className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
-                                    <span>Landmark event</span>
-                                    <span className="font-mono text-slate-500">{(evaluation.notes ?? '').length}/200</span>
+                    return (
+                      <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
+                        <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-semibold text-cyan-300">
+                            AD {adIndex + 1}: {antardasha.lord}
+                            {adNarrative && <span className="ml-2 rounded border border-cyan-500/30 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">Summary Ready</span>}
+                          </span>
+                          <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
+                        </summary>
+                        <div className="px-3 pb-2 space-y-1">
+                          {/* MD-AD Level Summary Card with Color Highlighting & PD Feeds Footer */}
+                          <DashaAdNarrativeCard
+                            personId={dashaPersonId}
+                            mahadashaLord={mahadasha.lord}
+                            antardashaLord={antardasha.lord}
+                            startDate={antardasha.startDate}
+                            endDate={antardasha.endDate}
+                            apiBaseUrl={apiBaseUrl}
+                            pdFeeds={adPdFeeds}
+                            cachedNarrative={adNarrative}
+                            customPromptOverride={adCustomPrompt}
+                            onNarrativeGenerated={generated => {
+                              setAdNarratives(prev => {
+                                const next = { ...prev, [adKey]: generated };
+                                storeAntardashaNarrative(adKey, generated);
+                                return next;
+                              });
+                            }}
+                          />
+
+                          {antardasha.intervals.map(interval => {
+                            const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
+                            const evaluation = dashaEvaluations[periodKey] ?? interval;
+                            const saveState = dashaSaveStates[periodKey];
+                            const hasDbRecord = dashaDatabaseRecords.some(record =>
+                              getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, record) === periodKey
+                            );
+                            const ratingOptions: { value: DashaEvaluationRating; label: string; selected: string; idle: string }[] = [
+                              { value: 0, label: 'Red 0', selected: 'bg-rose-500/20 text-rose-200 border-rose-400/60', idle: 'text-rose-300 border-rose-500/30 hover:bg-rose-500/10' },
+                              { value: 5, label: 'Yellow 5', selected: 'bg-amber-500/20 text-amber-100 border-amber-400/60', idle: 'text-amber-300 border-amber-500/30 hover:bg-amber-500/10' },
+                              { value: 10, label: 'Green 10', selected: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/60', idle: 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10' }
+                            ];
+                            const markerColor = evaluation.evaluation_rating === 10
+                              ? 'bg-emerald-400'
+                              : evaluation.evaluation_rating === 5
+                                ? 'bg-amber-400'
+                                : evaluation.evaluation_rating === 0
+                                  ? 'bg-rose-400'
+                                  : 'bg-slate-600';
+
+                            return (
+                              <details key={interval.sequence_index} className="border-t border-slate-800/70">
+                                <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span className="flex items-center gap-2 font-medium text-emerald-300">
+                                    <i className={`w-2 h-2 rounded-full ${markerColor}`} />
+                                    <span>PD: {interval.pratyantardasha_lord_pd}</span>
+                                    {evaluation.evaluation_rating !== null && <span className="text-slate-400">({evaluation.evaluation_rating})</span>}
+                                    {evaluation.notes && <span className="max-w-[35rem] truncate font-normal text-slate-300" title={evaluation.notes}>· {evaluation.notes}</span>}
                                   </span>
-                                  <textarea
-                                    maxLength={200}
-                                    rows={2}
-                                    value={evaluation.notes ?? ''}
-                                    onChange={event => updateDashaEvaluation(interval, { notes: event.target.value || null })}
-                                    placeholder="Record a notable event from this period..."
-                                    className="w-full resize-y rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
-                                  />
-                                </label>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="mr-1 text-[11px] font-semibold text-slate-300">Evaluation</span>
-                                  {ratingOptions.map(option => (
+                                  <span className="font-mono text-slate-400">{interval.start_date} to {interval.end_date}</span>
+                                </summary>
+                                <div className="pb-3 space-y-3">
+                                  <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                    <span>{interval.duration_days ?? '-'} days</span>
+                                    <span>{interval.full_lord_hierarchy}</span>
+                                  </div>
+                                  <label className="block space-y-1.5">
+                                    <span className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                                      <span>Landmark event</span>
+                                      <span className="font-mono text-slate-500">{(evaluation.notes ?? '').length}/200</span>
+                                    </span>
+                                    <textarea
+                                      maxLength={200}
+                                      rows={2}
+                                      value={evaluation.notes ?? ''}
+                                      onChange={event => updateDashaEvaluation(interval, { notes: event.target.value || null })}
+                                      placeholder="Record a notable event from this period..."
+                                      className="w-full resize-y rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-emerald-400 focus:outline-none"
+                                    />
+                                  </label>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="mr-1 text-[11px] font-semibold text-slate-300">Evaluation</span>
+                                    {ratingOptions.map(option => (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        aria-pressed={evaluation.evaluation_rating === option.value}
+                                        onClick={() => updateDashaEvaluation(interval, { evaluation_rating: option.value })}
+                                        className={`rounded border px-2.5 py-1 text-[11px] font-semibold transition ${evaluation.evaluation_rating === option.value ? option.selected : option.idle}`}
+                                      >
+                                        {option.label}
+                                      </button>
+                                    ))}
+                                    {evaluation.evaluation_rating !== null && (
+                                      <button
+                                        type="button"
+                                        onClick={() => updateDashaEvaluation(interval, { evaluation_rating: null })}
+                                        className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
+                                      >
+                                        Clear
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-3">
                                     <button
-                                      key={option.value}
                                       type="button"
-                                      aria-pressed={evaluation.evaluation_rating === option.value}
-                                      onClick={() => updateDashaEvaluation(interval, { evaluation_rating: option.value })}
-                                      className={`rounded border px-2.5 py-1 text-[11px] font-semibold transition ${evaluation.evaluation_rating === option.value ? option.selected : option.idle}`}
+                                      disabled={saveState === 'saving'}
+                                      onClick={() => void handleSaveDashaEvaluation(interval)}
+                                      className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                      {option.label}
+                                      {saveState === 'saved' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Save className="h-3.5 w-3.5" />}
+                                      {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save note'}
                                     </button>
-                                  ))}
-                                  {evaluation.evaluation_rating !== null && (
-                                    <button
-                                      type="button"
-                                      onClick={() => updateDashaEvaluation(interval, { evaluation_rating: null })}
-                                      className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
-                                    >
-                                      Clear
-                                    </button>
-                                  )}
+                                    {!hasDbRecord && dashaLoadState === 'ready' && <span className="text-[11px] text-slate-400">Stored to browser & syncs to DB.</span>}
+                                    {saveState === 'error' && <span className="text-[11px] text-rose-300">{dashaSaveErrors[periodKey]}</span>}
+                                    {saveState === 'dirty' && <span className="text-[11px] text-amber-300">Unsaved changes</span>}
+                                  </div>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <button
-                                    type="button"
-                                    disabled={saveState === 'saving' || dashaLoadState !== 'ready' || !hasDbRecord}
-                                    onClick={() => void handleSaveDashaEvaluation(interval)}
-                                    className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {saveState === 'saved' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Save className="h-3.5 w-3.5" />}
-                                    {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save note'}
-                                  </button>
-                                  {!hasDbRecord && dashaLoadState === 'ready' && <span className="text-[11px] text-amber-300">No matching PD row in PostgreSQL.</span>}
-                                  {saveState === 'error' && <span className="text-[11px] text-rose-300">{dashaSaveErrors[periodKey]}</span>}
-                                  {saveState === 'dirty' && <span className="text-[11px] text-amber-300">Unsaved changes</span>}
-                                </div>
-                              </div>
-                            </details>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  ))}
+                              </details>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  })}
                 </div>
                     </>
                   );

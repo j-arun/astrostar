@@ -574,6 +574,17 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
     name: 'gemini-api-plugin',
     configureServer(server) {
       server.middlewares.use('/api/llm/gemini', async (req, res) => {
+        // Full CORS Support for Browser iFrame & Cross-Origin Calls
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-goog-api-key, x-api-key');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
         if (req.method !== 'POST') {
           res.statusCode = 405;
           res.setHeader('Content-Type', 'application/json');
@@ -584,6 +595,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
+          res.setHeader('Content-Type', 'application/json');
           try {
             const { prompt, apiKey: bodyApiKey, model: requestedModel, isTestPing } = JSON.parse(body || '{}');
 
@@ -600,17 +612,32 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
             const isPlaceholder = !rawKey || rawKey === 'MY_GEMINI_API_KEY' || rawKey.includes('placeholder') || rawKey.includes('your_api_key');
 
             if (isPlaceholder) {
-              res.statusCode = 400;
-              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 401;
               res.end(JSON.stringify({
-                error: 'GEMINI_API_KEY is not configured or is a placeholder. Please paste your Gemini API Key in the Key Settings panel or set GEMINI_API_KEY in your .env file. (Get a free key at https://aistudio.google.com/apikey).'
+                error: 'Google Gemini Authentication Required: The default service key is unavailable or expired. Please enter your active Gemini API key from https://aistudio.google.com/apikey in the Gemini Key input field in the top header.',
+                code: 'ACCOUNT_STATE_INVALID',
+                statusCode: 401
               }));
               return;
             }
 
+            // Normalize models to valid @google/genai SDK aliases
+            let targetModel = requestedModel || GEMINI_PRIMARY_MODEL;
+            if (targetModel === 'gemini_pro' || targetModel === 'gemini-pro' || targetModel === 'gemini-2.5-pro') {
+              targetModel = 'gemini-4-argon';
+            } else if (targetModel === 'gemini-2.5-flash' || targetModel === 'gemini-2.0-flash' || targetModel === 'gemini-1.5-flash') {
+              targetModel = GEMINI_PRIMARY_MODEL;
+            }
+
             const { GoogleGenAI } = await import('@google/genai');
-            const ai = new GoogleGenAI({ apiKey: rawKey });
-            const targetModel = requestedModel || GEMINI_PRIMARY_MODEL;
+            const ai = new GoogleGenAI({
+              apiKey: rawKey,
+              httpOptions: {
+                headers: {
+                  'User-Agent': 'aistudio-build'
+                }
+              }
+            });
 
             // If this is a lightweight test ping to verify key health
             if (isTestPing || prompt === 'ping' || prompt === 'hi') {
@@ -621,7 +648,6 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                   config: { maxOutputTokens: 15 }
                 });
                 res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                   success: true,
                   status: 'OK',
@@ -632,7 +658,6 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                 return;
               } catch (pingErr: any) {
                 res.statusCode = 400;
-                res.setHeader('Content-Type', 'application/json');
                 let errDetail = pingErr.message || 'Gemini Key Ping Failed';
                 try {
                   const parsed = JSON.parse(errDetail);
@@ -681,7 +706,6 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
             }
 
             res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
               text: response.text,
               model: response.modelVersion || usedModel,
@@ -713,7 +737,6 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
             }
 
             res.statusCode = statusCode;
-            res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
               error: errorMsg,
               code: statusCode === 401 ? 'ACCOUNT_STATE_INVALID' : statusCode === 429 ? 'RESOURCE_EXHAUSTED' : 'API_ERROR',
@@ -731,6 +754,17 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
     name: 'claude-api-plugin',
     configureServer(server) {
       server.middlewares.use('/api/llm/claude', async (req, res) => {
+        // Full CORS Support for Browser iFrame & Cross-Origin Calls
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
         if (req.method !== 'POST') {
           res.statusCode = 405;
           res.setHeader('Content-Type', 'application/json');
@@ -741,6 +775,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
+          res.setHeader('Content-Type', 'application/json');
           try {
             const { prompt, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens, isTestPing } = JSON.parse(body || '{}');
 

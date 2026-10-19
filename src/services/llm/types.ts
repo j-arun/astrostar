@@ -343,7 +343,7 @@ export interface LLMThreePartNarrative {
 
   // Private LLM Verification & Wire Telemetry
   endpointUsed: string;
-  connectionStatus: 'connected_live' | 'connection_failed_fallback' | 'simulated';
+  connectionStatus: 'connected_live' | 'connection_failed_fallback' | 'simulated' | 'cancelled';
   connectionError?: string;
   isPrivateLocal: boolean;
   timeoutEnforced?: boolean;

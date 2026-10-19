@@ -344,7 +344,7 @@ export default function RestApiStudio({
       return {
         sequence_index: index + 1,
         ...period,
-        full_lord_hierarchy: `MD: ${period.mahadasha_lord_md} > AD: ${period.antardasha_lord_ad} > PD: ${period.pratyantardasha_lord_pd}`,
+        full_lord_hierarchy: `${period.mahadasha_lord_md} MD > ${period.antardasha_lord_ad} AD > ${period.pratyantardasha_lord_pd} PD`,
         duration_days: Math.round((new Date(period.end_date).getTime() - new Date(period.start_date).getTime()) / (1000 * 60 * 60 * 24)),
         notes: saved.notes,
         evaluation_rating: saved.evaluation_rating
@@ -2114,32 +2114,28 @@ print(prompt_markdown[:400])
 
         {expandDashaReference && (
           <div className="p-4 sm:p-5 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3 text-xs">
-              <span className="text-slate-300">PD landmark notes and ratings are saved to PostgreSQL.</span>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                <span className="flex items-center gap-1.5 text-rose-300"><i className="w-2 h-2 rounded-full bg-rose-400" />Red 0 · Bad</span>
-                <span className="flex items-center gap-1.5 text-amber-300"><i className="w-2 h-2 rounded-full bg-amber-400" />Yellow 5 · Average</span>
-                <span className="flex items-center gap-1.5 text-emerald-300"><i className="w-2 h-2 rounded-full bg-emerald-400" />Green 10 · Good</span>
+            {(dashaLoadState === 'loading' || dashaLoadState === 'error') && (
+              <div className="border-b border-slate-800 pb-2 text-xs">
+                {dashaLoadState === 'loading' && <span className="text-slate-500">Loading saved PD notes...</span>}
+                {dashaLoadState === 'error' && <span className="text-rose-300">Saved notes unavailable: {dashaLoadError}</span>}
               </div>
-              {dashaLoadState === 'loading' && <span className="text-slate-500">Loading saved PD notes...</span>}
-              {dashaLoadState === 'error' && <span className="text-rose-300">Saved notes unavailable: {dashaLoadError}</span>}
-            </div>
+            )}
             {dashaTree.length === 0 ? (
               <p className="py-6 text-center text-xs text-slate-400">No dasha periods are available for this native.</p>
-            ) : dashaTree.map((mahadasha, mdIndex) => (
+            ) : dashaTree.map((mahadasha) => (
               <details key={`${mahadasha.lord}-${mahadasha.startDate}`} className="border border-slate-800 rounded-lg bg-slate-950/50">
                 <summary className="cursor-pointer list-none px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="flex items-center gap-2 font-bold text-amber-300">
-                    MD {mdIndex + 1}: {mahadasha.lord}
+                    {mahadasha.lord} MD
                   </span>
                   <span className="font-mono text-slate-400">{mahadasha.startDate} to {mahadasha.endDate}</span>
                 </summary>
                 <div className="px-3 pb-3 space-y-2">
-                  {mahadasha.antardashas.map((antardasha, adIndex) => (
+                  {mahadasha.antardashas.map((antardasha) => (
                     <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
                       <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                         <span className="font-semibold text-cyan-300">
-                          AD {adIndex + 1}: {antardasha.lord}
+                          {antardasha.lord} AD
                         </span>
                         <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
                       </summary>
@@ -2170,7 +2166,7 @@ print(prompt_markdown[:400])
                                 <summary className="cursor-pointer list-none py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                                   <span className="flex items-center gap-2 font-medium text-emerald-300">
                                     <i className={`w-2 h-2 rounded-full ${markerColor}`} />
-                                    <span>PD: {interval.pratyantardasha_lord_pd}</span>
+                                    <span>{interval.pratyantardasha_lord_pd} PD</span>
                                     {evaluation.evaluation_rating !== null && <span className="text-slate-400">({evaluation.evaluation_rating})</span>}
                                     {evaluation.notes && <span className="max-w-[35rem] truncate font-normal text-slate-300" title={evaluation.notes}>· {evaluation.notes}</span>}
                                   </span>

@@ -162,7 +162,7 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
               AD
             </span>
             <h5 className="text-xs sm:text-sm font-bold text-white tracking-wide">
-              MD-AD Summary · <span className="text-amber-300">{mahadashaLord}</span> - <span className="text-cyan-300">{antardashaLord}</span>
+              <span className="text-amber-300">{mahadashaLord} MD</span> · <span className="text-cyan-300">{antardashaLord} AD</span> Summary
             </h5>
             {narrative && (
               <span className="hidden sm:inline-flex rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
@@ -184,7 +184,7 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
             className="inline-flex items-center gap-1.5 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/20 transition disabled:opacity-50"
           >
             <Sparkles className={`h-3.5 w-3.5 ${isGenerating ? 'animate-pulse text-cyan-400' : ''}`} />
-            {isGenerating ? 'Synthesizing...' : narrative ? 'Regenerate MD-AD' : 'Generate MD-AD Summary'}
+            {isGenerating ? 'Synthesizing...' : narrative ? 'Regenerate AD Summary' : 'Generate AD Summary'}
           </button>
           
           <button
@@ -392,99 +392,12 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
             <span>Generated: {new Date(narrative.generated_at).toLocaleString()}</span>
           </div>
         </div>
-      ) : (
-        <div className="rounded-md border border-dashed border-slate-800 p-3 sm:p-4 text-center">
-          <p className="text-xs text-slate-400">
-            No MD-AD summary generated yet for <span className="text-amber-300">{mahadashaLord}</span> - <span className="text-cyan-300">{antardashaLord}</span>.
-          </p>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Click <strong className="text-cyan-300">Generate MD-AD Summary</strong> to read the {activeFeedsWithNotes.length} saved PD notes in this period and synthesize a chronological narrative.
-          </p>
+      ) : isGenerating ? (
+        <div className="rounded-md border border-cyan-500/30 bg-cyan-950/20 p-4 text-center text-xs text-cyan-200">
+          <Sparkles className="inline-block w-4 h-4 animate-spin mr-2 text-cyan-400" />
+          Synthesizing {antardashaLord} AD narrative from recorded PD landmark notes...
         </div>
-      )}
-
-      {/* 6. FOOTER: "Gathered from PD's List" (The user's explicit requirement) */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <h6 className="text-[11px] font-bold text-slate-200 tracking-wide uppercase">
-              Gathered from PD's List · Feeds for this Narrative
-            </h6>
-          </div>
-          <span className="text-[10px] text-slate-400">
-            {activeFeedsWithNotes.length} feeds with notes / ratings ({pdFeeds.length} total PDs in this AD)
-          </span>
-        </div>
-
-        <p className="text-[10px] text-slate-400 leading-normal">
-          The MD-AD narrative is directly synthesized from these granular Pratyantardasha (PD) landmark notes stored in the database:
-        </p>
-
-        {activeFeedsWithNotes.length === 0 ? (
-          <p className="text-[11px] text-amber-300/80 italic py-1">
-            No landmark notes or evaluations have been recorded for the PDs in this Antardasha yet. Add notes in the PD rows below to feed the narrative.
-          </p>
-        ) : (
-          <div className="space-y-1.5 pt-1">
-            {(showAllFeedsInFooter ? activeFeedsWithNotes : activeFeedsWithNotes.slice(0, 5)).map(feed => {
-              const lord = (feed.pratyantardasha_lord || 'Saturn') as GrahaLord;
-              const lordConfig = GRAHA_COLOR_CONFIGS[lord] || GRAHA_COLOR_CONFIGS.Saturn;
-              const feedKey = `${feed.start_date}-${feed.pratyantardasha_lord}`;
-              const isHighlighted = highlightedFeedKey === feedKey;
-
-              const ratingBadge = feed.evaluation_rating === 10
-                ? <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 text-[9px] font-semibold">Green 10 · Good</span>
-                : feed.evaluation_rating === 5
-                  ? <span className="rounded bg-amber-500/20 text-amber-200 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-semibold">Yellow 5 · Average</span>
-                  : feed.evaluation_rating === 0
-                    ? <span className="rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 text-[9px] font-semibold">Red 0 · Bad</span>
-                    : <span className="text-slate-500 text-[10px]">Unrated</span>;
-
-              return (
-                <div
-                  key={feedKey}
-                  className={`flex flex-wrap items-center justify-between gap-2 p-2 rounded border text-xs transition ${
-                    isHighlighted
-                      ? 'border-cyan-400 bg-cyan-950/40 ring-1 ring-cyan-400'
-                      : 'border-slate-800/80 bg-slate-950/60 hover:bg-slate-900/80'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-semibold ${lordConfig.pillClass}`}>
-                      <span className={`w-2 h-2 rounded-full ${lordConfig.dotClass}`} />
-                      PD: {feed.pratyantardasha_lord}
-                    </span>
-                    <span className="font-mono text-[10px] text-slate-400">
-                      {feed.start_date} to {feed.end_date}
-                    </span>
-                    {ratingBadge}
-                    {feed.notes && (
-                      <span className="text-slate-200 font-normal truncate max-w-md" title={feed.notes}>
-                        "{feed.notes}"
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {activeFeedsWithNotes.length > 5 && (
-              <button
-                type="button"
-                onClick={() => setShowAllFeedsInFooter(!showAllFeedsInFooter)}
-                className="text-[10px] text-cyan-400 hover:underline pt-1 inline-flex items-center gap-1"
-              >
-                {showAllFeedsInFooter ? (
-                  <>Show Fewer Feeds <ChevronUp className="w-3 h-3" /></>
-                ) : (
-                  <>Show All {activeFeedsWithNotes.length} Feeds <ChevronDown className="w-3 h-3" /></>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      ) : null}
     </div>
   );
 };

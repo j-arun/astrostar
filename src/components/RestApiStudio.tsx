@@ -44,10 +44,18 @@ import {
   fetchDashaEvaluations,
   getCurrentMonthDateRange,
   getDashaEvaluationKey,
-  saveDashaEvaluation
+  saveDashaEvaluation,
+  AntardashaNarrativeIdentity,
+  CachedAntardashaNarrative,
+  getAntardashaNarrativeKey,
+  loadAntardashaNarratives,
+  loadAntardashaPromptOverrides,
+  storeAntardashaNarrative
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
 import { getFullVimshottariTimeline } from '../data/dashaCalculator';
+import { DashaAdNarrativeCard } from './DashaAdNarrativeCard';
+import { PdFeedItem } from '../utils/dashaNarrativeStyler';
 
 interface RestApiStudioProps {
   apiPersonId: string;
@@ -167,6 +175,8 @@ export default function RestApiStudio({
   const [dashaLoadError, setDashaLoadError] = useState<string | null>(null);
   const [dashaSaveStates, setDashaSaveStates] = useState<Record<string, 'dirty' | 'saving' | 'saved' | 'error'>>({});
   const [dashaSaveErrors, setDashaSaveErrors] = useState<Record<string, string>>({});
+  const [adNarratives, setAdNarratives] = useState<Record<string, CachedAntardashaNarrative>>(loadAntardashaNarratives);
+  const [adPromptOverrides, setAdPromptOverrides] = useState<Record<string, string>>(loadAntardashaPromptOverrides);
 
   // Collapsible section toggles for SAP Query Studio (3 Sections)
   const [expandQueryParams, setExpandQueryParams] = useState<boolean>(true);
@@ -2131,15 +2141,60 @@ print(prompt_markdown[:400])
                   <span className="font-mono text-slate-400">{mahadasha.startDate} to {mahadasha.endDate}</span>
                 </summary>
                 <div className="px-3 pb-3 space-y-2">
-                  {mahadasha.antardashas.map((antardasha) => (
-                    <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
-                      <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="font-semibold text-cyan-300">
-                          {antardasha.lord} AD
-                        </span>
-                        <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
-                      </summary>
-                      <div className="px-3 pb-2 space-y-1">
+                  {mahadasha.antardashas.map((antardasha) => {
+                    const adPdFeeds: PdFeedItem[] = antardasha.intervals.map(interval => {
+                      const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
+                      const evaluation = dashaEvaluations[periodKey] ?? interval;
+                      return {
+                        mahadasha_lord: interval.mahadasha_lord_md,
+                        antardasha_lord: interval.antardasha_lord_ad,
+                        pratyantardasha_lord: interval.pratyantardasha_lord_pd,
+                        start_date: interval.start_date,
+                        end_date: interval.end_date,
+                        notes: evaluation.notes ?? null,
+                        evaluation_rating: evaluation.evaluation_rating ?? null,
+                        duration_days: interval.duration_days ?? undefined
+                      };
+                    });
+                    const adIdentity: AntardashaNarrativeIdentity = {
+                      mahadasha_lord_md: mahadasha.lord,
+                      antardasha_lord_ad: antardasha.lord,
+                      start_date: antardasha.startDate,
+                      end_date: antardasha.endDate
+                    };
+                    const adKey = getAntardashaNarrativeKey(dashaPersonId, adIdentity);
+                    const adNarrative = adNarratives[adKey];
+                    const adCustomPrompt = adPromptOverrides[adKey];
+
+                    return (
+                      <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
+                        <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-semibold text-cyan-300">
+                            {antardasha.lord} AD
+                            {adNarrative && <span className="ml-2 rounded border border-cyan-500/30 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">Summary Ready</span>}
+                          </span>
+                          <span className="font-mono text-slate-400">{antardasha.startDate} to {antardasha.endDate}</span>
+                        </summary>
+                        <div className="px-3 pb-2 space-y-2">
+                          {/* AD Summary Section */}
+                          <DashaAdNarrativeCard
+                            personId={dashaPersonId}
+                            mahadashaLord={mahadasha.lord}
+                            antardashaLord={antardasha.lord}
+                            startDate={antardasha.startDate}
+                            endDate={antardasha.endDate}
+                            apiBaseUrl={apiBaseUrl}
+                            pdFeeds={adPdFeeds}
+                            cachedNarrative={adNarrative}
+                            customPromptOverride={adCustomPrompt}
+                            onNarrativeGenerated={generated => {
+                              setAdNarratives(prev => {
+                                const next = { ...prev, [adKey]: generated };
+                                storeAntardashaNarrative(adKey, generated);
+                                return next;
+                              });
+                            }}
+                          />
 
                           {antardasha.intervals.map(interval => {
                             const periodKey = getDashaEvaluationKey(apiResponse?.person_id ?? apiPersonId, interval);
@@ -2234,7 +2289,8 @@ print(prompt_markdown[:400])
                           })}
                         </div>
                       </details>
-                    ))}
+                    );
+                  })}
                 </div>
               </details>
             ))}

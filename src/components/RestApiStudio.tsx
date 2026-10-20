@@ -53,7 +53,7 @@ import {
   storeAntardashaNarrative
 } from '../data/apiService';
 import { START_CMD_TEXT, START_SH_TEXT } from '../data/scriptData';
-import { getFullVimshottariTimeline } from '../data/dashaCalculator';
+import { getFullVimshottariTimeline, calculateVimshottariTimelineForProfile } from '../data/dashaCalculator';
 import { DashaAdNarrativeCard } from './DashaAdNarrativeCard';
 import { PdFeedItem } from '../utils/dashaNarrativeStyler';
 
@@ -327,40 +327,37 @@ export default function RestApiStudio({
   const dashaReferenceIntervals = useMemo((): DashaIntervalItem[] => {
     if (!apiResponse) return [];
     const dateOfBirth = apiResponse.person_profile.date_of_birth;
-    const databasePeriodRecords = dashaDatabaseRecords.filter(record => record.end_date >= dateOfBirth);
-    let completeIntervals: DashaEvaluationRecord[];
 
-    if (databasePeriodRecords.length > 0) {
-      completeIntervals = databasePeriodRecords;
-    } else if (apiResponse.person_id === '001ME') {
-      completeIntervals = getFullVimshottariTimeline()
-        .filter(([, , , , endDate]) => endDate >= dateOfBirth)
-        .map(([mahadasha, antardasha, pratyantardasha, startDate, endDate]) => ({
-          mahadasha_lord_md: mahadasha,
-          antardasha_lord_ad: antardasha,
-          pratyantardasha_lord_pd: pratyantardasha,
-          start_date: startDate,
-          end_date: endDate,
-          notes: null,
-          evaluation_rating: null
-        }));
-    } else {
-      completeIntervals = apiResponse.vimshottari_dasha_intervals.intervals;
-    }
+    // Always source the full lifetime 120-year Vimshottari timeline across all 9 Mahadashas
+    const timelineTuples = apiResponse.person_id === '001ME'
+      ? getFullVimshottariTimeline()
+      : calculateVimshottariTimelineForProfile(apiResponse.person_profile);
+
+    const completeIntervals: DashaEvaluationRecord[] = timelineTuples
+      .filter(([, , , , endDate]) => endDate >= dateOfBirth)
+      .map(([mahadasha, antardasha, pratyantardasha, startDate, endDate]) => ({
+        mahadasha_lord_md: mahadasha,
+        antardasha_lord_ad: antardasha,
+        pratyantardasha_lord_pd: pratyantardasha,
+        start_date: startDate,
+        end_date: endDate,
+        notes: null,
+        evaluation_rating: null
+      }));
 
     return completeIntervals.map((period, index) => {
       const key = getDashaEvaluationKey(apiResponse.person_id, period);
-      const saved = dashaEvaluations[key] ?? period;
+      const saved = dashaEvaluations[key];
       return {
         sequence_index: index + 1,
         ...period,
         full_lord_hierarchy: `${period.mahadasha_lord_md} MD > ${period.antardasha_lord_ad} AD > ${period.pratyantardasha_lord_pd} PD`,
         duration_days: Math.round((new Date(period.end_date).getTime() - new Date(period.start_date).getTime()) / (1000 * 60 * 60 * 24)),
-        notes: saved.notes,
-        evaluation_rating: saved.evaluation_rating
+        notes: saved?.notes ?? null,
+        evaluation_rating: saved?.evaluation_rating ?? null
       };
     });
-  }, [apiResponse, dashaDatabaseRecords, dashaEvaluations]);
+  }, [apiResponse, dashaEvaluations]);
 
   const updateDashaEvaluation = (period: DashaIntervalItem, updates: Partial<DashaEvaluationRecord>) => {
     if (!apiResponse) return;

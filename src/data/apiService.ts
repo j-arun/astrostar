@@ -67,110 +67,101 @@ export function getAntardashaNarrativeKey(personId: string, period: AntardashaNa
   return JSON.stringify([personId, period.mahadasha_lord_md, period.antardasha_lord_ad, period.start_date, period.end_date]);
 }
 
-export function loadMahadashaNarratives(): Record<string, CachedMahadashaNarrative> {
+function getStoredJson<T>(key: string): Record<string, T> {
   if (typeof window === 'undefined') return {};
+  const merged: Record<string, T> = {};
   try {
-    const cache = window.localStorage.getItem(MAHADASHA_NARRATIVE_CACHE_KEY);
-    return cache ? JSON.parse(cache) as Record<string, CachedMahadashaNarrative> : {};
-  } catch {
-    return {};
-  }
+    const local = window.localStorage?.getItem(key);
+    if (local) {
+      Object.assign(merged, JSON.parse(local));
+    }
+  } catch {}
+  try {
+    const session = window.sessionStorage?.getItem(key);
+    if (session) {
+      Object.assign(merged, JSON.parse(session));
+    }
+  } catch {}
+  return merged;
+}
+
+function setStoredJson<T>(key: string, data: Record<string, T>): void {
+  if (typeof window === 'undefined') return;
+  const serialized = JSON.stringify(data);
+  try {
+    window.sessionStorage?.setItem(key, serialized);
+  } catch {}
+  try {
+    window.localStorage?.setItem(key, serialized);
+  } catch {}
+}
+
+export function loadMahadashaNarratives(): Record<string, CachedMahadashaNarrative> {
+  return getStoredJson<CachedMahadashaNarrative>(MAHADASHA_NARRATIVE_CACHE_KEY);
 }
 
 export function storeMahadashaNarrative(key: string, narrative: CachedMahadashaNarrative): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const cache = loadMahadashaNarratives();
   cache[key] = narrative;
-  window.localStorage.setItem(MAHADASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
+  setStoredJson(MAHADASHA_NARRATIVE_CACHE_KEY, cache);
 }
 
 export function loadAntardashaNarratives(): Record<string, CachedAntardashaNarrative> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const cache = window.localStorage.getItem(ANTARDASHA_NARRATIVE_CACHE_KEY);
-    return cache ? JSON.parse(cache) as Record<string, CachedAntardashaNarrative> : {};
-  } catch {
-    return {};
-  }
+  return getStoredJson<CachedAntardashaNarrative>(ANTARDASHA_NARRATIVE_CACHE_KEY);
 }
 
 export function storeAntardashaNarrative(key: string, narrative: CachedAntardashaNarrative): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const cache = loadAntardashaNarratives();
   cache[key] = narrative;
-  window.localStorage.setItem(ANTARDASHA_NARRATIVE_CACHE_KEY, JSON.stringify(cache));
+  setStoredJson(ANTARDASHA_NARRATIVE_CACHE_KEY, cache);
 }
 
 const MAHADASHA_PROMPT_OVERRIDES_KEY = 'astro_md_prompt_overrides_v1';
 const ANTARDASHA_PROMPT_OVERRIDES_KEY = 'astro_ad_prompt_overrides_v1';
 
 export function loadMahadashaPromptOverrides(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const overrides = window.localStorage.getItem(MAHADASHA_PROMPT_OVERRIDES_KEY);
-    return overrides ? JSON.parse(overrides) as Record<string, string> : {};
-  } catch {
-    return {};
-  }
+  return getStoredJson<string>(MAHADASHA_PROMPT_OVERRIDES_KEY);
 }
 
 export function storeMahadashaPromptOverride(key: string, prompt: string): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const overrides = loadMahadashaPromptOverrides();
   overrides[key] = prompt;
-  window.localStorage.setItem(MAHADASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+  setStoredJson(MAHADASHA_PROMPT_OVERRIDES_KEY, overrides);
 }
 
 export function removeMahadashaPromptOverride(key: string): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const overrides = loadMahadashaPromptOverrides();
   delete overrides[key];
-  window.localStorage.setItem(MAHADASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+  setStoredJson(MAHADASHA_PROMPT_OVERRIDES_KEY, overrides);
 }
 
 export function loadAntardashaPromptOverrides(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const overrides = window.localStorage.getItem(ANTARDASHA_PROMPT_OVERRIDES_KEY);
-    return overrides ? JSON.parse(overrides) as Record<string, string> : {};
-  } catch {
-    return {};
-  }
+  return getStoredJson<string>(ANTARDASHA_PROMPT_OVERRIDES_KEY);
 }
 
 export function storeAntardashaPromptOverride(key: string, prompt: string): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const overrides = loadAntardashaPromptOverrides();
   overrides[key] = prompt;
-  window.localStorage.setItem(ANTARDASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+  setStoredJson(ANTARDASHA_PROMPT_OVERRIDES_KEY, overrides);
 }
 
 export function removeAntardashaPromptOverride(key: string): void {
-  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
   const overrides = loadAntardashaPromptOverrides();
   delete overrides[key];
-  window.localStorage.setItem(ANTARDASHA_PROMPT_OVERRIDES_KEY, JSON.stringify(overrides));
+  setStoredJson(ANTARDASHA_PROMPT_OVERRIDES_KEY, overrides);
 }
 
 const LOCAL_PD_EVALUATIONS_STORAGE_KEY = 'astro_local_pd_evaluations_v1';
 
 export function loadLocalPdEvaluations(): Record<string, DashaEvaluationRecord> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const data = window.localStorage.getItem(LOCAL_PD_EVALUATIONS_STORAGE_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch {
-    return {};
-  }
+  const stored = getStoredJson<DashaEvaluationRecord>(LOCAL_PD_EVALUATIONS_STORAGE_KEY);
+  return stored;
 }
 
 export function storeLocalPdEvaluation(key: string, record: DashaEvaluationRecord): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const data = loadLocalPdEvaluations();
-    data[key] = record;
-    window.localStorage.setItem(LOCAL_PD_EVALUATIONS_STORAGE_KEY, JSON.stringify(data));
-  } catch {}
+  const data = loadLocalPdEvaluations();
+  data[key] = record;
+  setStoredJson(LOCAL_PD_EVALUATIONS_STORAGE_KEY, data);
 }
 
 export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {

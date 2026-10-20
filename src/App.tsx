@@ -30,7 +30,6 @@ import {
 import storedPersonsData from './data/stored_persons.json';
 import RestApiStudio, { getStarLordShort } from './components/RestApiStudio';
 import { MonthlyTransitView } from './components/MonthlyTransitView';
-import { NatalAvatarStudio } from './components/NatalAvatarStudio';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
 // 0,0: Meenam (Pisces)   | 0,1: Mesham (Aries)   | 0,2: Rishabam (Taurus) | 0,3: Mithunam (Gemini)
@@ -65,7 +64,7 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'avatar' | 'charts' | 'monthly' | 'report' | 'api'>('avatar');
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api'>('charts');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -233,10 +232,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* Integrated 5 Navigation Menu Items */}
+          {/* Integrated 4 Navigation Menu Items */}
           <nav className="flex items-center gap-1.5 flex-wrap">
             {[
-              { id: 'avatar', label: 'Natal Avatar & Karakatvas (Prototype)', icon: Sparkles, highlight: true },
               { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
               { id: 'monthly', label: 'Monthly View (Matrix)', icon: CalendarDays },
               { id: 'report', label: 'Voice & Predictions Studio', icon: FileText },
@@ -273,14 +271,6 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
-        {/* TAB 0: VEDIC NATAL AVATAR & KARAKATVA LIFE STORY PROTOTYPE */}
-        {activeTab === 'avatar' && (
-          <NatalAvatarStudio
-            activeRecord={activeRecord}
-            onSelectPerson={handleSelectPerson}
-            availablePersonIds={availablePersonIds}
-          />
-        )}
 
         {/* TAB 0: REST API QUERY (MODEL 2) */}
         {activeTab === 'api' && (

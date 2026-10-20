@@ -158,11 +158,8 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-bold">
-              AD
-            </span>
             <h5 className="text-xs sm:text-sm font-bold text-white tracking-wide">
-              <span className="text-amber-300">{mahadashaLord} MD</span> · <span className="text-cyan-300">{antardashaLord} AD</span> Summary
+              Summary
             </h5>
             {narrative && (
               <span className="hidden sm:inline-flex rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
@@ -184,7 +181,7 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
             className="inline-flex items-center gap-1.5 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/20 transition disabled:opacity-50"
           >
             <Sparkles className={`h-3.5 w-3.5 ${isGenerating ? 'animate-pulse text-cyan-400' : ''}`} />
-            {isGenerating ? 'Synthesizing...' : narrative ? 'Regenerate AD Summary' : 'Generate AD Summary'}
+            {isGenerating ? 'Synthesizing...' : narrative ? 'Regenerate Summary' : 'Generate Summary'}
           </button>
           
           <button
@@ -395,7 +392,7 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
       ) : isGenerating ? (
         <div className="rounded-md border border-cyan-500/30 bg-cyan-950/20 p-4 text-center text-xs text-cyan-200">
           <Sparkles className="inline-block w-4 h-4 animate-spin mr-2 text-cyan-400" />
-          Synthesizing {antardashaLord} AD narrative from recorded PD landmark notes...
+          Synthesizing summary from recorded PD landmark notes...
         </div>
       ) : null}
     </div>

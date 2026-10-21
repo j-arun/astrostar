@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Sparkles, Eye, Save, RotateCcw, CheckCircle2, AlertCircle, Info, ChevronDown, ChevronUp, Palette, ListFilter } from 'lucide-react';
 import {
   AntardashaNarrativeIdentity,
@@ -54,6 +54,15 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
   const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
   const [highlightedFeedKey, setHighlightedFeedKey] = useState<string | null>(null);
   const [showAllFeedsInFooter, setShowAllFeedsInFooter] = useState<boolean>(false);
+
+  // Synchronize narrative and prompt whenever cached props change (browser cache / sessionStorage)
+  useEffect(() => {
+    setNarrative(cachedNarrative);
+  }, [cachedNarrative]);
+
+  useEffect(() => {
+    setPromptText(customPromptOverride || '');
+  }, [customPromptOverride]);
 
   const adIdentity: AntardashaNarrativeIdentity = useMemo(() => ({
     mahadasha_lord_md: mahadashaLord,

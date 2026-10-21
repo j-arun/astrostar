@@ -190,6 +190,8 @@ export default function RestApiStudio({
     setDashaLoadError(null);
     setDashaDatabaseRecords([]);
     setDashaEvaluations({});
+    setAdNarratives(loadAntardashaNarratives());
+    setAdPromptOverrides(loadAntardashaPromptOverrides());
 
     fetchDashaEvaluations(apiBaseUrl, dashaPersonId)
       .then(records => {

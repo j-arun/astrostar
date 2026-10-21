@@ -151,10 +151,23 @@ export function removeAntardashaPromptOverride(key: string): void {
   setStoredJson(ANTARDASHA_PROMPT_OVERRIDES_KEY, overrides);
 }
 
+import defaultSeedNotes from './dasha_notes.json';
+
 const LOCAL_PD_EVALUATIONS_STORAGE_KEY = 'astro_local_pd_evaluations_v1';
 
 export function loadLocalPdEvaluations(): Record<string, DashaEvaluationRecord> {
   const stored = getStoredJson<DashaEvaluationRecord>(LOCAL_PD_EVALUATIONS_STORAGE_KEY);
+  // If browser cache is empty, seed with initial recorded evaluations
+  if (Object.keys(stored).length === 0 && defaultSeedNotes) {
+    for (const [pid, records] of Object.entries(defaultSeedNotes as Record<string, DashaEvaluationRecord[]>)) {
+      if (Array.isArray(records)) {
+        for (const r of records) {
+          const k = getDashaEvaluationKey(pid, r);
+          stored[k] = r;
+        }
+      }
+    }
+  }
   return stored;
 }
 
@@ -901,13 +914,21 @@ export async function fetchDashaEvaluations(baseUrl: string, personId: string): 
   for (const url of urls) {
     try {
       const response = await fetch(url);
-      const result = await response.json();
+      const text = await response.text();
+      let result: any = null;
+      try {
+        result = JSON.parse(text);
+      } catch {
+        continue;
+      }
       if (response.ok && result.success && Array.isArray(result.evaluations)) {
-        // Merge remote evaluations with local ones
+        // Merge remote evaluations with local ones and persist to browser session cache
         const remoteList = result.evaluations as DashaEvaluationRecord[];
         const mergedMap: Record<string, DashaEvaluationRecord> = {};
         for (const r of remoteList) {
-          mergedMap[getDashaEvaluationKey(personId, r)] = r;
+          const k = getDashaEvaluationKey(personId, r);
+          mergedMap[k] = r;
+          storeLocalPdEvaluation(k, r);
         }
         for (const l of localList) {
           const k = getDashaEvaluationKey(personId, l);
@@ -1081,22 +1102,37 @@ export async function generateAntardashaNarrative(
   customPrompt?: string,
   fallbackFeeds?: PdFeedItem[]
 ): Promise<CachedAntardashaNarrative> {
-  // 1. Try Python API server endpoint
+  const narrativeKey = getAntardashaNarrativeKey(personId, period);
+
+  // 1. Try Python API server / Vite dev server endpoint
   for (const url of getNarrativeApiUrls(baseUrl, '/api/dasha/ad-narrative')) {
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person_id: personId, ...period, custom_prompt: customPrompt })
+        body: JSON.stringify({
+          person_id: personId,
+          ...period,
+          custom_prompt: customPrompt,
+          pd_feeds: fallbackFeeds
+        })
       });
-      const result = await response.json();
-      if (response.ok && result.success && typeof result.narrative === 'string' && typeof result.prompt === 'string') {
-        return {
+      const text = await response.text();
+      let result: any = null;
+      try {
+        result = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      if (response.ok && result.success && typeof result.narrative === 'string') {
+        const item: CachedAntardashaNarrative = {
           narrative: result.narrative,
-          prompt: result.prompt,
+          prompt: result.prompt || customPrompt || '',
           model: result.model || 'Local Ollama Qwen 7B',
           generated_at: result.generated_at || new Date().toISOString()
         };
+        storeAntardashaNarrative(narrativeKey, item);
+        return item;
       }
     } catch {}
   }
@@ -1123,12 +1159,14 @@ export async function generateAntardashaNarrative(
         const ollamaJson = await ollamaRes.json();
         const text = (ollamaJson.response || '').trim();
         if (text) {
-          return {
+          const item: CachedAntardashaNarrative = {
             narrative: text,
             prompt: promptToUse,
             model: 'Local Ollama (qwen2.5:7b-instruct)',
             generated_at: new Date().toISOString()
           };
+          storeAntardashaNarrative(narrativeKey, item);
+          return item;
         }
       }
     } catch {}
@@ -1152,12 +1190,14 @@ export async function generateAntardashaNarrative(
       ...narrativeLines
     ].join('\n');
 
-    return {
+    const item: CachedAntardashaNarrative = {
       narrative,
       prompt: promptToUse || buildAdNarrativePrompt(period.mahadasha_lord_md, period.antardasha_lord_ad, period.start_date, period.end_date, fallbackFeeds),
       model: 'Deterministic Grounded Synthesizer (PD Ground Truth)',
       generated_at: new Date().toISOString()
     };
+    storeAntardashaNarrative(narrativeKey, item);
+    return item;
   }
 
   throw new Error('Could not generate Antardasha narrative: no active PD notes found for this window.');

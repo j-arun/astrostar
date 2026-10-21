@@ -563,6 +563,218 @@ function astroApiPlugin(): Plugin {
           return;
         }
 
+        // 8. CORS OPTIONS handler for /api/dasha/ and horoscope endpoints
+        if (req.method === 'OPTIONS' && (url.startsWith('/api/dasha') || url.startsWith('/api/persons') || url.startsWith('/api/horoscope'))) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        // 9. GET /api/dasha/notes?person_id=...
+        const getDashaNotesMatch = url.match(/^\/api\/dasha\/notes(\?.*)?$/);
+        if (getDashaNotesMatch && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          let personId = '001ME';
+          try {
+            const parsedUrl = new URL(url, 'http://localhost:3000');
+            personId = parsedUrl.searchParams.get('person_id') || '001ME';
+          } catch {}
+
+          const notesPath = path.resolve(__dirname, 'src/data/dasha_notes.json');
+          let evaluations: any[] = [];
+          if (fs.existsSync(notesPath)) {
+            try {
+              const notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+              evaluations = notesDb[personId] || [];
+            } catch (e) {
+              console.error('Error reading dasha_notes.json:', e);
+            }
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, evaluations }));
+          return;
+        }
+
+        // 10. POST /api/dasha/notes - Save PD note and rating to dasha_notes.json
+        if (url === '/api/dasha/notes' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', () => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            try {
+              const data = JSON.parse(body || '{}');
+              const personId = data.person_id;
+              const period = data.period || {};
+              const notes = data.notes !== undefined ? data.notes : period.notes;
+              const rating = data.evaluation_rating !== undefined ? data.evaluation_rating : period.evaluation_rating;
+
+              if (!personId) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Missing person_id' }));
+                return;
+              }
+
+              const notesPath = path.resolve(__dirname, 'src/data/dasha_notes.json');
+              let notesDb: Record<string, any[]> = {};
+              if (fs.existsSync(notesPath)) {
+                try {
+                  notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+                } catch {}
+              }
+              if (!Array.isArray(notesDb[personId])) {
+                notesDb[personId] = [];
+              }
+
+              const record = {
+                person_id: personId,
+                mahadasha_lord_md: period.mahadasha_lord_md,
+                antardasha_lord_ad: period.antardasha_lord_ad,
+                pratyantardasha_lord_pd: period.pratyantardasha_lord_pd,
+                start_date: period.start_date,
+                end_date: period.end_date,
+                notes: notes ?? null,
+                evaluation_rating: rating ?? null
+              };
+
+              const existingIdx = notesDb[personId].findIndex(item =>
+                item.mahadasha_lord_md === record.mahadasha_lord_md &&
+                item.antardasha_lord_ad === record.antardasha_lord_ad &&
+                item.pratyantardasha_lord_pd === record.pratyantardasha_lord_pd &&
+                item.start_date === record.start_date &&
+                item.end_date === record.end_date
+              );
+
+              if (existingIdx >= 0) {
+                notesDb[personId][existingIdx] = record;
+              } else {
+                notesDb[personId].push(record);
+              }
+
+              fs.writeFileSync(notesPath, JSON.stringify(notesDb, null, 2), 'utf-8');
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, notes: record.notes, evaluation_rating: record.evaluation_rating }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 11. GET /api/dasha/ad-narrative/prompt
+        const getAdNarrativePromptMatch = url.match(/^\/api\/dasha\/ad-narrative\/prompt(\?.*)?$/);
+        if (getAdNarrativePromptMatch && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          let personId = '001ME', md = '', ad = '', start = '', end = '';
+          try {
+            const parsedUrl = new URL(url, 'http://localhost:3000');
+            personId = parsedUrl.searchParams.get('person_id') || '001ME';
+            md = parsedUrl.searchParams.get('mahadasha_lord_md') || '';
+            ad = parsedUrl.searchParams.get('antardasha_lord_ad') || '';
+            start = parsedUrl.searchParams.get('start_date') || '';
+            end = parsedUrl.searchParams.get('end_date') || '';
+          } catch {}
+
+          const notesPath = path.resolve(__dirname, 'src/data/dasha_notes.json');
+          let observations: any[] = [];
+          if (fs.existsSync(notesPath)) {
+            try {
+              const notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+              observations = (notesDb[personId] || []).filter((item: any) => {
+                const mdMatch = !md || item.mahadasha_lord_md?.toLowerCase().includes(md.toLowerCase().split(' ')[0]);
+                const adMatch = !ad || item.antardasha_lord_ad?.toLowerCase().includes(ad.toLowerCase().split(' ')[0]);
+                return mdMatch && adMatch;
+              });
+            } catch {}
+          }
+
+          const prompt = [
+            `Task: Synthesize a concise chronological personal-event narrative for ${md} MD - ${ad} AD (${start} to ${end}).`,
+            'Grounding rules: Attribute events directly to the explicit Pratyantardasha Lord tag (e.g. [PD: Moon] or [PD: Venus]).',
+            'PD observations:',
+            ...(observations.length > 0
+              ? observations.map((o: any) => `- ${o.start_date} to ${o.end_date} | PD: ${o.pratyantardasha_lord_pd} | Rating: ${o.evaluation_rating ?? 'none'} | Note: ${o.notes || 'No landmark note'}`)
+              : [`- ${start} to ${end} | PD: Active Window | Period evaluated.`])
+          ].join('\n');
+
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, prompt }));
+          return;
+        }
+
+        // 12. POST /api/dasha/ad-narrative - Grounded narrative generation
+        if (url === '/api/dasha/ad-narrative' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', () => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            try {
+              const data = JSON.parse(body || '{}');
+              const personId = data.person_id || '001ME';
+              const md = data.mahadasha_lord_md || '';
+              const ad = data.antardasha_lord_ad || '';
+              const start = data.start_date || '';
+              const end = data.end_date || '';
+              const customPrompt = data.custom_prompt;
+              const pdFeeds = Array.isArray(data.pd_feeds) ? data.pd_feeds : [];
+
+              let feedsToUse = pdFeeds;
+              if (feedsToUse.length === 0) {
+                const notesPath = path.resolve(__dirname, 'src/data/dasha_notes.json');
+                if (fs.existsSync(notesPath)) {
+                  try {
+                    const notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+                    feedsToUse = (notesDb[personId] || []).filter((item: any) => {
+                      const mdMatch = !md || item.mahadasha_lord_md?.toLowerCase().includes(md.toLowerCase().split(' ')[0]);
+                      const adMatch = !ad || item.antardasha_lord_ad?.toLowerCase().includes(ad.toLowerCase().split(' ')[0]);
+                      return mdMatch && adMatch;
+                    });
+                  } catch {}
+                }
+              }
+
+              const rated = feedsToUse.filter((f: any) => (f.notes && f.notes.trim()) || f.evaluation_rating !== null);
+              const narrativeLines = rated.length > 0
+                ? rated.map((f: any) => {
+                    const r = f.evaluation_rating;
+                    const rLabel = r === 10 ? 'positive' : r === 0 ? 'challenging' : 'favorable/mixed';
+                    const lord = f.pratyantardasha_lord || f.pratyantardasha_lord_pd || 'Graha';
+                    const noteText = (f.notes || '').trim() || `Experienced ${rLabel} circumstances during ${lord} sub-period`;
+                    return `[PD: ${lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}, evaluated as ${rLabel}).`;
+                  })
+                : [
+                    `[PD: ${ad}] Stable transit unfolding across the ${start} to ${end} window under ${md} Mahadasha influence.`
+                  ];
+
+              const narrative = [
+                `Chronological MD-AD Synthesis for ${md} - ${ad} (${start} to ${end}):`,
+                ...narrativeLines
+              ].join('\n');
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                narrative,
+                prompt: customPrompt || `Synthesized for ${md} MD - ${ad} AD`,
+                model: 'Deterministic Grounded Synthesizer (Vite Preview)',
+                generated_at: new Date().toISOString()
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
         next();
       });
     }

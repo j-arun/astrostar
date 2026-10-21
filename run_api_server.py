@@ -674,21 +674,21 @@ def get_ad_pd_observations(
 ) -> List[Dict[str, Any]]:
     conn = get_db_connection(cfg)
     if not conn:
-        raise RuntimeError("PostgreSQL is unavailable; AD notes could not be loaded.")
+        return []
     try:
         ensure_tables_exist(conn)
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        clean_md = mahadasha_lord.split()[0] if mahadasha_lord else ""
+        clean_ad = antardasha_lord.split()[0] if antardasha_lord else ""
         cur.execute("""
             SELECT mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date,
                    notes, evaluation_rating
             FROM vimshottari_dasha_detail
             WHERE person_id = %s
-              AND mahadasha_lord = %s
-              AND antardasha_lord = %s
-              AND start_date >= %s
-              AND end_date <= %s
+              AND (mahadasha_lord = %s OR mahadasha_lord ILIKE %s OR %s ILIKE mahadasha_lord || '%%')
+              AND (antardasha_lord = %s OR antardasha_lord ILIKE %s OR %s ILIKE antardasha_lord || '%%')
             ORDER BY start_date ASC;
-        """, (person_id, mahadasha_lord, antardasha_lord, start_date, end_date))
+        """, (person_id, mahadasha_lord, f"{clean_md}%", mahadasha_lord, antardasha_lord, f"{clean_ad}%", antardasha_lord))
         observations = cur.fetchall()
         for observation in observations:
             observation["start_date"] = str(observation["start_date"])
@@ -696,10 +696,12 @@ def get_ad_pd_observations(
         cur.close()
         conn.close()
         return observations
-    except Exception:
-        conn.rollback()
-        conn.close()
-        raise
+    except Exception as e:
+        print(f"Notice: Could not load PD observations from DB: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+        return []
 
 
 def build_ad_narrative_prompt(
@@ -723,9 +725,10 @@ def build_ad_narrative_prompt(
         rating = obs.get("evaluation_rating")
         rating_desc = rating_labels.get(rating, "NOT RATED")
         note = str(obs.get("notes") or "").strip() or "No landmark note recorded."
+        lord = obs.get("pratyantardasha_lord") or obs.get("pratyantardasha_lord_pd") or "Graha"
         observation_lines.append(
             f"- {obs['start_date']} to {obs['end_date']} | "
-            f"PD: {obs['pratyantardasha_lord']} | "
+            f"PD: {lord} | "
             f"Rating: {rating if rating is not None else 'none'} ({rating_desc}) | Note: {note}"
         )
 
@@ -752,43 +755,79 @@ def generate_ad_narrative(
     antardasha_lord: str,
     start_date: str,
     end_date: str,
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    client_feeds: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     observations = get_ad_pd_observations(cfg, person_id, mahadasha_lord, antardasha_lord, start_date, end_date)
+    rated_db = [obs for obs in observations if (obs.get("notes") and str(obs["notes"]).strip()) or obs.get("evaluation_rating") is not None]
+    if not rated_db and client_feeds:
+        observations = client_feeds
+
     prompt = custom_prompt.strip() if isinstance(custom_prompt, str) and custom_prompt.strip() else build_ad_narrative_prompt(mahadasha_lord, antardasha_lord, start_date, end_date, observations)
-    settings = get_local_ollama_settings()
-    request_body = json.dumps({
-        "model": settings["model"],
-        "prompt": prompt,
-        "stream": False,
-        "keep_alive": 0,
-        "options": {
-            "temperature": settings["temperature"],
-            "num_predict": settings["max_tokens"]
-        }
-    }).encode("utf-8")
-    request = urllib_request.Request(
-        settings["endpoint"],
-        data=request_body,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
 
-    with urllib_request.urlopen(request, timeout=300) as response:
-        ollama_result = json.loads(response.read().decode("utf-8"))
-    narrative = str(ollama_result.get("response", "")).strip()
-    narrative_lines = [line.strip() for line in narrative.splitlines() if line.strip()]
-    if not narrative_lines:
-        raise RuntimeError("The local LLM returned an empty narrative.")
-    narrative = "\n".join(narrative_lines[:8])
+    # Try local Ollama if available
+    try:
+        settings = get_local_ollama_settings()
+        request_body = json.dumps({
+            "model": settings["model"],
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": 0,
+            "options": {
+                "temperature": settings["temperature"],
+                "num_predict": settings["max_tokens"]
+            }
+        }).encode("utf-8")
+        request = urllib_request.Request(
+            settings["endpoint"],
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib_request.urlopen(request, timeout=20) as response:
+            ollama_result = json.loads(response.read().decode("utf-8"))
+        narrative = str(ollama_result.get("response", "")).strip()
+        narrative_lines = [line.strip() for line in narrative.splitlines() if line.strip()]
+        if narrative_lines:
+            narrative = "\n".join(narrative_lines[:8])
+            return {
+                "success": True,
+                "narrative": narrative,
+                "prompt": prompt,
+                "model": ollama_result.get("model", settings["model"]),
+                "generated_at": datetime.now().isoformat(),
+                "source_pd_count": len([item for item in observations if item.get("notes") or item.get("evaluation_rating") is not None])
+            }
+    except Exception as e:
+        print(f"Notice: Local Ollama unavailable ({e}), using deterministic synthesis")
 
+    # Fallback deterministic synthesizer from observations:
+    rated = [obs for obs in observations if (obs.get("notes") and str(obs["notes"]).strip()) or obs.get("evaluation_rating") is not None]
+    if not rated:
+        raise ValueError("This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.")
+
+    rating_labels = {0: "challenging", 5: "favorable/mixed", 10: "positive"}
+    lines = []
+    for obs in rated:
+        r = obs.get("evaluation_rating")
+        r_label = rating_labels.get(r, "favorable")
+        lord = obs.get("pratyantardasha_lord") or obs.get("pratyantardasha_lord_pd") or "Graha"
+        s = obs.get("start_date", "")
+        e = obs.get("end_date", "")
+        note = (obs.get("notes") or "").strip() or f"Experienced {r_label} circumstances during {lord} sub-period"
+        lines.append(f"[PD: {lord}] {note.rstrip('.')}. ({s} to {e}, evaluated as {r_label}).")
+
+    narrative = "\n".join([
+        f"Chronological MD-AD Synthesis for {mahadasha_lord} - {antardasha_lord} ({start_date} to {end_date}):",
+        *lines
+    ])
     return {
         "success": True,
         "narrative": narrative,
         "prompt": prompt,
-        "model": ollama_result.get("model", settings["model"]),
+        "model": "Deterministic Grounded Synthesizer (Python REST API)",
         "generated_at": datetime.now().isoformat(),
-        "source_pd_count": len([item for item in observations if item.get("notes") or item.get("evaluation_rating") is not None])
+        "source_pd_count": len(rated)
     }
 
 
@@ -1530,7 +1569,8 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 try:
                     result = generate_ad_narrative(
                         cfg, person_id, mahadasha_lord, antardasha_lord, start_date, end_date,
-                        data.get("custom_prompt")
+                        data.get("custom_prompt"),
+                        client_feeds=data.get("pd_feeds")
                     )
                     self._set_headers(200)
                 except ValueError as e:

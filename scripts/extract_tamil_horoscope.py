@@ -580,7 +580,7 @@ def ingest_to_postgres(db_params: Dict[str, Any],
             pratyantardasha_lord VARCHAR(50) NOT NULL,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
-            notes VARCHAR(200),
+            notes VARCHAR(1000),
             evaluation_rating SMALLINT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT chk_vimshottari_evaluation_rating
@@ -595,7 +595,8 @@ def ingest_to_postgres(db_params: Dict[str, Any],
                 person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date
             );
 
-        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(200);
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(1000);
+        ALTER TABLE vimshottari_dasha_detail ALTER COLUMN notes TYPE VARCHAR(1000);
         ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
         ALTER TABLE vimshottari_dasha_detail
             ALTER COLUMN evaluation_rating TYPE SMALLINT

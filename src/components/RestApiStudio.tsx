@@ -2234,11 +2234,11 @@ print(prompt_markdown[:400])
                                   <label className="block space-y-1.5">
                                     <span className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
                                       <span>Landmark event</span>
-                                      <span className="font-mono text-slate-500">{(evaluation.notes ?? '').length}/200</span>
+                                      <span className="font-mono text-slate-500">{(evaluation.notes ?? '').length}/1000</span>
                                     </span>
                                     <textarea
-                                      maxLength={200}
-                                      rows={2}
+                                      maxLength={1000}
+                                      rows={4}
                                       value={evaluation.notes ?? ''}
                                       onChange={event => updateDashaEvaluation(interval, { notes: event.target.value || null })}
                                       placeholder="Record a notable event from this period..."

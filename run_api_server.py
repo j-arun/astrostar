@@ -289,7 +289,7 @@ def ensure_tables_exist(conn):
             pratyantardasha_lord VARCHAR(50) NOT NULL,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
-            notes VARCHAR(200),
+            notes VARCHAR(1000),
             evaluation_rating SMALLINT,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT chk_vimshottari_evaluation_rating
@@ -299,7 +299,8 @@ def ensure_tables_exist(conn):
             )
         );
 
-        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(200);
+        ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS notes VARCHAR(1000);
+        ALTER TABLE vimshottari_dasha_detail ALTER COLUMN notes TYPE VARCHAR(1000);
         ALTER TABLE vimshottari_dasha_detail ADD COLUMN IF NOT EXISTS evaluation_rating SMALLINT;
         ALTER TABLE vimshottari_dasha_detail
             ALTER COLUMN evaluation_rating TYPE SMALLINT
@@ -463,8 +464,8 @@ def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Di
         "mahadasha_lord_md", "antardasha_lord_ad", "pratyantardasha_lord_pd", "start_date", "end_date"
     )):
         return {"success": False, "error": "Person and complete PD identity are required."}
-    if notes is not None and (not isinstance(notes, str) or len(notes) > 200):
-        return {"success": False, "error": "Notes must be 200 characters or fewer."}
+    if notes is not None and (not isinstance(notes, str) or len(notes) > 1000):
+        return {"success": False, "error": "Notes must be 1000 characters or fewer."}
     if rating is not None and (isinstance(rating, bool) or rating not in (0, 5, 10)):
         return {"success": False, "error": "Evaluation rating must be 0, 5, 10, or null."}
 

@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS vimshottari_dasha_detail (
     pratyantardasha_lord VARCHAR(50) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    notes VARCHAR(200),
+    notes VARCHAR(1000),
     evaluation_rating SMALLINT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_vimshottari_evaluation_rating

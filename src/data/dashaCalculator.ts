@@ -46,6 +46,57 @@ export function getFullVimshottariTimeline(): [string, string, string, string, s
   const intervals: [string, string, string, string, string][] = [];
 
   for (const md of MAHADASHAS) {
+    if (md.lord === "Saturn (Sani)" && md.start === "1976-01-26") {
+      // 001ME birth balance: born with 13y 2m 5d Saturn remaining, starting in Ketu AD (Venus PD)
+      const ketuPds: [string, string, string][] = [
+        ["Venus (Sukra)", "1976-01-26", "1976-03-14"],
+        ["Sun (Surya)", "1976-03-14", "1976-04-04"],
+        ["Moon (Chandra)", "1976-04-04", "1976-05-07"],
+        ["Mars (Sevvai)", "1976-05-07", "1976-05-30"],
+        ["Rahu", "1976-05-30", "1976-07-30"],
+        ["Jupiter (Guru)", "1976-07-30", "1976-09-23"],
+        ["Saturn (Sani)", "1976-09-23", "1976-11-27"],
+        ["Mercury (Budha)", "1976-11-27", "1977-01-23"],
+      ];
+      for (const [pd, s, e] of ketuPds) {
+        intervals.push([md.lord, "Ketu", pd, s, e]);
+      }
+
+      // Remaining 6 Antardashas of Saturn MD: Venus, Sun, Moon, Mars, Rahu, Jupiter
+      const saturnAds = [
+        { lord: LORDS[1], start: "1977-01-23", end: "1980-03-23" },
+        { lord: LORDS[2], start: "1980-03-23", end: "1981-03-05" },
+        { lord: LORDS[3], start: "1981-03-05", end: "1982-10-05" },
+        { lord: LORDS[4], start: "1982-10-05", end: "1983-11-14" },
+        { lord: LORDS[5], start: "1983-11-14", end: "1986-09-20" },
+        { lord: LORDS[6], start: "1986-09-20", end: "1989-04-02" },
+      ];
+      for (const adItem of saturnAds) {
+        const adStartMs = new Date(adItem.start).getTime();
+        const adEndMs = new Date(adItem.end).getTime();
+        const adActualDurationMs = adEndMs - adStartMs;
+        const adIdx = LORDS.findIndex(l => l.name === adItem.lord.name);
+        let pdStartMs = adStartMs;
+
+        for (let j = 0; j < 9; j++) {
+          const pdLord = LORDS[(adIdx + j) % 9];
+          const pdFraction = pdLord.years / 120.0;
+          const pdDurationMs = adActualDurationMs * pdFraction;
+          const pdEndMs = (j === 8) ? adEndMs : pdStartMs + pdDurationMs;
+
+          intervals.push([
+            md.lord,
+            adItem.lord.name,
+            pdLord.name,
+            new Date(pdStartMs).toISOString().slice(0, 10),
+            new Date(pdEndMs).toISOString().slice(0, 10)
+          ]);
+          pdStartMs = pdEndMs;
+        }
+      }
+      continue;
+    }
+
     const mdStartMs = new Date(md.start).getTime();
     const mdEndMs = new Date(md.end).getTime();
     const mdTotalMs = mdEndMs - mdStartMs;
@@ -57,12 +108,7 @@ export function getFullVimshottariTimeline(): [string, string, string, string, s
     for (let i = 0; i < 9; i++) {
       const adLord = LORDS[(mdIdx + i) % 9];
       const adFraction = adLord.years / 120.0;
-
-      // In the first MD (Saturn), the balance at birth starts partway through Ketu Bukthi
-      const adSpanMs = md.lord === "Saturn (Sani)" && md.start === "1976-01-26"
-        ? (mdTotalMs * (adLord.years / 13.183))
-        : (mdTotalMs * adFraction);
-
+      const adSpanMs = mdTotalMs * adFraction;
       const adEndMs = Math.min(mdEndMs, adStartMs + adSpanMs);
 
       const adIdx = LORDS.findIndex(l => l.name === adLord.name);

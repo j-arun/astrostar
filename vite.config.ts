@@ -599,6 +599,45 @@ function astroApiPlugin(): Plugin {
           return;
         }
 
+        // 9b. GET /api/dasha/pd?person_id=...&md=...&ad=...
+        const getDashaPdMatch = url.match(/^\/api\/dasha\/pd(\?.*)?$/);
+        if (getDashaPdMatch && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          let personId = '001ME', mdQuery = '', adQuery = '';
+          try {
+            const parsedUrl = new URL(url, 'http://localhost:3000');
+            personId = parsedUrl.searchParams.get('person_id') || '001ME';
+            mdQuery = (parsedUrl.searchParams.get('md') || parsedUrl.searchParams.get('mahadasha') || '').trim();
+            adQuery = (parsedUrl.searchParams.get('ad') || parsedUrl.searchParams.get('antardasha') || '').trim();
+          } catch {}
+
+          const notesPath = path.resolve(__dirname, 'src/data/dasha_notes.json');
+          let notesDb: Record<string, any[]> = {};
+          if (fs.existsSync(notesPath)) {
+            try {
+              notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+            } catch {}
+          }
+          const personNotes = notesDb[personId] || [];
+          const matchingPds = personNotes.filter(n => {
+            const mdMatch = !mdQuery || (n.mahadasha_lord_md || '').toLowerCase().includes(mdQuery.toLowerCase());
+            const adMatch = !adQuery || (n.antardasha_lord_ad || '').toLowerCase().includes(adQuery.toLowerCase());
+            return mdMatch && adMatch;
+          });
+
+          res.statusCode = 200;
+          res.end(JSON.stringify({
+            success: true,
+            person_id: personId,
+            mahadasha: mdQuery,
+            antardasha: adQuery,
+            pds: matchingPds,
+            source: 'embedded_store'
+          }));
+          return;
+        }
+
         // 10. POST /api/dasha/notes - Save PD note and rating to dasha_notes.json
         if (url === '/api/dasha/notes' && req.method === 'POST') {
           let body = '';

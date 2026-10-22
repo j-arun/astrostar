@@ -157,13 +157,15 @@ const LOCAL_PD_EVALUATIONS_STORAGE_KEY = 'astro_local_pd_evaluations_v1';
 
 export function loadLocalPdEvaluations(): Record<string, DashaEvaluationRecord> {
   const stored = getStoredJson<DashaEvaluationRecord>(LOCAL_PD_EVALUATIONS_STORAGE_KEY);
-  // If browser cache is empty, seed with initial recorded evaluations
-  if (Object.keys(stored).length === 0 && defaultSeedNotes) {
+  // Guarantee existing recorded evaluations from dasha_notes.json are populated
+  if (defaultSeedNotes) {
     for (const [pid, records] of Object.entries(defaultSeedNotes as Record<string, DashaEvaluationRecord[]>)) {
       if (Array.isArray(records)) {
         for (const r of records) {
           const k = getDashaEvaluationKey(pid, r);
-          stored[k] = r;
+          if (!stored[k] || (!stored[k].notes && r.notes)) {
+            stored[k] = r;
+          }
         }
       }
     }
@@ -945,6 +947,39 @@ export async function fetchDashaEvaluations(baseUrl: string, personId: string): 
 
   // If live server was unreachable, return local stored records
   return localList;
+}
+
+export async function fetchDashaPds(
+  baseUrl: string,
+  personId: string,
+  md: string,
+  ad: string
+): Promise<DashaEvaluationRecord[]> {
+  const query = `?person_id=${encodeURIComponent(personId)}&md=${encodeURIComponent(md)}&ad=${encodeURIComponent(ad)}`;
+  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+    const base = candidate.replace(/\/+$/, '');
+    return base ? `${base}/api/dasha/pd${query}` : `/api/dasha/pd${query}`;
+  });
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success && Array.isArray(data.pds)) {
+          return data.pds as DashaEvaluationRecord[];
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback to local evaluations matching md and ad
+  const localMap = loadLocalPdEvaluations();
+  return Object.values(localMap).filter(r => {
+    const mdMatch = !md || (r.mahadasha_lord_md || '').toLowerCase().includes(md.toLowerCase());
+    const adMatch = !ad || (r.antardasha_lord_ad || '').toLowerCase().includes(ad.toLowerCase());
+    return mdMatch && adMatch;
+  });
 }
 
 export async function saveDashaEvaluation(

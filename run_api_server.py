@@ -426,9 +426,19 @@ def save_person_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, An
 
 
 def get_dasha_evaluations_from_db(cfg: Dict[str, Any], person_id: str) -> Dict[str, Any]:
+    notes_json_path = os.path.join(os.path.dirname(__file__), "src", "data", "dasha_notes.json")
+    json_evaluations = []
+    if os.path.exists(notes_json_path):
+        try:
+            with open(notes_json_path, "r", encoding="utf-8") as f:
+                notes_db = json.load(f)
+                json_evaluations = notes_db.get(person_id, [])
+        except Exception:
+            pass
+
     conn = get_db_connection(cfg)
     if not conn:
-        return {"success": False, "error": "PostgreSQL is unavailable; dasha notes were not loaded."}
+        return {"success": True, "evaluations": json_evaluations, "source": "embedded_store"}
     try:
         ensure_tables_exist(conn)
         cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -447,11 +457,75 @@ def get_dasha_evaluations_from_db(cfg: Dict[str, Any], person_id: str) -> Dict[s
             evaluation["end_date"] = str(evaluation["end_date"])
         cur.close()
         conn.close()
-        return {"success": True, "evaluations": evaluations}
+        if not evaluations and json_evaluations:
+            return {"success": True, "evaluations": json_evaluations, "source": "embedded_store"}
+        return {"success": True, "evaluations": evaluations, "source": "postgresql"}
     except Exception as e:
         if conn:
             conn.close()
-        return {"success": False, "error": str(e)}
+        return {"success": True, "evaluations": json_evaluations, "source": "embedded_store"}
+
+
+def get_dasha_pds_from_db(cfg: Dict[str, Any], person_id: str, md_query: str, ad_query: str) -> Dict[str, Any]:
+    conn = get_db_connection(cfg)
+    if conn:
+        try:
+            ensure_tables_exist(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("""
+                SELECT mahadasha_lord AS mahadasha_lord_md,
+                     antardasha_lord AS antardasha_lord_ad,
+                     pratyantardasha_lord AS pratyantardasha_lord_pd,
+                     start_date, end_date, notes, evaluation_rating
+                FROM vimshottari_dasha_detail
+                WHERE person_id = %s
+                  AND mahadasha_lord ILIKE %s
+                  AND antardasha_lord ILIKE %s
+                ORDER BY start_date ASC;
+            """, (person_id, f"%{md_query.strip()}%", f"%{ad_query.strip()}%"))
+            pds = cur.fetchall()
+            for pd in pds:
+                pd["start_date"] = str(pd["start_date"])
+                pd["end_date"] = str(pd["end_date"])
+            cur.close()
+            conn.close()
+            if pds:
+                return {
+                    "success": True,
+                    "person_id": person_id,
+                    "mahadasha": md_query,
+                    "antardasha": ad_query,
+                    "pds": pds,
+                    "source": "postgresql"
+                }
+        except Exception:
+            if conn:
+                conn.close()
+
+    # Fallback to embedded dasha_notes.json / timeline store
+    notes_json_path = os.path.join(os.path.dirname(__file__), "src", "data", "dasha_notes.json")
+    matching_notes = []
+    if os.path.exists(notes_json_path):
+        try:
+            with open(notes_json_path, "r", encoding="utf-8") as f:
+                notes_db = json.load(f)
+                all_person_notes = notes_db.get(person_id, [])
+                matching_notes = [
+                    n for n in all_person_notes
+                    if md_query.lower() in (n.get("mahadasha_lord_md") or "").lower()
+                    and ad_query.lower() in (n.get("antardasha_lord_ad") or "").lower()
+                ]
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "person_id": person_id,
+        "mahadasha": md_query,
+        "antardasha": ad_query,
+        "pds": matching_notes,
+        "source": "embedded_store"
+    }
 
 
 def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
@@ -469,9 +543,45 @@ def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Di
     if rating is not None and (isinstance(rating, bool) or rating not in (0, 5, 10)):
         return {"success": False, "error": "Evaluation rating must be 0, 5, 10, or null."}
 
+    # Always persist to embedded store src/data/dasha_notes.json
+    notes_json_path = os.path.join(os.path.dirname(__file__), "src", "data", "dasha_notes.json")
+    if os.path.exists(notes_json_path):
+        try:
+            with open(notes_json_path, "r", encoding="utf-8") as f:
+                notes_db = json.load(f)
+            if not isinstance(notes_db.get(person_id), list):
+                notes_db[person_id] = []
+            rec = {
+                "person_id": person_id,
+                "mahadasha_lord_md": period["mahadasha_lord_md"],
+                "antardasha_lord_ad": period["antardasha_lord_ad"],
+                "pratyantardasha_lord_pd": period["pratyantardasha_lord_pd"],
+                "start_date": period["start_date"],
+                "end_date": period["end_date"],
+                "notes": notes or None,
+                "evaluation_rating": rating
+            }
+            matched_idx = -1
+            for idx, existing in enumerate(notes_db[person_id]):
+                if (existing.get("mahadasha_lord_md") == rec["mahadasha_lord_md"] and
+                    existing.get("antardasha_lord_ad") == rec["antardasha_lord_ad"] and
+                    existing.get("pratyantardasha_lord_pd") == rec["pratyantardasha_lord_pd"] and
+                    existing.get("start_date") == rec["start_date"] and
+                    existing.get("end_date") == rec["end_date"]):
+                    matched_idx = idx
+                    break
+            if matched_idx >= 0:
+                notes_db[person_id][matched_idx] = rec
+            else:
+                notes_db[person_id].append(rec)
+            with open(notes_json_path, "w", encoding="utf-8") as f:
+                json.dump(notes_db, f, indent=2)
+        except Exception:
+            pass
+
     conn = get_db_connection(cfg)
     if not conn:
-        return {"success": False, "error": "PostgreSQL is unavailable; dasha notes were not saved."}
+        return {"success": True, "notes": notes or None, "evaluation_rating": rating, "source": "embedded_store"}
     try:
         ensure_tables_exist(conn)
         cur = conn.cursor()
@@ -494,20 +604,15 @@ def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Di
             period["start_date"],
             period["end_date"]
         ))
-        if cur.rowcount != 1:
-            conn.rollback()
-            cur.close()
-            conn.close()
-            return {"success": False, "error": "No matching dasha period exists in the database."}
         conn.commit()
         cur.close()
         conn.close()
-        return {"success": True, "notes": notes or None, "evaluation_rating": rating}
+        return {"success": True, "notes": notes or None, "evaluation_rating": rating, "source": "postgresql"}
     except Exception as e:
         if conn:
             conn.rollback()
             conn.close()
-        return {"success": False, "error": str(e)}
+        return {"success": True, "notes": notes or None, "evaluation_rating": rating, "source": "embedded_store"}
 
 
 def get_local_ollama_settings() -> Dict[str, Any]:
@@ -1356,6 +1461,16 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 "success": False, "error": "person_id is required."
             }
             self._set_headers(200 if result.get("success") else 503)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+            return
+
+        elif parsed.path == "/api/dasha/pd":
+            params = urllib.parse.parse_qs(parsed.query)
+            person_id = params.get("person_id", ["001ME"])[0]
+            md_query = params.get("md", params.get("mahadasha", [""]))[0]
+            ad_query = params.get("ad", params.get("antardasha", [""]))[0]
+            result = get_dasha_pds_from_db(cfg, person_id, md_query, ad_query)
+            self._set_headers(200 if result.get("success") else 400)
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             return
 

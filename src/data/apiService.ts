@@ -179,15 +179,17 @@ export function storeLocalPdEvaluation(key: string, record: DashaEvaluationRecor
   setStoredJson(LOCAL_PD_EVALUATIONS_STORAGE_KEY, data);
 }
 
-export function getDashaEvaluationKey(personId: string, period: DashaEvaluationRecord): string {
-  return JSON.stringify([
-    personId,
-    period.mahadasha_lord_md,
-    period.antardasha_lord_ad,
-    period.pratyantardasha_lord_pd,
-    period.start_date,
-    period.end_date
-  ]);
+export function normalizeLordName(lord: string | undefined): string {
+  if (!lord) return '';
+  const clean = lord.split('(')[0].trim();
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
+export function getDashaEvaluationKey(personId: string, period: Partial<DashaEvaluationRecord>): string {
+  const md = normalizeLordName(period.mahadasha_lord_md || (period as any)?.mahadasha_lord || (period as any)?.md);
+  const ad = normalizeLordName(period.antardasha_lord_ad || (period as any)?.antardasha_lord || (period as any)?.ad);
+  const pd = normalizeLordName(period.pratyantardasha_lord_pd || (period as any)?.pratyantardasha_lord || (period as any)?.pd);
+  return `${personId || '001ME'}:${md}:${ad}:${pd}`;
 }
 
 export interface HoroscopeApiResponse {

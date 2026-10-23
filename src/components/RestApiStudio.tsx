@@ -42,6 +42,7 @@ import {
   pingApiHealth,
   ApiFetchResult,
   fetchDashaEvaluations,
+  fetchDashaPds,
   getCurrentMonthDateRange,
   getDashaEvaluationKey,
   saveDashaEvaluation,
@@ -347,19 +348,13 @@ export default function RestApiStudio({
         evaluation_rating: null
       }));
 
-    return completeIntervals.map((period, index) => {
-      const key = getDashaEvaluationKey(apiResponse.person_id, period);
-      const saved = dashaEvaluations[key];
-      return {
-        sequence_index: index + 1,
-        ...period,
-        full_lord_hierarchy: `${period.mahadasha_lord_md} MD > ${period.antardasha_lord_ad} AD > ${period.pratyantardasha_lord_pd} PD`,
-        duration_days: Math.round((new Date(period.end_date).getTime() - new Date(period.start_date).getTime()) / (1000 * 60 * 60 * 24)),
-        notes: saved?.notes ?? null,
-        evaluation_rating: saved?.evaluation_rating ?? null
-      };
-    });
-  }, [apiResponse, dashaEvaluations]);
+    return completeIntervals.map((period, index) => ({
+      sequence_index: index + 1,
+      ...period,
+      full_lord_hierarchy: `${period.mahadasha_lord_md} MD > ${period.antardasha_lord_ad} AD > ${period.pratyantardasha_lord_pd} PD`,
+      duration_days: Math.round((new Date(period.end_date).getTime() - new Date(period.start_date).getTime()) / (1000 * 60 * 60 * 24))
+    }));
+  }, [apiResponse]);
 
   const updateDashaEvaluation = (period: DashaIntervalItem, updates: Partial<DashaEvaluationRecord>) => {
     if (!apiResponse) return;
@@ -370,6 +365,24 @@ export default function RestApiStudio({
     }));
     setDashaSaveStates(previous => ({ ...previous, [key]: 'dirty' }));
     setDashaSaveErrors(previous => ({ ...previous, [key]: 'Unsaved changes' }));
+  };
+
+  const handleAntardashaToggle = async (mahadashaLord: string, antardashaLord: string) => {
+    try {
+      const pds = await fetchDashaPds(apiBaseUrl, dashaPersonId, mahadashaLord, antardashaLord);
+      if (pds && pds.length > 0) {
+        setDashaEvaluations(previous => {
+          const updated = { ...previous };
+          for (const pd of pds) {
+            const k = getDashaEvaluationKey(dashaPersonId, pd);
+            if (pd.notes || pd.evaluation_rating !== null || !updated[k]) {
+              updated[k] = { ...updated[k], ...pd };
+            }
+          }
+          return updated;
+        });
+      }
+    } catch {}
   };
 
   const handleSaveDashaEvaluation = async (period: DashaIntervalItem) => {
@@ -2166,7 +2179,15 @@ print(prompt_markdown[:400])
                     const adCustomPrompt = adPromptOverrides[adKey];
 
                     return (
-                      <details key={`${antardasha.lord}-${antardasha.startDate}`} className="border border-slate-800/80 rounded-md">
+                      <details
+                        key={`${antardasha.lord}-${antardasha.startDate}`}
+                        className="border border-slate-800/80 rounded-md"
+                        onToggle={(e) => {
+                          if ((e.currentTarget as HTMLDetailsElement).open) {
+                            handleAntardashaToggle(mahadasha.lord, antardasha.lord);
+                          }
+                        }}
+                      >
                         <summary className="cursor-pointer list-none px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="font-semibold text-cyan-300">
                             {antardasha.lord} AD

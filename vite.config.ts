@@ -680,16 +680,27 @@ function astroApiPlugin(): Plugin {
                 evaluation_rating: rating ?? null
               };
 
+              const normalizeLord = (name?: string) => {
+                if (!name) return '';
+                const clean = name.split('(')[0].trim();
+                return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+              };
+
+              const cleanMd = normalizeLord(record.mahadasha_lord_md);
+              const cleanAd = normalizeLord(record.antardasha_lord_ad);
+              const cleanPd = normalizeLord(record.pratyantardasha_lord_pd);
+
               const existingIdx = notesDb[personId].findIndex(item =>
-                item.mahadasha_lord_md === record.mahadasha_lord_md &&
-                item.antardasha_lord_ad === record.antardasha_lord_ad &&
-                item.pratyantardasha_lord_pd === record.pratyantardasha_lord_pd &&
-                item.start_date === record.start_date &&
-                item.end_date === record.end_date
+                normalizeLord(item.mahadasha_lord_md) === cleanMd &&
+                normalizeLord(item.antardasha_lord_ad) === cleanAd &&
+                normalizeLord(item.pratyantardasha_lord_pd) === cleanPd
               );
 
               if (existingIdx >= 0) {
-                notesDb[personId][existingIdx] = record;
+                notesDb[personId][existingIdx].notes = record.notes;
+                notesDb[personId][existingIdx].evaluation_rating = record.evaluation_rating;
+                if (record.start_date) notesDb[personId][existingIdx].start_date = record.start_date;
+                if (record.end_date) notesDb[personId][existingIdx].end_date = record.end_date;
               } else {
                 notesDb[personId].push(record);
               }

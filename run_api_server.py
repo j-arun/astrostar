@@ -528,22 +528,35 @@ def get_dasha_pds_from_db(cfg: Dict[str, Any], person_id: str, md_query: str, ad
     }
 
 
+def _clean_lord_name(name: str) -> str:
+    if not name:
+        return ""
+    clean = name.split("(")[0].strip()
+    return clean.capitalize()
+
+
 def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
     person_id = data.get("person_id")
     period = data.get("period", {})
     notes = data.get("notes")
     rating = data.get("evaluation_rating")
 
-    if not person_id or not all(period.get(key) for key in (
-        "mahadasha_lord_md", "antardasha_lord_ad", "pratyantardasha_lord_pd", "start_date", "end_date"
-    )):
-        return {"success": False, "error": "Person and complete PD identity are required."}
+    md_raw = period.get("mahadasha_lord_md") or period.get("mahadasha_lord") or period.get("md") or ""
+    ad_raw = period.get("antardasha_lord_ad") or period.get("antardasha_lord") or period.get("ad") or ""
+    pd_raw = period.get("pratyantardasha_lord_pd") or period.get("pratyantardasha_lord") or period.get("pd") or ""
+
+    if not person_id or not md_raw or not ad_raw or not pd_raw:
+        return {"success": False, "error": "Person, Mahadasha, Antardasha, and Pratyantardasha lords are required."}
     if notes is not None and (not isinstance(notes, str) or len(notes) > 1000):
         return {"success": False, "error": "Notes must be 1000 characters or fewer."}
     if rating is not None and (isinstance(rating, bool) or rating not in (0, 5, 10)):
         return {"success": False, "error": "Evaluation rating must be 0, 5, 10, or null."}
 
-    # Always persist to embedded store src/data/dasha_notes.json
+    clean_md = _clean_lord_name(md_raw)
+    clean_ad = _clean_lord_name(ad_raw)
+    clean_pd = _clean_lord_name(pd_raw)
+
+    # Always persist to embedded store src/data/dasha_notes.json matching by person_id & normalized lords
     notes_json_path = os.path.join(os.path.dirname(__file__), "src", "data", "dasha_notes.json")
     if os.path.exists(notes_json_path):
         try:
@@ -553,25 +566,30 @@ def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Di
                 notes_db[person_id] = []
             rec = {
                 "person_id": person_id,
-                "mahadasha_lord_md": period["mahadasha_lord_md"],
-                "antardasha_lord_ad": period["antardasha_lord_ad"],
-                "pratyantardasha_lord_pd": period["pratyantardasha_lord_pd"],
-                "start_date": period["start_date"],
-                "end_date": period["end_date"],
+                "mahadasha_lord_md": md_raw,
+                "antardasha_lord_ad": ad_raw,
+                "pratyantardasha_lord_pd": pd_raw,
+                "start_date": period.get("start_date") or "",
+                "end_date": period.get("end_date") or "",
                 "notes": notes or None,
                 "evaluation_rating": rating
             }
             matched_idx = -1
             for idx, existing in enumerate(notes_db[person_id]):
-                if (existing.get("mahadasha_lord_md") == rec["mahadasha_lord_md"] and
-                    existing.get("antardasha_lord_ad") == rec["antardasha_lord_ad"] and
-                    existing.get("pratyantardasha_lord_pd") == rec["pratyantardasha_lord_pd"] and
-                    existing.get("start_date") == rec["start_date"] and
-                    existing.get("end_date") == rec["end_date"]):
+                e_md = _clean_lord_name(existing.get("mahadasha_lord_md") or existing.get("mahadasha_lord") or "")
+                e_ad = _clean_lord_name(existing.get("antardasha_lord_ad") or existing.get("antardasha_lord") or "")
+                e_pd = _clean_lord_name(existing.get("pratyantardasha_lord_pd") or existing.get("pratyantardasha_lord") or "")
+                if e_md == clean_md and e_ad == clean_ad and e_pd == clean_pd:
                     matched_idx = idx
                     break
             if matched_idx >= 0:
-                notes_db[person_id][matched_idx] = rec
+                # Update existing record
+                notes_db[person_id][matched_idx]["notes"] = notes or None
+                notes_db[person_id][matched_idx]["evaluation_rating"] = rating
+                if rec["start_date"]:
+                    notes_db[person_id][matched_idx]["start_date"] = rec["start_date"]
+                if rec["end_date"]:
+                    notes_db[person_id][matched_idx]["end_date"] = rec["end_date"]
             else:
                 notes_db[person_id].append(rec)
             with open(notes_json_path, "w", encoding="utf-8") as f:
@@ -589,21 +607,35 @@ def save_dasha_evaluation_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Di
             UPDATE vimshottari_dasha_detail
             SET notes = %s, evaluation_rating = %s
             WHERE person_id = %s
-              AND mahadasha_lord = %s
-              AND antardasha_lord = %s
-              AND pratyantardasha_lord = %s
-              AND start_date = %s
-              AND end_date = %s;
+              AND mahadasha_lord ILIKE %s
+              AND antardasha_lord ILIKE %s
+              AND pratyantardasha_lord ILIKE %s;
         """, (
             notes or None,
             rating,
             person_id,
-            period["mahadasha_lord_md"],
-            period["antardasha_lord_ad"],
-            period["pratyantardasha_lord_pd"],
-            period["start_date"],
-            period["end_date"]
+            f"%{clean_md}%",
+            f"%{clean_ad}%",
+            f"%{clean_pd}%"
         ))
+        if cur.rowcount == 0 and period.get("start_date") and period.get("end_date"):
+            cur.execute("""
+                INSERT INTO vimshottari_dasha_detail (
+                    person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord,
+                    start_date, end_date, notes, evaluation_rating
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (person_id, mahadasha_lord, antardasha_lord, pratyantardasha_lord, start_date, end_date)
+                DO UPDATE SET notes = EXCLUDED.notes, evaluation_rating = EXCLUDED.evaluation_rating;
+            """, (
+                person_id,
+                md_raw,
+                ad_raw,
+                pd_raw,
+                period.get("start_date"),
+                period.get("end_date"),
+                notes or None,
+                rating
+            ))
         conn.commit()
         cur.close()
         conn.close()

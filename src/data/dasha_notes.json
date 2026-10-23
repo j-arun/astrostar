@@ -9,6 +9,16 @@
       "end_date": "1976-03-14",
       "notes": "Birth balance period with family support and initial health stabilization.",
       "evaluation_rating": 5
+    },
+    {
+      "person_id": "001ME",
+      "mahadasha_lord_md": "Mercury (Budha)",
+      "antardasha_lord_ad": "Saturn (Sani)",
+      "pratyantardasha_lord_pd": "Saturn (Sani)",
+      "start_date": "2003-07-23",
+      "end_date": "2003-12-25",
+      "notes": "Updated note: Career transition and relocation milestone.",
+      "evaluation_rating": 5
     }
   ]
 }

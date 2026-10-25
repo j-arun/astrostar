@@ -314,14 +314,17 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
     persistAdNarrativeRecord(record);
     setLastSavedAt(nowIso);
 
-    // 2. Sync to backend API (relative /api/ad-narratives on current server + apiBaseUrl)
+    // 2. Sync to backend API (Prioritize Python backend apiBaseUrl for direct PostgreSQL insertion, plus local dev server)
     try {
-      const endpointsToTry = ['/api/ad-narratives'];
-      if (apiBaseUrl && apiBaseUrl !== '' && !endpointsToTry.includes(`${apiBaseUrl}/api/ad-narratives`)) {
-        endpointsToTry.push(`${apiBaseUrl}/api/ad-narratives`);
+      const endpointsToTry: string[] = [];
+      if (apiBaseUrl && apiBaseUrl.trim() !== '') {
+        const cleanBase = apiBaseUrl.replace(/\/+$/, '');
+        endpointsToTry.push(`${cleanBase}/api/ad-narratives`);
+      }
+      if (!endpointsToTry.includes('/api/ad-narratives')) {
+        endpointsToTry.push('/api/ad-narratives');
       }
 
-      let synced = false;
       for (const endpoint of endpointsToTry) {
         try {
           const response = await fetch(endpoint, {
@@ -330,15 +333,12 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
             body: JSON.stringify(record)
           });
           if (response.ok) {
-            synced = true;
-            break;
+            const resJson = await response.json();
+            console.log(`[AD_Narratives DB] Saved via ${endpoint}:`, resJson);
           }
-        } catch {
-          // continue to next endpoint
+        } catch (fetchErr) {
+          console.warn(`[AD_Narratives DB] Endpoint ${endpoint} unreachable:`, fetchErr);
         }
-      }
-      if (!synced) {
-        // Local authoritative store already persisted in step 1
       }
     } catch {
       // Offline fallback: Client-side authoritative table record remains intact

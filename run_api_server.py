@@ -941,7 +941,8 @@ def generate_ad_narrative(
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib_request.urlopen(request, timeout=20) as response:
+        # Allow up to 90 seconds for local Ollama Qwen 7B model generation/VRAM loading
+        with urllib_request.urlopen(request, timeout=90) as response:
             ollama_result = json.loads(response.read().decode("utf-8"))
         narrative = str(ollama_result.get("response", "")).strip()
         narrative_lines = [line.strip() for line in narrative.splitlines() if line.strip()]

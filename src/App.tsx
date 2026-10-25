@@ -235,43 +235,63 @@ export default function App() {
       {/* Top Header */}
       <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-50">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-          {/* Left: Home button */}
-          <div className="flex items-center justify-start shrink-0">
+          {/* Left: Home button + Om Muruga Horoscope Vedic Engine */}
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0 min-w-0">
             <button
               onClick={() => {
                 setActiveTab('charts');
                 setSidebarOpen(false);
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/60 text-xs font-semibold transition cursor-pointer shadow-sm"
-              title="Return to Home (South Indian Chart Visualizer)"
+              title="Return to Home (Chart)"
             >
               <Home className="w-4 h-4 text-amber-400" />
               <span>Home</span>
             </button>
-          </div>
 
-          {/* Center: Om Muruga Rasi Koota Vedic Medai with sacred Vel spear & Om symbol (Center Aligned) */}
-          <div className="flex-1 flex items-center justify-center gap-2.5 sm:gap-3 text-center mx-auto min-w-0">
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
-              title="Lord Muruga's Sacred Vel (Spear)"
-            >
-              <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
-              {/* Sacred Vel of Lord Murugan (Spear) */}
-              <svg
-                viewBox="0 0 24 24"
-                className="w-5 h-5 text-amber-400 fill-current drop-shadow"
+            <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+
+            {/* Om Muruga Horoscope Vedic Engine with sacred Vel spear & Om symbol */}
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
+                title="Lord Muruga's Sacred Vel (Spear)"
               >
-                <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
-              </svg>
+                <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
+                {/* Sacred Vel of Lord Murugan (Spear) */}
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5 text-amber-400 fill-current drop-shadow"
+                >
+                  <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
+                </svg>
+              </div>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate">
+                Om Muruga Horoscope Vedic Engine
+              </h1>
             </div>
-            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate text-center">
-              Om Muruga Rasi Koota Vedic Medai
-            </h1>
           </div>
 
-          {/* Right: Balance spacer on desktop, Hamburger on mobile */}
-          <div className="flex items-center justify-end shrink-0">
+          {/* Right: Active Native ID Dropdown + Mobile Hamburger */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Active Native ID Dropdown (Only person icon and dropdown, no redundant labels) */}
+            <div className="flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/50 hover:border-amber-400 rounded-xl px-2.5 py-1.5 transition shadow-inner">
+              <User className="w-4 h-4 text-amber-400 shrink-0" />
+              <select
+                value={activePersonId}
+                onChange={(e) => handleSelectPerson(e.target.value)}
+                className="bg-transparent text-amber-300 font-bold text-xs focus:outline-none cursor-pointer pr-1"
+                title="Choose person ID from person_master table"
+              >
+                {availablePersonIds.map(id => (
+                  <option key={id} value={id} className="bg-slate-900 text-white font-medium">
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mobile hamburger menu toggle */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
@@ -279,8 +299,6 @@ export default function App() {
             >
               {sidebarOpen ? <X className="w-5 h-5 text-amber-400" /> : <Menu className="w-5 h-5 text-amber-400" />}
             </button>
-            {/* Desktop spacer matching Home button width for geometric centering */}
-            <div className="hidden lg:block w-[78px]" aria-hidden="true" />
           </div>
         </div>
       </header>
@@ -298,73 +316,37 @@ export default function App() {
               : 'hidden lg:flex p-4 xl:p-5 overflow-y-auto'
           }`}
         >
-          <div>
-            {/* Active Native Profile Section */}
-            <div className="mb-5 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-amber-400" />
-                  Active Native
-                </span>
-              </div>
-              <select
-                value={activePersonId}
-                onChange={(e) => handleSelectPerson(e.target.value)}
-                className="w-full bg-slate-900 text-amber-300 font-bold text-xs border border-amber-500/40 hover:border-amber-400 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer transition shadow-inner"
-                title="Choose person ID from person_master table"
-              >
-                {availablePersonIds.map(id => {
-                  const pRecord = (storedPersonsData as any)[id];
-                  const pName = pRecord?.profile?.person_name;
-                  return (
-                    <option key={id} value={id} className="bg-slate-900 text-white font-medium">
-                      {id} {pName ? `(${pName.split(' ')[0]})` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              {activeProfile && (
-                <div className="mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400 flex flex-col gap-0.5">
-                  <div className="font-semibold text-slate-200 truncate">{activeProfile.person_name}</div>
-                  <div className="text-[10px] text-slate-500">
-                    Lagna: <span className="text-amber-400/90">{activeProfile.birth_lagna || 'Sagittarius'}</span> | Rashi: <span className="text-amber-400/90">{activeProfile.birth_rashi || 'Scorpio'}</span>
-                  </div>
-                </div>
-              )}
+          {/* Left Navigation Menu Links */}
+          <div className="space-y-1.5">
+            <div className="px-2 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Navigation Menu
             </div>
-
-            {/* Left Navigation Menu Links */}
-            <div className="space-y-1.5">
-              <div className="px-2 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Navigation Menu
-              </div>
-              {[
-                { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
-                { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
-                { id: 'report', label: 'Voice Prediction Studio', icon: FileText },
-                { id: 'api', label: 'SAP Query Studio', icon: Server },
-              ].map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      setActiveTab(tab.id as any);
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer ${
-                      isActive
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800/80 border border-transparent hover:border-slate-700/50'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
-                    <span className="truncate">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {[
+              { id: 'charts', label: 'Chart', icon: Compass },
+              { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
+              { id: 'report', label: 'Prediction Studio', icon: FileText },
+              { id: 'api', label: 'Query Studio', icon: Server },
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/80 border border-transparent hover:border-slate-700/50'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Bottom Resize & Reset Indicator */}

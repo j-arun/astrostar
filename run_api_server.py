@@ -345,6 +345,25 @@ def ensure_tables_exist(conn):
             response_json JSONB,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS ad_narratives (
+            unique_id VARCHAR(64) PRIMARY KEY,
+            person_id VARCHAR(50) NOT NULL REFERENCES person_master(person_id) ON DELETE CASCADE,
+            md VARCHAR(30) NOT NULL,
+            ad VARCHAR(30) NOT NULL,
+            start_date VARCHAR(20),
+            end_date VARCHAR(20),
+            life_period VARCHAR(50),
+            primary_domains TEXT,
+            key_milestones TEXT,
+            narrative TEXT,
+            source_model VARCHAR(50) DEFAULT 'local_qwen',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ad_narratives_person_md_ad 
+            ON ad_narratives (person_id, md, ad);
     """)
     conn.commit()
     cur.close()
@@ -1087,8 +1106,124 @@ def get_llm_prompt_logs_from_db(cfg: Dict[str, Any], limit: int = 50) -> List[Di
     return []
 
 
+def save_ad_narrative_to_db(cfg: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+    unique_id = data.get("unique_id") or f"{data.get('person_id', '001ME')}_{data.get('md', '')}_{data.get('ad', '')}".replace(" ", "")
+    person_id = data.get("person_id", "001ME")
+    md = data.get("md", "")
+    ad = data.get("ad", "")
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    life_period = data.get("life_period", "")
+    primary_domains = data.get("primary_domains", "")
+    if isinstance(primary_domains, list):
+        primary_domains = ", ".join(primary_domains)
+    key_milestones = data.get("key_milestones", "")
+    narrative = data.get("narrative", "")
+    source_model = data.get("source_model", "local_qwen")
+    now_iso = datetime.now().isoformat()
 
-# =============================================================================
+    pg_success = False
+    pg_error = None
+
+    conn = get_db_connection(cfg)
+    if conn:
+        try:
+            ensure_tables_exist(conn)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO ad_narratives (
+                    unique_id, person_id, md, ad, start_date, end_date,
+                    life_period, primary_domains, key_milestones, narrative, source_model, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (unique_id) DO UPDATE SET
+                    life_period = EXCLUDED.life_period,
+                    primary_domains = EXCLUDED.primary_domains,
+                    key_milestones = EXCLUDED.key_milestones,
+                    narrative = EXCLUDED.narrative,
+                    source_model = EXCLUDED.source_model,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (unique_id, person_id, md, ad, start_date, end_date, life_period, primary_domains, key_milestones, narrative, source_model))
+            conn.commit()
+            cur.close()
+            conn.close()
+            pg_success = True
+        except Exception as e:
+            pg_error = str(e)
+            if conn:
+                try: conn.rollback(); conn.close()
+                except: pass
+
+    # Always persist in fallback JSON file so that data is never lost
+    fallback_path = os.path.join(os.path.dirname(__file__), "src", "data", "ad_narratives.json")
+    try:
+        file_db = {}
+        if os.path.exists(fallback_path):
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                file_db = json.load(f)
+        file_db[unique_id] = {
+            "unique_id": unique_id,
+            "person_id": person_id,
+            "md": md,
+            "ad": ad,
+            "start_date": start_date,
+            "end_date": end_date,
+            "life_period": life_period,
+            "primary_domains": [d.strip() for d in primary_domains.split(",") if d.strip()] if primary_domains else [],
+            "key_milestones": key_milestones,
+            "narrative": narrative,
+            "source_model": source_model,
+            "updated_at": now_iso,
+            "pg_persisted": pg_success
+        }
+        with open(fallback_path, "w", encoding="utf-8") as f:
+            json.dump(file_db, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        pass
+
+    return {
+        "success": True,
+        "unique_id": unique_id,
+        "person_id": person_id,
+        "pg_persisted": pg_success,
+        "pg_error": pg_error,
+        "message": f"Successfully stored narrative for {md} > {ad} in table ad_narratives",
+        "timestamp": now_iso
+    }
+
+
+def get_ad_narratives_from_db(cfg: Dict[str, Any], person_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    conn = get_db_connection(cfg)
+    if conn:
+        try:
+            ensure_tables_exist(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            if person_id:
+                cur.execute("SELECT * FROM ad_narratives WHERE person_id = %s ORDER BY updated_at DESC;", (person_id,))
+            else:
+                cur.execute("SELECT * FROM ad_narratives ORDER BY updated_at DESC;")
+            rows = cur.fetchall()
+            for r in rows:
+                if r.get("created_at"): r["created_at"] = str(r["created_at"])
+                if r.get("updated_at"): r["updated_at"] = str(r["updated_at"])
+            cur.close()
+            conn.close()
+            return rows
+        except Exception:
+            if conn: conn.close()
+
+    fallback_path = os.path.join(os.path.dirname(__file__), "src", "data", "ad_narratives.json")
+    if os.path.exists(fallback_path):
+        try:
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                records = list(data.values())
+                if person_id:
+                    records = [r for r in records if r.get("person_id") == person_id]
+                return records
+        except Exception:
+            pass
+    return []
+
 # 4. QUERY EXECUTION & RESPONSE BUILDER
 # =============================================================================
 
@@ -1605,6 +1740,18 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode())
             return
 
+        elif parsed.path.startswith("/api/ad-narratives"):
+            params = urllib.parse.parse_qs(parsed.query)
+            person_id = params.get("person_id", [None])[0]
+            records = get_ad_narratives_from_db(cfg, person_id)
+            self._set_headers(200)
+            self.wfile.write(json.dumps({
+                "success": True,
+                "count": len(records),
+                "records": records
+            }, indent=2, ensure_ascii=False).encode())
+            return
+
         self._set_headers(404)
         self.wfile.write(json.dumps({"error": "Endpoint not found"}).encode())
 
@@ -1823,6 +1970,19 @@ class HoroscopeApiHandler(BaseHTTPRequestHandler):
                 data = {}
             result = save_dasha_evaluation_to_db(cfg, data)
             status = 200 if result.get("success") else (503 if "unavailable" in result.get("error", "") else 400)
+            self._set_headers(status)
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+            return
+
+        elif parsed.path == "/api/ad-narratives":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length)
+            try:
+                data = json.loads(body_bytes.decode()) if body_bytes else {}
+            except Exception:
+                data = {}
+            result = save_ad_narrative_to_db(cfg, data)
+            status = 200 if result.get("success") else 500
             self._set_headers(status)
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             return

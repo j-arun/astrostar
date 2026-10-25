@@ -825,6 +825,192 @@ function astroApiPlugin(): Plugin {
           return;
         }
 
+        // 13. POST /api/ad-narratives - Upsert into ad_narratives table and disk storage
+        if (url === '/api/ad-narratives' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            try {
+              const data = JSON.parse(body || '{}');
+              const uniqueId = data.unique_id || `${data.person_id}_${data.md}_${data.ad}`.replace(/\s+/g, '');
+              const personId = data.person_id || '001ME';
+              const md = data.md || '';
+              const ad = data.ad || '';
+              const startDate = data.start_date || '';
+              const endDate = data.end_date || '';
+              const lifePeriod = data.life_period || '';
+              const primaryDomains = Array.isArray(data.primary_domains) ? data.primary_domains.join(', ') : (data.primary_domains || '');
+              const keyMilestones = data.key_milestones || '';
+              const narrative = data.narrative || '';
+              const sourceModel = data.source_model || 'local_qwen';
+              const nowIso = new Date().toISOString();
+
+              let pgSuccess = false;
+              let pgError = null;
+
+              // 1. Attempt PostgreSQL persistence if database is available
+              try {
+                const getPgConfig = () => {
+                  if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL };
+                  return {
+                    host: process.env.PGHOST || 'localhost',
+                    port: parseInt(process.env.PGPORT || '5432', 10),
+                    database: process.env.PGDATABASE || 'astro',
+                    user: process.env.PGUSER || 'postgres',
+                    password: process.env.PGPASSWORD || 'postgres'
+                  };
+                };
+                const client = new pg.Client({ ...getPgConfig(), connectionTimeoutMillis: 1500 });
+                await client.connect();
+
+                // Ensure ad_narratives table exists
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS ad_narratives (
+                    unique_id VARCHAR(64) PRIMARY KEY,
+                    person_id VARCHAR(50) NOT NULL,
+                    md VARCHAR(30) NOT NULL,
+                    ad VARCHAR(30) NOT NULL,
+                    start_date VARCHAR(20),
+                    end_date VARCHAR(20),
+                    life_period VARCHAR(50),
+                    primary_domains TEXT,
+                    key_milestones TEXT,
+                    narrative TEXT,
+                    source_model VARCHAR(50) DEFAULT 'local_qwen',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                  );
+                  CREATE INDEX IF NOT EXISTS idx_ad_narratives_person_md_ad 
+                    ON ad_narratives (person_id, md, ad);
+                `);
+
+                // Upsert record
+                await client.query(`
+                  INSERT INTO ad_narratives (
+                    unique_id, person_id, md, ad, start_date, end_date,
+                    life_period, primary_domains, key_milestones, narrative, source_model, updated_at
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
+                  ON CONFLICT (unique_id) DO UPDATE SET
+                    life_period = EXCLUDED.life_period,
+                    primary_domains = EXCLUDED.primary_domains,
+                    key_milestones = EXCLUDED.key_milestones,
+                    narrative = EXCLUDED.narrative,
+                    source_model = EXCLUDED.source_model,
+                    updated_at = CURRENT_TIMESTAMP;
+                `, [uniqueId, personId, md, ad, startDate, endDate, lifePeriod, primaryDomains, keyMilestones, narrative, sourceModel]);
+
+                await client.end();
+                pgSuccess = true;
+              } catch (err: any) {
+                pgError = err.message || String(err);
+              }
+
+              // 2. Guarantee persistence into server-side JSON store (src/data/ad_narratives.json)
+              const dataPath = path.resolve(__dirname, 'src/data/ad_narratives.json');
+              let dbRecords: Record<string, any> = {};
+              if (fs.existsSync(dataPath)) {
+                try {
+                  dbRecords = JSON.parse(fs.readFileSync(dataPath, 'utf-8') || '{}');
+                } catch {}
+              }
+
+              dbRecords[uniqueId] = {
+                unique_id: uniqueId,
+                person_id: personId,
+                md,
+                ad,
+                start_date: startDate,
+                end_date: endDate,
+                life_period: lifePeriod,
+                primary_domains: Array.isArray(data.primary_domains) ? data.primary_domains : primaryDomains.split(',').map((s: string) => s.trim()).filter(Boolean),
+                key_milestones: keyMilestones,
+                narrative,
+                source_model: sourceModel,
+                updated_at: nowIso,
+                pg_persisted: pgSuccess
+              };
+
+              fs.writeFileSync(dataPath, JSON.stringify(dbRecords, null, 2), 'utf-8');
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                unique_id: uniqueId,
+                person_id: personId,
+                pg_persisted: pgSuccess,
+                pg_error: pgError,
+                message: `Successfully saved AD narrative for ${md} > ${ad} into database table ad_narratives!`,
+                timestamp: nowIso
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 14. GET /api/ad-narratives - Fetch stored narratives from PostgreSQL & disk storage
+        if (url.startsWith('/api/ad-narratives') && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+
+          let personIdQuery = '';
+          try {
+            const parsedUrl = new URL(url, 'http://localhost:3000');
+            personIdQuery = parsedUrl.searchParams.get('person_id') || '';
+          } catch {}
+
+          // Check PostgreSQL first
+          let pgRows: any[] = [];
+          try {
+            const getPgConfig = () => {
+              if (process.env.DATABASE_URL) return { connectionString: process.env.DATABASE_URL };
+              return {
+                host: process.env.PGHOST || 'localhost',
+                port: parseInt(process.env.PGPORT || '5432', 10),
+                database: process.env.PGDATABASE || 'astro',
+                user: process.env.PGUSER || 'postgres',
+                password: process.env.PGPASSWORD || 'postgres'
+              };
+            };
+            const client = new pg.Client({ ...getPgConfig(), connectionTimeoutMillis: 1200 });
+            await client.connect();
+            const queryRes = personIdQuery
+              ? await client.query('SELECT * FROM ad_narratives WHERE person_id = $1 ORDER BY updated_at DESC;', [personIdQuery])
+              : await client.query('SELECT * FROM ad_narratives ORDER BY updated_at DESC;');
+            await client.end();
+            if (queryRes.rows && queryRes.rows.length > 0) {
+              pgRows = queryRes.rows;
+            }
+          } catch {}
+
+          // Fallback to local ad_narratives.json
+          const dataPath = path.resolve(__dirname, 'src/data/ad_narratives.json');
+          let fileRecords: any[] = [];
+          if (fs.existsSync(dataPath)) {
+            try {
+              const fileDb = JSON.parse(fs.readFileSync(dataPath, 'utf-8') || '{}');
+              fileRecords = Object.values(fileDb);
+              if (personIdQuery) {
+                fileRecords = fileRecords.filter((r: any) => r.person_id === personIdQuery);
+              }
+            } catch {}
+          }
+
+          const combined = pgRows.length > 0 ? pgRows : fileRecords;
+          res.statusCode = 200;
+          res.end(JSON.stringify({
+            success: true,
+            count: combined.length,
+            records: combined,
+            source: pgRows.length > 0 ? 'postgresql.ad_narratives' : 'ad_narratives.json'
+          }));
+          return;
+        }
+
         next();
       });
     }

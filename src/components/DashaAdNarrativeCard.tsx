@@ -229,8 +229,37 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
     } else if (cachedNarrative) {
       setNarrative(cachedNarrative);
       setEditableNarrative(cachedNarrative.narrative || '');
+    } else {
+      // Query server if not yet in browser storage
+      fetch(`/api/ad-narratives?person_id=${personId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.records && Array.isArray(data.records)) {
+            const match = data.records.find((r: any) => r.unique_id === uniqueId);
+            if (match) {
+              persistAdNarrativeRecord(match);
+              if (match.narrative) {
+                setEditableNarrative(match.narrative);
+                setNarrative({
+                  narrative: match.narrative,
+                  prompt: promptText || '',
+                  model: match.source_model || 'local_qwen',
+                  generated_at: match.updated_at
+                });
+              }
+              if (match.life_period) setLifePeriod(match.life_period);
+              if (match.primary_domains) {
+                setPrimaryDomains(Array.isArray(match.primary_domains) ? match.primary_domains : match.primary_domains.split(',').map((s: string) => s.trim()));
+              }
+              if (match.key_milestones) setKeyMilestones(match.key_milestones);
+              if (match.source_model) setSourceModel(match.source_model);
+              if (match.updated_at) setLastSavedAt(match.updated_at);
+            }
+          }
+        })
+        .catch(() => {});
     }
-  }, [uniqueId, cachedNarrative]);
+  }, [uniqueId, cachedNarrative, personId]);
 
   useEffect(() => {
     setPromptText(customPromptOverride || '');
@@ -285,15 +314,31 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
     persistAdNarrativeRecord(record);
     setLastSavedAt(nowIso);
 
-    // 2. Sync to backend API if live server is reachable
+    // 2. Sync to backend API (relative /api/ad-narratives on current server + apiBaseUrl)
     try {
-      const response = await fetch(`${apiBaseUrl}/api/ad-narratives`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-      });
-      if (!response.ok) {
-        // Backend table sync skipped or server offline - client store remains authoritative
+      const endpointsToTry = ['/api/ad-narratives'];
+      if (apiBaseUrl && apiBaseUrl !== '' && !endpointsToTry.includes(`${apiBaseUrl}/api/ad-narratives`)) {
+        endpointsToTry.push(`${apiBaseUrl}/api/ad-narratives`);
+      }
+
+      let synced = false;
+      for (const endpoint of endpointsToTry) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+          });
+          if (response.ok) {
+            synced = true;
+            break;
+          }
+        } catch {
+          // continue to next endpoint
+        }
+      }
+      if (!synced) {
+        // Local authoritative store already persisted in step 1
       }
     } catch {
       // Offline fallback: Client-side authoritative table record remains intact

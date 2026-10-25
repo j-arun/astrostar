@@ -41,6 +41,6 @@ CREATE TRIGGER trg_ad_narratives_updated_at
 COMMENT ON TABLE ad_narratives IS 'Stores 81 MD-AD synthesis narratives, life period tags, and domain milestones for LLM reasoning and diary recall';
 COMMENT ON COLUMN ad_narratives.unique_id IS 'Unique composite ID: {person_id}_{md}_{ad} e.g. 001ME_Venus_Ketu';
 COMMENT ON COLUMN ad_narratives.life_period IS '1 of 10 human life stages (Infancy, Early Childhood, School Age, Adolescence, Early Youth, Prime Adulthood, Mid Adulthood, Mature Adulthood, Senior Elder, Twilight)';
-COMMENT ON COLUMN ad_narratives.primary_domains IS 'Comma-separated multi-select life domains (Career, Finance, Health, Marriage, Children, Education, Relocation, Spiritual, Property, Legal)';
+COMMENT ON COLUMN ad_narratives.primary_domains IS 'Comma-separated multi-select life domains (Career, Finance, Health, Marriage, Children, Education, Relocation, Spiritual, Property, Legal, Enjoyment, Adulteration)';
 COMMENT ON COLUMN ad_narratives.key_milestones IS 'Concise bullet points or 1-2 sentence landmark summary of that AD';
 COMMENT ON COLUMN ad_narratives.narrative IS 'Unlimited CLOB/TEXT containing the detailed synthesis narrative';

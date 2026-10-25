@@ -58,7 +58,9 @@ export const PRIMARY_DOMAIN_OPTIONS = [
   'Relocation',
   'Spiritual',
   'Property',
-  'Legal'
+  'Legal',
+  'Enjoyment',
+  'Adulteration'
 ];
 
 export interface AdNarrativeDbRecord {

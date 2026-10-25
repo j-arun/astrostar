@@ -73,8 +73,7 @@ export default function App() {
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Collapsible section toggles for South Indian Chart Visualizer (4 Sections)
-  const [expandChartControls, setExpandChartControls] = useState<boolean>(true);
+  // Collapsible section toggles for South Indian Chart Visualizer (Sections 2, 3, 4)
   const [expandChartGrid, setExpandChartGrid] = useState<boolean>(true);
   const [expandPlacementsTable, setExpandPlacementsTable] = useState<boolean>(true);
   const [expandOverviewHighlights, setExpandOverviewHighlights] = useState<boolean>(true);
@@ -431,17 +430,7 @@ export default function App() {
                   <Layers className="w-3.5 h-3.5 text-amber-400" />
                   <span>Chart Visualizer Sections:</span>
                 </span>
-                <button
-                  onClick={() => setExpandChartControls(!expandChartControls)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                    expandChartControls
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
-                  }`}
-                >
-                  <span>1. Chart Selector</span>
-                  {expandChartControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </button>
+
                 <button
                   onClick={() => setExpandChartGrid(!expandChartGrid)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
@@ -478,71 +467,40 @@ export default function App() {
               </div>
             </div>
 
-            {/* SECTION 1: Chart Viewport & D1 / D9 Switcher */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm transition-all">
-              <div
-                onClick={() => setExpandChartControls(!expandChartControls)}
-                className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/40 select-none"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                    <Compass className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                      1. Chart Selector &amp; Viewport Mode
-                    </h3>
-                    <div className="text-[11px] text-slate-400">
-                      Currently viewing: <strong className="text-amber-300">{selectedChart === 'D1' ? 'D1 இராசி (Rashi Chart)' : 'D9 நவாம்சம் (Navamsha Chart)'}</strong>
-                    </div>
-                  </div>
+            {/* SECTION 1: 1. Chart Selector Ribbon */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Compass className="w-4 h-4" />
                 </div>
-
-                <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-                  {/* Chart selector toggle */}
-                  <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
-                    <button
-                      onClick={() => setSelectedChart('D1')}
-                      className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                        selectedChart === 'D1'
-                          ? 'bg-amber-500 text-slate-950 shadow'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      D1 இராசி (Rashi)
-                    </button>
-                    <button
-                      onClick={() => setSelectedChart('D9')}
-                      className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                        selectedChart === 'D9'
-                          ? 'bg-amber-500 text-slate-950 shadow'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      D9 நவாம்சம் (Navamsha)
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setExpandChartControls(!expandChartControls)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                    title={expandChartControls ? "Minimize Section 1" : "Expand Section 1"}
-                  >
-                    {expandChartControls ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                  1. Chart Selector
+                </h3>
               </div>
 
-              {expandChartControls && (
-                <div className="px-4 pb-3.5 pt-2 border-t border-slate-800/80 bg-slate-950/40 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-3">
-                  <p>
-                    Interactive 4x4 perimeter grid. House 1 is dynamically positioned at Lagna (<strong className="text-cyan-400">{selectedChart === 'D1' ? activeProfile.birth_lagna : 'Navamsha Lagna'}</strong>), numbering 1 to 12 clockwise following traditional South Indian astrology convention.
-                  </p>
-                  <span className="text-[11px] text-slate-500">
-                    Click title or chevron to collapse/expand
-                  </span>
-                </div>
-              )}
+              {/* Chart selector toggle */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button
+                  onClick={() => setSelectedChart('D1')}
+                  className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                    selectedChart === 'D1'
+                      ? 'bg-amber-500 text-slate-950 shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  D1 இராசி (Rashi)
+                </button>
+                <button
+                  onClick={() => setSelectedChart('D9')}
+                  className={`px-3 sm:px-4 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                    selectedChart === 'D9'
+                      ? 'bg-amber-500 text-slate-950 shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  D9 நவாம்சம் (Navamsha)
+                </button>
+              </div>
             </div>
 
             {/* SECTION 2: The South Indian 4x4 Grid */}

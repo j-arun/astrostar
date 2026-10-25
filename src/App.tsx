@@ -15,7 +15,9 @@ import {
   FileText,
   Home,
   Menu,
-  X
+  X,
+  GripVertical,
+  RotateCcw
 } from 'lucide-react';
 import {
   samplePersonMaster,
@@ -79,6 +81,58 @@ export default function App() {
 
   // Mobile sidebar drawer state
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+  // Resizable left navigation sidebar state (persistent in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('vedic_nav_sidebar_width');
+      return saved ? Math.min(Math.max(parseInt(saved, 10), 220), 520) : 280;
+    } catch {
+      return 280;
+    }
+  });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // Dragging event listeners for sidebar resize
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Direct X coordinate gives the width since sidebar is pinned to left edge
+      const newWidth = Math.min(Math.max(e.clientX, 220), 520);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      try {
+        localStorage.setItem('vedic_nav_sidebar_width', sidebarWidth.toString());
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging, sidebarWidth]);
+
+  const handleResetSidebarWidth = () => {
+    setSidebarWidth(280);
+    try {
+      localStorage.setItem('vedic_nav_sidebar_width', '280');
+    } catch {
+      // ignore
+    }
+  };
 
   // Active Native Profile (Directly loaded from authoritative store, no stale caching)
   const [activePersonId, setActivePersonId] = useState<string>('001ME');
@@ -196,23 +250,23 @@ export default function App() {
 
             <div className="h-5 w-px bg-slate-800 hidden sm:block" />
 
-            {/* Tamil Rasi for Vedic Engine with sphere/spear symbol */}
-            <div className="flex items-center gap-2.5">
+            {/* Om Muruga Horoscope Vedic Engine with sacred Vel spear & Om symbol */}
+            <div className="flex items-center gap-3">
               <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
                 title="Lord Muruga's Sacred Vel (Spear)"
               >
-                <span className="text-amber-400 font-bold text-base leading-none">ௐ</span>
+                <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
                 {/* Sacred Vel of Lord Murugan (Spear) */}
                 <svg
                   viewBox="0 0 24 24"
-                  className="w-4 h-4 text-amber-400 fill-current drop-shadow"
+                  className="w-5 h-5 text-amber-400 fill-current drop-shadow"
                 >
                   <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
                 </svg>
               </div>
-              <h1 className="text-sm sm:text-base font-bold tracking-tight text-white">
-                Tamil Rasi for Vedic Engine
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm">
+                Om Muruga Horoscope Vedic Engine
               </h1>
             </div>
           </div>
@@ -232,81 +286,126 @@ export default function App() {
 
       {/* Main Two-Column Layout (Left Navigation Menu + Right Content Workspace) */}
       <div className="flex-1 flex flex-col lg:flex-row w-full min-h-[calc(100vh-57px)]">
-        {/* Left-Hand Side Navigation Sidebar */}
+        {/* Left-Hand Side Navigation Sidebar (Draggable & Resizable) */}
         <aside
-          className={`lg:w-64 xl:w-72 flex-shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col transition-all z-40 ${
+          style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${sidebarWidth}px` : undefined }}
+          className={`flex-shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between z-30 transition-[width] ${
+            isDragging ? '!transition-none select-none' : ''
+          } ${
             sidebarOpen
-              ? 'block fixed inset-y-0 left-0 top-[57px] w-72 bg-slate-900 p-4 shadow-2xl overflow-y-auto'
-              : 'hidden lg:flex p-4 xl:p-5'
+              ? 'block fixed inset-y-0 left-0 top-[57px] w-72 bg-slate-900 p-4 shadow-2xl overflow-y-auto z-40'
+              : 'hidden lg:flex p-4 xl:p-5 overflow-y-auto'
           }`}
         >
-          {/* Active Native Profile Section */}
-          <div className="mb-5 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-amber-400" />
-                Active Native
-              </span>
+          <div>
+            {/* Active Native Profile Section */}
+            <div className="mb-5 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-amber-400" />
+                  Active Native
+                </span>
+              </div>
+              <select
+                value={activePersonId}
+                onChange={(e) => handleSelectPerson(e.target.value)}
+                className="w-full bg-slate-900 text-amber-300 font-bold text-xs border border-amber-500/40 hover:border-amber-400 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer transition shadow-inner"
+                title="Choose person ID from person_master table"
+              >
+                {availablePersonIds.map(id => {
+                  const pRecord = (storedPersonsData as any)[id];
+                  const pName = pRecord?.profile?.person_name;
+                  return (
+                    <option key={id} value={id} className="bg-slate-900 text-white font-medium">
+                      {id} {pName ? `(${pName.split(' ')[0]})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              {activeProfile && (
+                <div className="mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400 flex flex-col gap-0.5">
+                  <div className="font-semibold text-slate-200 truncate">{activeProfile.person_name}</div>
+                  <div className="text-[10px] text-slate-500">
+                    Lagna: <span className="text-amber-400/90">{activeProfile.birth_lagna || 'Sagittarius'}</span> | Rashi: <span className="text-amber-400/90">{activeProfile.birth_rashi || 'Scorpio'}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <select
-              value={activePersonId}
-              onChange={(e) => handleSelectPerson(e.target.value)}
-              className="w-full bg-slate-900 text-amber-300 font-bold text-xs border border-amber-500/40 hover:border-amber-400 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer transition shadow-inner"
-              title="Choose person ID from person_master table"
-            >
-              {availablePersonIds.map(id => {
-                const pRecord = (storedPersonsData as any)[id];
-                const pName = pRecord?.profile?.person_name;
+
+            {/* Left Navigation Menu Links */}
+            <div className="space-y-1.5">
+              <div className="px-2 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Navigation Menu
+              </div>
+              {[
+                { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
+                { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
+                { id: 'report', label: 'Voice Prediction Studio', icon: FileText },
+                { id: 'api', label: 'SAP Query Studio', icon: Server },
+              ].map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
                 return (
-                  <option key={id} value={id} className="bg-slate-900 text-white font-medium">
-                    {id} {pName ? `(${pName.split(' ')[0]})` : ''}
-                  </option>
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer ${
+                      isActive
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/80 border border-transparent hover:border-slate-700/50'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
+                    <span className="truncate">{tab.label}</span>
+                  </button>
                 );
               })}
-            </select>
-            {activeProfile && (
-              <div className="mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400 flex flex-col gap-0.5">
-                <div className="font-semibold text-slate-200 truncate">{activeProfile.person_name}</div>
-                <div className="text-[10px] text-slate-500">
-                  Lagna: <span className="text-amber-400/90">{activeProfile.birth_lagna || 'Sagittarius'}</span> | Rashi: <span className="text-amber-400/90">{activeProfile.birth_rashi || 'Scorpio'}</span>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
-          {/* Left Navigation Menu Links */}
-          <div className="flex-1 space-y-1.5">
-            <div className="px-2 pb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Navigation Menu
-            </div>
-            {[
-              { id: 'charts', label: 'South Indian Chart Visualizer', icon: Compass },
-              { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
-              { id: 'report', label: 'Voice Prediction Studio', icon: FileText },
-              { id: 'api', label: 'SAP Query Studio', icon: Server },
-            ].map(tab => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as any);
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition text-left cursor-pointer ${
-                    isActive
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/80 border border-transparent hover:border-slate-700/50'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
-                  <span className="truncate">{tab.label}</span>
-                </button>
-              );
-            })}
+          {/* Bottom Resize & Reset Indicator */}
+          <div className="pt-4 mt-6 border-t border-slate-800/60 hidden lg:flex items-center justify-between text-[10px] text-slate-500 select-none">
+            <span className="flex items-center gap-1 text-slate-400">
+              <GripVertical className="w-3 h-3 text-amber-400/70" />
+              <span>Drag edge to resize ({sidebarWidth}px)</span>
+            </span>
+            <button
+              onClick={handleResetSidebarWidth}
+              className="hover:text-amber-400 transition cursor-pointer p-1 rounded hover:bg-slate-800 flex items-center gap-1 text-[10px]"
+              title="Reset width to default 280px"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              <span>Reset</span>
+            </button>
           </div>
         </aside>
+
+        {/* Draggable & Resizable Vertical Divider Splitter */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDoubleClick={handleResetSidebarWidth}
+          className={`hidden lg:flex flex-col items-center justify-center w-2.5 -ml-1.5 cursor-col-resize z-40 select-none group relative transition-colors ${
+            isDragging ? 'bg-amber-500/30' : 'hover:bg-amber-500/20'
+          }`}
+          title="Click and drag to resize left navigation (Double-click to reset)"
+        >
+          {/* Subtle vertical indicator bar */}
+          <div
+            className={`w-1 rounded-full transition-all flex flex-col items-center justify-center gap-1 ${
+              isDragging
+                ? 'h-14 bg-amber-400 shadow-lg shadow-amber-400/50'
+                : 'h-8 bg-slate-700/80 group-hover:bg-amber-400/80 group-hover:h-12'
+            }`}
+          >
+            <GripVertical className={`w-2.5 h-2.5 ${isDragging ? 'text-slate-950' : 'text-slate-400 group-hover:text-slate-900'}`} />
+          </div>
+        </div>
 
         {/* Mobile backdrop */}
         {sidebarOpen && (

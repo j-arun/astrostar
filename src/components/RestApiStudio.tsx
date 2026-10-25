@@ -214,17 +214,6 @@ export default function RestApiStudio({
     };
   }, [apiBaseUrl, dashaPersonId]);
 
-  const handleExpandAll = () => {
-    setExpandQueryParams(true);
-    setExpandResponseStudio(true);
-    setExpandDashaReference(true);
-  };
-
-  const handleCollapseAll = () => {
-    setExpandQueryParams(false);
-    setExpandResponseStudio(false);
-    setExpandDashaReference(false);
-  };
 
   // Resolved transit timeline: always guarantees 9 Grahas Gochara timeline for all views
   const activeTransitTimeline = useMemo(() => {
@@ -566,22 +555,7 @@ print(prompt_markdown[:400])
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExpandAll}
-            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Expand all 3 sections"
-          >
-            Expand All
-          </button>
-          <button
-            onClick={handleCollapseAll}
-            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Collapse all 3 sections"
-          >
-            Collapse All
-          </button>
-        </div>
+
       </div>
 
       {/* SECTION 1: Query Parameters & REST Connection Form */}

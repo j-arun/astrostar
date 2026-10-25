@@ -261,15 +261,6 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [expandTimelineControls, setExpandTimelineControls] = useState<boolean>(true);
   const [expandTransitChart, setExpandTransitChart] = useState<boolean>(true);
 
-  const handleExpandAll = () => {
-    setExpandTimelineControls(true);
-    setExpandTransitChart(true);
-  };
-
-  const handleCollapseAll = () => {
-    setExpandTimelineControls(false);
-    setExpandTransitChart(false);
-  };
 
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>(() => {
     try {
@@ -1150,20 +1141,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={handleExpandAll}
-            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Expand all sections"
-          >
-            Expand All
-          </button>
-          <button
-            onClick={handleCollapseAll}
-            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition cursor-pointer"
-            title="Collapse all sections"
-          >
-            Collapse All
-          </button>
+
         </div>
       </div>
 

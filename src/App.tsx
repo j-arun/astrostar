@@ -232,10 +232,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Header */}
+      {/* Top Header */}
       <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-50">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Home button */}
+          {/* Left: Home button */}
+          <div className="flex items-center justify-start shrink-0">
             <button
               onClick={() => {
                 setActiveTab('charts');
@@ -247,39 +248,39 @@ export default function App() {
               <Home className="w-4 h-4 text-amber-400" />
               <span>Home</span>
             </button>
-
-            <div className="h-5 w-px bg-slate-800 hidden sm:block" />
-
-            {/* Om Muruga Horoscope Vedic Engine with sacred Vel spear & Om symbol */}
-            <div className="flex items-center gap-3">
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
-                title="Lord Muruga's Sacred Vel (Spear)"
-              >
-                <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
-                {/* Sacred Vel of Lord Murugan (Spear) */}
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-5 h-5 text-amber-400 fill-current drop-shadow"
-                >
-                  <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
-                </svg>
-              </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm">
-                Om Muruga Horoscope Vedic Engine
-              </h1>
-            </div>
           </div>
 
-          {/* Mobile hamburger menu toggle */}
-          <div className="flex items-center lg:hidden">
+          {/* Center: Om Muruga Rasi Koota Vedic Medai with sacred Vel spear & Om symbol (Center Aligned) */}
+          <div className="flex-1 flex items-center justify-center gap-2.5 sm:gap-3 text-center mx-auto min-w-0">
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
+              title="Lord Muruga's Sacred Vel (Spear)"
+            >
+              <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
+              {/* Sacred Vel of Lord Murugan (Spear) */}
+              <svg
+                viewBox="0 0 24 24"
+                className="w-5 h-5 text-amber-400 fill-current drop-shadow"
+              >
+                <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
+              </svg>
+            </div>
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate text-center">
+              Om Muruga Rasi Koota Vedic Medai
+            </h1>
+          </div>
+
+          {/* Right: Balance spacer on desktop, Hamburger on mobile */}
+          <div className="flex items-center justify-end shrink-0">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
+              className="lg:hidden p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
               title="Toggle Navigation Menu"
             >
               {sidebarOpen ? <X className="w-5 h-5 text-amber-400" /> : <Menu className="w-5 h-5 text-amber-400" />}
             </button>
+            {/* Desktop spacer matching Home button width for geometric centering */}
+            <div className="hidden lg:block w-[78px]" aria-hidden="true" />
           </div>
         </div>
       </header>
@@ -560,9 +561,8 @@ export default function App() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* SECTION 2: The South Indian 4x4 Grid */}
-              <div className={`${!expandPlacementsTable ? 'lg:col-span-12' : !expandChartGrid ? 'lg:col-span-12' : 'lg:col-span-7'} bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all`}>
+            {/* SECTION 2: The South Indian 4x4 Grid */}
+            <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
                 <div
                   onClick={() => setExpandChartGrid(!expandChartGrid)}
                   className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
@@ -607,15 +607,18 @@ export default function App() {
                           return (
                             <div
                               key={`${rowIdx}-${colIdx}`}
-                              className="col-span-2 row-span-2 bg-slate-900/60 border border-slate-800/80 rounded-lg flex flex-col items-center justify-center p-4 text-center"
+                              className="col-span-2 row-span-2 bg-slate-900/60 border border-slate-800/80 rounded-lg flex flex-col items-center justify-center p-4 text-center shadow-inner"
                             >
+                              <div className="text-emerald-400 font-extrabold text-xs uppercase tracking-wider mb-0.5">
+                                ஓம் முருகா
+                              </div>
                               <div className="text-amber-400 font-bold text-lg mb-1">
-                                {selectedChart === 'D1' ? 'இராசி சக்கரம்' : 'நவாம்ச சக்கரம்'}
+                                {selectedChart === 'D1' ? 'இராசி கட்டம்' : 'நவாம்ச சக்கரம்'}
                               </div>
                               <div className="text-xs font-semibold text-slate-300">
-                                {selectedChart === 'D1' ? 'D1 - Rashi Kundali' : 'D9 - Navamsha Kundali'}
+                                {selectedChart === 'D1' ? 'D1 - Rashi Koota Medai' : 'D9 - Navamsha Kundali'}
                               </div>
-                              <div className="text-[11px] text-slate-500 mt-2">
+                              <div className="text-[11px] text-slate-500 mt-2 font-mono">
                                 Lagna = House 1 &bull; Clockwise 1-12
                               </div>
                             </div>
@@ -700,8 +703,8 @@ export default function App() {
             )}
           </div>
 
-          {/* SECTION 3: Placements Detailed Sidebar Table */}
-          <div className={`${!expandChartGrid ? 'lg:col-span-12' : !expandPlacementsTable ? 'lg:col-span-12' : 'lg:col-span-5'} bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all`}>
+            {/* SECTION 3: Placements Detailed Table (Displayed cleanly below Section 2) */}
+            <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
             <div
               onClick={() => setExpandPlacementsTable(!expandPlacementsTable)}
               className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 border-b border-slate-800 select-none"
@@ -797,9 +800,8 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* SECTION 4: Native's Horoscope Overview Highlights */}

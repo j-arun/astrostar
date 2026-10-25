@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   GripVertical,
-  RotateCcw
+  RotateCcw,
+  Settings
 } from 'lucide-react';
 import {
   samplePersonMaster,
@@ -35,6 +36,7 @@ import {
 import storedPersonsData from './data/stored_persons.json';
 import RestApiStudio, { getStarLordShort } from './components/RestApiStudio';
 import { MonthlyTransitView } from './components/MonthlyTransitView';
+import SettingsStudio from './components/SettingsStudio';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
 // 0,0: Meenam (Pisces)   | 0,1: Mesham (Aries)   | 0,2: Rishabam (Taurus) | 0,3: Mithunam (Gemini)
@@ -69,7 +71,7 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api'>('charts');
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api' | 'settings'>('charts');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -327,6 +329,7 @@ export default function App() {
               { id: 'monthly', label: 'Monthly View', icon: CalendarDays },
               { id: 'report', label: 'Prediction Studio', icon: FileText },
               { id: 'api', label: 'Query Studio', icon: Server },
+              { id: 'settings', label: 'Settings', icon: Settings },
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -899,6 +902,15 @@ export default function App() {
         {/* TAB 3: DEDICATED FULL-PAGE VOICE & PREDICTIONS STUDIO (FITTING IN-APP, NO CLIPPING) */}
         {activeTab === 'report' && (
           <MonthlyTransitView key={`${activePersonId}-report`} personId={activePersonId} initialViewMode="report" />
+        )}
+
+        {/* TAB 4: SETTINGS & PROMPT ARCHITECTURE VERSIONING */}
+        {activeTab === 'settings' && (
+          <SettingsStudio
+            key={`${activePersonId}-settings`}
+            activePersonId={activePersonId}
+            onNavigateToReport={() => setActiveTab('report')}
+          />
         )}
       </main>
       </div>

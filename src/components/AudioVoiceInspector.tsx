@@ -46,7 +46,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog, getActivePromptVersion, PROMPT_VERSIONS } from '../services/llm/adapters';
 import {
   generateVedicPdfReport,
   generateVedicHtmlReport,
@@ -1844,13 +1844,16 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               >
                 <Code className="w-4 h-4 text-amber-400" />
                 <span>Vedic Prompt &amp; Reasoning Studio</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  {PROMPT_VERSIONS[getActivePromptVersion()]?.shortTitle || 'Prompt v2'}
+                </span>
                 {isPromptCustomized ? (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    ✏️ Editable Custom Override Active
+                    ✏️ Custom Override Active
                   </span>
                 ) : (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                    System Generated (Editable)
+                    System Canonical
                   </span>
                 )}
                 {showPromptStudio ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}

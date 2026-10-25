@@ -5,6 +5,21 @@ import { GEMINI_PRIMARY_MODEL } from './geminiModels';
 
 export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude_fable' | 'claude';
 
+export type AstroPromptVersion = 'v1' | 'v2';
+
+export interface PromptVersionDefinition {
+  id: AstroPromptVersion;
+  name: string;
+  shortTitle: string;
+  badge: string;
+  status: 'active' | 'deprecated';
+  isDefault: boolean;
+  refinementRemark: string;
+  astrologicalStance: string;
+  transitReferenceFrame: string;
+  keyPrinciples: string[];
+}
+
 export interface LLMProviderConfig {
   id: LLMProviderId;
   name: string;
@@ -131,6 +146,7 @@ export interface VedicHouseContext {
   selectedLmStudioModel?: string;
   lmStudioEndpoint?: string;
   customPromptOverride?: string;
+  promptVersion?: AstroPromptVersion;
   enableTimeout?: boolean; // false = Full Throttle / No Timeout (default), true = enforce timeout limit
   timeoutSeconds?: number; // Configured timeout in seconds when enableTimeout is true (e.g. 180, 300)
   flattenedNatalD1?: Array<{

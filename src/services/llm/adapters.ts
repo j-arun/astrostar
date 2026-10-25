@@ -8,7 +8,9 @@ import {
   LLMProviderId,
   VedicHouseContext,
   LLMThreePartNarrative,
-  ILLMAdapter
+  ILLMAdapter,
+  AstroPromptVersion,
+  PromptVersionDefinition
 } from './types';
 
 // Classical House Significations Matrix (Clean Unified English)
@@ -286,15 +288,96 @@ export function cleanEnglishSentence(sentence?: string): string {
   return res.replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim();
 }
 
-/**
- * Builds the canonical Vedic reasoning prompt based on the native's chart and active transit context
- */
-export function buildVedicPrompt(context: VedicHouseContext, providerName: string): string {
-  // If user provided a customized prompt override in the interactive studio, respect it directly!
-  if (context.customPromptOverride && context.customPromptOverride.trim().length > 0) {
-    return context.customPromptOverride;
-  }
+// Storage key for active prompt version (defaults to 'v2')
+export const PROMPT_VERSION_STORAGE_KEY = 'astro_prompt_version';
 
+export const PROMPT_VERSIONS: Record<AstroPromptVersion, PromptVersionDefinition> = {
+  v2: {
+    id: 'v2',
+    name: 'Prompt v2 (Classical Parashara)',
+    shortTitle: 'Prompt v2',
+    badge: 'Recommended • Classical Parashara',
+    status: 'active',
+    isDefault: true,
+    refinementRemark:
+      'Strict Vedic separation. Transits (Gochara) evaluated exclusively from Janma Rashi (Moon) to judge timing and karmic fruitfulness of the sky for doing karmas. Natal promise is fixed in D1/D9 from Lagna. Zero Lagna transit conflation.',
+    astrologicalStance: 'Pure Moon-Based Gochara (Janma Rashi Reference Frame)',
+    transitReferenceFrame: 'Strictly from Janma Rashi (Moon Sign)',
+    keyPrinciples: [
+      'Gochara transits evaluated exclusively with reference to the Moon sign (Janma Rashi).',
+      'Never estimate Lagna or Lagna house D1 chart house strength by using transits.',
+      'Transits judge what is currently possible against natal promise and how fruitful the cosmic sky is for performing karmas.',
+      'Planetary Karakatwas in transit evaluated through house position from Moon (e.g., Jupiter in 9th from Moon grants immense Guru Bala).',
+      'Vimshottari Dasha (MD / AD / PD) acts as the karmic sanction bridge between natal promise and transit execution.'
+    ]
+  },
+  v1: {
+    id: 'v1',
+    name: 'Prompt v1 (Legacy Hybrid)',
+    shortTitle: 'Prompt v1',
+    badge: 'Legacy • Deprecated',
+    status: 'deprecated',
+    isDefault: false,
+    refinementRemark:
+      'Legacy hybrid version that mixed transit positions relative to Lagna with natal predictions (Western astrological denotation). Deprecated due to un-Vedic Lagna-transit leakage.',
+    astrologicalStance: 'Hybrid (Mixed Lagna & Moon Transits)',
+    transitReferenceFrame: 'Conflated (Lagna House + Moon House)',
+    keyPrinciples: [
+      'Included transit house positions relative to Natal Lagna (e.g. "Saturn in 4th from Lagna").',
+      'Conflated transit impact with natal Lagna bhava condition (Western astrology influence).',
+      'Retained solely for historical benchmarking, comparison, and rollback audits.'
+    ]
+  }
+};
+
+/**
+ * Retrieves the currently active prompt version from localStorage ('v2' by default).
+ */
+export function getActivePromptVersion(): AstroPromptVersion {
+  if (typeof window === 'undefined') return 'v2';
+  try {
+    const saved = localStorage.getItem(PROMPT_VERSION_STORAGE_KEY);
+    if (saved === 'v1' || saved === 'v2') return saved;
+  } catch {
+    // fallback
+  }
+  return 'v2';
+}
+
+/**
+ * Persists the active prompt version to localStorage.
+ */
+export function setActivePromptVersion(version: AstroPromptVersion): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PROMPT_VERSION_STORAGE_KEY, version);
+  } catch (e) {
+    console.error('Failed to persist active prompt version:', e);
+  }
+}
+
+// Compact formatting helpers
+const formatDegreeCompact = (deg?: string): string => {
+  if (!deg) return '00°00\'';
+  const clean = deg.replace(/\s+/g, '');
+  const m = clean.match(/(\d+°\d+['']?)/);
+  return m ? m[1] : clean;
+};
+
+const formatNakshatraCompact = (nak?: string, pada?: number): string => {
+  if (!nak || nak === 'N/A') return 'N/A';
+  const cleanStar = nak.replace(/\s*\(.*?\)/g, '').trim();
+  return pada ? `${cleanStar} P${pada}` : cleanStar;
+};
+
+/**
+ * PROMPT V2 — Pure Classical Parashara Vedic Reasoning Engine
+ * Strict separation:
+ * - D1/D9 from Lagna: Natal Promise & inherent capacity only.
+ * - Gochara: Evaluated EXCLUSIVELY from Janma Rashi (Moon) to judge timing and cosmic fruitfulness for doing karmas.
+ * - Zero Lagna transit conflation.
+ */
+export function buildVedicPromptV2(context: VedicHouseContext, providerName: string): string {
   const bhavaInfo = context.houseNumber ? (BHAVA_NAMES[context.houseNumber] || {
     title: `House ${context.houseNumber}`,
     karakas: 'Planetary lords',
@@ -303,20 +386,6 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
 
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
   const cleanTargetSign = context.rashiName ? toCleanEnglishSign(context.rashiName) : '';
-
-  // Compact formatting helpers
-  const formatDegreeCompact = (deg?: string): string => {
-    if (!deg) return '00°00\'';
-    const clean = deg.replace(/\s+/g, '');
-    const m = clean.match(/(\d+°\d+['']?)/);
-    return m ? m[1] : clean;
-  };
-
-  const formatNakshatraCompact = (nak?: string, pada?: number): string => {
-    if (!nak || nak === 'N/A') return 'N/A';
-    const cleanStar = nak.replace(/\s*\(.*?\)/g, '').trim();
-    return pada ? `${cleanStar} P${pada}` : cleanStar;
-  };
 
   // 1. Flattened Natal D1 Placements (Compact)
   const natalD1Table = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
@@ -332,12 +401,11 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} — ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
     : 'Standard D9 alignments align with natal grid';
 
-  // 3. Complete All-Graha Gochara Transits (Reckoned STRICTLY from Janma Rashi / Moon)
+  // 3. Complete All-Graha Gochara Transits (STRICTLY FROM MOON / JANMA RASHI — NO LAGNA HOUSES)
   const allTransits = context.allTransitPlacements || [];
 
   const allTransitsTable = allTransits.length > 0
     ? allTransits.map(t => {
-        const aspectNote = t.aspects_target_house ? ` [Aspect to Target House: ${t.aspect_type}]` : '';
         const hMoon = t.house_from_moon || t.house_from_lagna;
         const motionLabel = t.motion_type === 'Vakra'
           ? `[VAKRA / RETROGRADE: ${t.motion_description || 'Unconventional, contrarian flow'}]`
@@ -345,7 +413,7 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
             ? `[ADISARA / ACCELERATED: ${t.motion_description || 'Impatient drive, pushing execution'}]`
             : '[Direct / Normal Motion]';
         const savBindus = t.sav_points ? ` [SAV: ${t.sav_points} Bindus]` : '';
-        return `  • ${toCleanEnglishPlanet(t.graha_key)} in ${toCleanEnglishSign(t.transit_rashi_name)} — House from Moon: ${hMoon}th House Gochara${savBindus} — Motion: ${motionLabel} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})${t.is_custom ? ' [Override]' : ''}${aspectNote}`;
+        return `  • ${toCleanEnglishPlanet(t.graha_key)} in ${toCleanEnglishSign(t.transit_rashi_name)} — House from Moon: ${hMoon}th House Gochara (Janma Rashi)${savBindus} — Motion: ${motionLabel} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})${t.is_custom ? ' [Override]' : ''}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
         ? context.transitOccupants.map(t => `  • ${toCleanEnglishPlanet(t.graha_key)} in ${cleanTargetSign} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})`).join('\n')
@@ -356,7 +424,7 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.monthlyMoonSpans.map(m => {
         const isTargetMatch = !context.isComprehensiveMonthly && context.houseNumber && m.houseNumber === context.houseNumber;
         const targetNote = isTargetMatch ? '===> [DIRECT TRANSIT OVER TARGET HOUSE] <===' : [1, 4, 5, 7, 9, 10, 11].includes(m.houseNumber) ? '[Angular/Trinal House]' : '';
-        return `  • Day ${m.startDay}–${m.endDay}: Moon in ${toCleanEnglishSign(m.signName)} (House ${m.houseNumber}) ${targetNote}`;
+        return `  • Day ${m.startDay}–${m.endDay}: Moon in ${toCleanEnglishSign(m.signName)} (Sign ${m.signIndex}) ${targetNote}`;
       }).join('\n')
     : '  • Moon completes one 360-degree zodiacal circuit through 12 signs (~2.25 days per sign)';
 
@@ -365,7 +433,7 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.monthlyIngressEvents.map(e => `  • ${cleanEnglishSentence(e)}`).join('\n')
     : '  • Major slow planets maintain sign stability; fast planets transition per ephemeris.';
 
-  // 6. Dasha Triad Delivery Report (Rule 5)
+  // 6. Dasha Triad Delivery Report
   const dashaDelivery = context.dashaDeliveryReport
     ? `Dasha Triad Delivery Index: ${(context.dashaDeliveryReport.overallIndex * 100).toFixed(0)}% (${context.dashaDeliveryReport.status})
   - MD Lord (${toCleanEnglishPlanet(context.activeDasha.mahadasha)}): ${context.dashaDeliveryReport.mdDignity} [Score: ${context.dashaDeliveryReport.mdScore.toFixed(2)}]
@@ -378,7 +446,7 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
     ? context.matchedRules.map(r => `• ${r.ruleName} (Weight: ${r.weight}): ${r.reason}`).join('\n')
     : '• Baseline house evaluation';
 
-  // 7. Advanced Parashara Payloads (Tara Bala, Chandra Bala, Ashtakavarga, Dasha Dossier, Karakas)
+  // 8. Advanced Parashara Payloads
   const janmaStarStr = context.natalJanmaStar
     ? `Native Janma Star: ${context.natalJanmaStar.nakshatra_name} (Pada ${context.natalJanmaStar.pada}) in ${toCleanEnglishSign(context.natalJanmaStar.rashi_name)}`
     : 'Native Janma Star: Anuradha (Pada 2) in Scorpio';
@@ -424,17 +492,28 @@ export function buildVedicPrompt(context: VedicHouseContext, providerName: strin
 
   const horizonSection = context.isComprehensiveMonthly
     ? `### Monthly Scope & Horizon — ${monthName} ${context.selectedYear}
+- Prompt Architecture: PROMPT V2 (CLASSICAL PARASHARA — STRICT MOON GOCHARA)
 - Focus: Comprehensive Full-Month Vedic Synthesis across All 12 Houses and Core Life Domains
-- Scope: Objective analysis of all current planetary transits across the entire zodiac (no default house prioritized)
+- Scope: Objective analysis of all current planetary transits across the entire zodiac
 - Domain Focus Filter: ${context.activeDomainFilter && context.activeDomainFilter !== 'all' ? `Focused on ${context.activeDomainFilter.toUpperCase()}` : 'All Core Life Domains (Career, Finance, Love, Health, Family)'}
-- Key Anchors: Double Transit Sanction (Saturn & Jupiter), Ingress Milestones, and Vimshottari Dasha Triad`
+- Key Anchors: Gochara from Moon (Janma Rashi), Double Transit Sanction (Saturn & Jupiter), Ingress Milestones, and Vimshottari Dasha Triad`
     : `### Target Horizon
+- Prompt Architecture: PROMPT V2 (CLASSICAL PARASHARA — STRICT MOON GOCHARA)
 - House: House ${context.houseNumber} (${bhavaInfo?.title || `House ${context.houseNumber}`}) — Sign: ${cleanTargetSign} ${context.isLagna ? '[Ascendant / Lagna]' : ''}
 - Month: ${monthName} ${context.selectedYear}
 - Activation: ${(context.activationScore ?? 0).toFixed(2)} / 1.00 (${context.isEventActive ? 'Event Activated' : 'Standard Baseline'})
 ${rulesStr}`;
 
   return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
+
+[PROMPT ARCHITECTURE: VERSION 2 — CLASSICAL PARASHARA PURE MOON-GOCHARA]
+================================================================================
+CRITICAL ASTROLOGICAL LAW:
+1. GOCHARA (TRANSIT) IS RECKONED EXCLUSIVELY FROM JANMA RASHI (MOON SIGN).
+2. NEVER ESTIMATE LAGNA OR LAGNA HOUSE D1 CHART STRENGTH USING TRANSITS.
+3. TRANSITS JUDGE WHAT IS CURRENTLY POSSIBLE AGAINST NATAL PROMISE (HOW FRUITFUL THE SKY IS FOR DOING KARMAS).
+4. NATAL PROMISE IS FIXED IN D1 AND D9 FROM LAGNA. DASHA TELLS WHO IS COMMISSIONED TO DELIVER.
+================================================================================
 
 ${horizonSection}
 
@@ -493,24 +572,28 @@ CRITICAL PLAIN TEXT REQUIREMENT FOR JSON PROSE FIELDS:
 - 'part1_probabilityAndScope', 'part2_financialAndResources', and 'part3_microTimingWindow' MUST BE PLAIN TEXT ENGLISH PROSE STRINGS (multi-paragraph).
 - NEVER output raw JSON objects, key-value pairs, or code blocks inside these fields. Write clean, direct English sentences.
 
-REASONING DIRECTIVES:
-1. STRICT REFERENCE-FRAME SEPARATION (NO BATTER CONFLATION):
-   - All Gochara transits MUST be interpreted relative to Janma Rashi (Moon sign: ${context.natalMoonSignName || 'Moon'}).
-   - NEVER treat a transit planet's position relative to Natal Lagna as a Gochara house! For example, if Moon is in Scorpio and a planet is transiting Cancer, it is in the 9th house from Moon (favorable Gochara), NOT the 8th house from Dhanu Lagna.
-   - The ONLY permissible bridge between Natal Lagna and Gochara is the active Dasha Lord (MD / AD / PD): evaluate the Dasha Lord's natal portfolio (which houses it rules from Lagna and what capacity it holds), and examine how that portfolio is delivered through its current Gochara house from the Moon.
-2. ASHTAKAVARGA BINDUS (SAV & BAV SANCTION):
-   - Transits do not deliver in a vacuum. Evaluate Sarvashtakavarga (SAV) bindus for each transiting sign:
-     * >= 28 to 32+ Bindus: Abundant environmental backing, effortless fruition, collective support.
-     * < 25 Bindus: Environmental friction, drainage, resistance, lack of support even if house placement seems benefic.
-3. MOTION DYNAMICS — VAKRA (RETROGRADE) & ADISARA (ACCELERATED):
-   - SATURN VAKRA (Retrograde): 'Vakra' in classical Sanskrit literally means behaving abnormal to the normal, defying expected conventional flow, stubborn non-conformist behavior, refusing to follow standard protocols, and settling karmic accounts through unorthodox, non-linear ways. When Saturn is Vakra in transit, evaluate how it executes its natal portfolio through an unconventional, contrarian modality.
-   - JUPITER ADISARA vs VAKRA vs NORMAL: Normal Jupiter offers gentle, wise counsel and organic expansion. Adisara (accelerated motion/leap into next sign) stops being a gentle adviser and forces the native to 'push and do the job' with impatient urgency. Vakra Jupiter triggers deep internal re-evaluation of beliefs, ethics, and mentors.
-4. TARA BALA & CHANDRA BALA:
+CLASSICAL PARASHARA REASONING DIRECTIVES (PROMPT V2):
+1. STRICT MOON-SIGN GOCHARA REFERENCE (ZERO LAGNA TRANSIT CONFLATION):
+   - All Gochara transits MUST be interpreted exclusively relative to Janma Rashi (Moon sign: ${context.natalMoonSignName || 'Moon'}).
+   - NEVER evaluate transits relative to the Ascendant / Lagna. You must NOT estimate Lagna or Lagna house D1 chart house strength by using transits.
+   - Any prediction claiming a transit is in a certain house from Lagna (e.g., 'Saturn is currently in 4th from Lagna so 4th house is obstructed' or 'Jupiter is transiting 8th from Lagna') is an un-Vedic Western distortion and strictly prohibited.
+   - Transits determine whether the current cosmic time is applicable and fruitful for performing karmas.
+2. NATAL PROMISE VS. TRANSIT FRUITFULNESS:
+   - Natal promise is fixed in the D1 and D9 charts (from Lagna): it defines the native's capacity, inherent yogas, and house rulerships.
+   - Transit from Moon judges what is currently possible against that natal promise: is the cosmic weather fruitful, receptive, or resisting?
+3. PLANETARY KARAKATWAS IN TRANSIT:
+   - Transiting planets act through their natural Karakatwas (significations) and their house distance from Janma Rashi (Moon).
+   - For example, if transiting Jupiter is strong and aspecting or occupying the 9th house from the Moon, it possesses supreme Guru Bala. Anything related to Jupiter's natural Karakatwas (wisdom, finance, expansion, higher knowledge, mentors) and the houses it rules in D1 has a significantly higher possibility of fruitful manifestation.
+4. VIMSHOTTARI DASHA (MD / AD / PD) AS AUTHORIZATION BRIDGE:
+   - Vimshottari Dasha lords represent WHO is sanctioned to release results.
+   - Evaluate the active Dasha lord's natal portfolio (which houses it rules from Lagna) and examine how fruitfully it delivers through its current Gochara position from the Moon.
+5. ASHTAKAVARGA & MOTION DYNAMICS:
+   - Sarvashtakavarga (SAV) points evaluate environmental backing (>=28 = effortless fruition; <25 = resistance).
+   - Vakra (Retrograde) indicates unconventional, non-linear settling of karmic debts.
+   - Adisara (Accelerated) indicates urgency and impatience to push execution.
+6. TARA BALA & CHANDRA BALA:
    - Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
    - Flag 8th house Moon transits from Janma Rashi (Chandrashtama) with clear cautions.
-5. DASHA LORDS' TRANSIT DELIVERY:
-   - Synthesize how Mahadasha, Antardasha, and Pratyantardasha lords deliver their natal agenda through their current Gochara positions from the Moon, modulated by their Vakra/Adisara motion and Ashtakavarga scores.
-   - Explicitly reference exact degrees and Nakshatra Padas of transiting Jupiter, Saturn, Mars, Venus, and Moon (< 5°-7° orbs).
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
@@ -631,6 +714,111 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     }
   ]
 }`;
+}
+
+/**
+ * PROMPT V1 — Legacy Hybrid Reasoning Engine (Deprecated)
+ * Mixed transit positions relative to Lagna with natal predictions (Western astrological denotation).
+ * Maintained strictly for benchmarking and rollback audits.
+ */
+export function buildVedicPromptV1(context: VedicHouseContext, providerName: string): string {
+  const bhavaInfo = context.houseNumber ? (BHAVA_NAMES[context.houseNumber] || {
+    title: `House ${context.houseNumber}`,
+    karakas: 'Planetary lords',
+    financialRole: 'General financial domain'
+  }) : null;
+
+  const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
+  const cleanTargetSign = context.rashiName ? toCleanEnglishSign(context.rashiName) : '';
+
+  // 1. Flattened Natal D1 Placements
+  const natalD1Table = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
+    ? context.flattenedNatalD1.map(p => 
+        `  ${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} H${p.house_number || '?'} — ${formatDegreeCompact(p.degree_sputa)} — ${formatNakshatraCompact(p.nakshatra_name, p.pada)}${p.is_retrograde ? ' [R]' : ''}`
+      ).join('\n')
+    : '  None (Empty Bhava)';
+
+  // 2. Flattened Natal D9 Navamsha
+  const natalD9Table = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
+    ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} — ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
+    : 'Standard D9 alignments align with natal grid';
+
+  // 3. Complete All-Graha Gochara Transits (Legacy Hybrid: Includes Lagna House & Moon House)
+  const allTransits = context.allTransitPlacements || [];
+
+  const allTransitsTable = allTransits.length > 0
+    ? allTransits.map(t => {
+        const aspectNote = t.aspects_target_house ? ` [Aspect to Target House: ${t.aspect_type}]` : '';
+        const hLagna = t.house_from_lagna;
+        const hMoon = t.house_from_moon;
+        const motionLabel = t.motion_type === 'Vakra'
+          ? `[VAKRA / RETROGRADE: ${t.motion_description || 'Unconventional flow'}]`
+          : t.motion_type === 'Adisara'
+            ? `[ADISARA / ACCELERATED: ${t.motion_description || 'Fast push'}]`
+            : '[Direct / Normal Motion]';
+        const savBindus = t.sav_points ? ` [SAV: ${t.sav_points} Bindus]` : '';
+        return `  • ${toCleanEnglishPlanet(t.graha_key)} in ${toCleanEnglishSign(t.transit_rashi_name)} — House from Lagna: H${hLagna} | House from Moon: H${hMoon}${savBindus} — Motion: ${motionLabel} — ${formatDegreeCompact(t.degree_sputa)} (${formatNakshatraCompact(t.nakshatra_name, t.pada)})${aspectNote}`;
+      }).join('\n')
+    : '  Full planetary Gochara transits computed per ephemeris.';
+
+  const dashaDelivery = context.dashaDeliveryReport
+    ? `Dasha Triad Delivery Index: ${(context.dashaDeliveryReport.overallIndex * 100).toFixed(0)}% (${context.dashaDeliveryReport.status})
+  - MD Lord (${toCleanEnglishPlanet(context.activeDasha.mahadasha)}): ${context.dashaDeliveryReport.mdDignity}
+  - AD Lord (${toCleanEnglishPlanet(context.activeDasha.antardasha)}): ${context.dashaDeliveryReport.adDignity}
+  - PD Lord (${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}): ${context.dashaDeliveryReport.pdDignity}`
+    : `Active Vimshottari: MD: ${toCleanEnglishPlanet(context.activeDasha.mahadasha)} > AD: ${toCleanEnglishPlanet(context.activeDasha.antardasha)} > PD: ${toCleanEnglishPlanet(context.activeDasha.pratyantardasha)}`;
+
+  return `You are a Vedic Astrologer synthesizing monthly transit activations.
+
+[PROMPT ARCHITECTURE: VERSION 1 — LEGACY HYBRID (DEPRECATED)]
+NOTICE: This version mixes transit positions relative to Lagna with natal predictions (Western astrological denotation).
+
+### Target Horizon
+- House: House ${context.houseNumber || 'General'} (${bhavaInfo?.title || 'General'}) — Sign: ${cleanTargetSign}
+- Month: ${monthName} ${context.selectedYear}
+
+### Natal Chart (Ascendant / Lagna Reference)
+Natal Lagna: ${context.natalLagnaSignName || 'Ascendant'}
+Natal Moon: ${context.natalMoonSignName || 'Moon Sign'}
+
+D1 Rasi Placements:
+${natalD1Table}
+
+D9 Navamsha:
+  ${natalD9Table}
+
+### Planetary Transits (Hybrid Reference: Lagna & Moon)
+${allTransitsTable}
+
+### Vimshottari Dasha Hierarchy
+${dashaDelivery}
+Active Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
+
+### User Inquiry
+"${context.userQuery || `Provide an astrological evaluation for ${monthName} ${context.selectedYear}`}"
+
+Synthesize analysis in plain English and return a raw JSON object with: summarySentence, natalPromiseVsTransitDelivery, part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow, peakDateRange, overallConfidence, supplementaryScenarios.`;
+}
+
+/**
+ * Builds the canonical Vedic reasoning prompt based on the native's chart and active transit context.
+ * Automatically selects the active prompt version (v2 Classical Parashara by default), unless overridden.
+ */
+export function buildVedicPrompt(
+  context: VedicHouseContext,
+  providerName: string,
+  versionOverride?: AstroPromptVersion
+): string {
+  // If user provided a customized prompt override in the interactive studio, respect it directly!
+  if (context.customPromptOverride && context.customPromptOverride.trim().length > 0) {
+    return context.customPromptOverride;
+  }
+
+  const activeVer = versionOverride || context.promptVersion || getActivePromptVersion();
+  if (activeVer === 'v1') {
+    return buildVedicPromptV1(context, providerName);
+  }
+  return buildVedicPromptV2(context, providerName);
 }
 
 /**

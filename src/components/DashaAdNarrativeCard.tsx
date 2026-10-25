@@ -835,8 +835,10 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
       ) : isGenerating ? (
         <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-5 text-center text-xs text-cyan-200 space-y-2">
           <Sparkles className="inline-block w-5 h-5 animate-spin text-cyan-400" />
-          <p className="font-semibold text-white">Synthesizing narrative from recorded PD landmark notes...</p>
-          <p className="text-[11px] text-cyan-300/80">Once generated, it will immediately display on screen and auto-commit to the AD_Narratives table.</p>
+          <p className="font-semibold text-white">Synthesizing narrative via Local LLM (Qwen)...</p>
+          <p className="text-[11px] text-cyan-300/80">
+            Running in the background with no time constraints. Once complete, it will display on screen and immediately commit to the AD_Narratives table.
+          </p>
         </div>
       ) : null}
     </div>

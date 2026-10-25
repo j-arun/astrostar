@@ -234,9 +234,9 @@ export default function App() {
       {/* Top Header */}
       {/* Top Header */}
       <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-50">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-          {/* Left: Home button + Om Muruga Horoscope Vedic Engine */}
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0 min-w-0">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3 grid grid-cols-3 items-center gap-2 sm:gap-4">
+          {/* Left: Home button + Sacred Emblem (Lord Muruga's Vel Spear & Om) */}
+          <div className="flex items-center justify-start gap-2.5 sm:gap-3.5 shrink-0">
             <button
               onClick={() => {
                 setActiveTab('charts');
@@ -251,29 +251,31 @@ export default function App() {
 
             <div className="h-5 w-px bg-slate-800 hidden sm:block" />
 
-            {/* Om Muruga Horoscope Vedic Engine with sacred Vel spear & Om symbol */}
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
-                title="Lord Muruga's Sacred Vel (Spear)"
+            {/* Sacred Emblem: Lord Muruga's Vel Spear + Om (Left-aligned) */}
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner shrink-0"
+              title="Lord Muruga's Sacred Vel (Spear)"
+            >
+              <span className="text-amber-400 font-bold text-base sm:text-lg leading-none">ௐ</span>
+              {/* Sacred Vel of Lord Murugan (Spear) */}
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 fill-current drop-shadow"
               >
-                <span className="text-amber-400 font-bold text-lg leading-none">ௐ</span>
-                {/* Sacred Vel of Lord Murugan (Spear) */}
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-5 h-5 text-amber-400 fill-current drop-shadow"
-                >
-                  <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
-                </svg>
-              </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate">
-                Om Muruga Horoscope Vedic Engine
-              </h1>
+                <path d="M12 2 C10 6 7 9 7 13 C7 15.5 9 17 11 17.5 L11 22 L13 22 L13 17.5 C15 17 17 15.5 17 13 C17 9 14 6 12 2 Z M12 5 C13 7.5 14.5 10 14.5 13 C14.5 14.5 13.5 15.5 12 15.8 C10.5 15.5 9.5 14.5 9.5 13 C9.5 10 11 7.5 12 5 Z" />
+              </svg>
             </div>
           </div>
 
+          {/* Center: ONLY Horoscope Engine (Center Aligned) */}
+          <div className="flex items-center justify-center text-center mx-auto min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate text-center">
+              Horoscope Engine
+            </h1>
+          </div>
+
           {/* Right: Active Native ID Dropdown + Mobile Hamburger */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center justify-end gap-2.5 shrink-0">
             {/* Active Native ID Dropdown (Only person icon and dropdown, no redundant labels) */}
             <div className="flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/50 hover:border-amber-400 rounded-xl px-2.5 py-1.5 transition shadow-inner">
               <User className="w-4 h-4 text-amber-400 shrink-0" />

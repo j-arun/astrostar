@@ -268,7 +268,7 @@ export default function App() {
 
           {/* Center: ONLY Horoscope Engine (Center Aligned) */}
           <div className="flex items-center justify-center text-center mx-auto min-w-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-emerald-400 drop-shadow-sm truncate text-center">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-amber-400 drop-shadow-sm truncate text-center">
               Horoscope Engine
             </h1>
           </div>

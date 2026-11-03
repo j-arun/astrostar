@@ -274,6 +274,10 @@ export function getDashaIntervalsForDateRange(
   endDateStr: string,
   profile?: any
 ): ActiveDashaIntervalRange[] {
+  if (!startDateStr || !endDateStr || startDateStr > endDateStr) {
+    return [];
+  }
+
   const fullTimeline = profile
     ? calculateVimshottariTimelineForProfile(profile)
     : getFullVimshottariTimeline();

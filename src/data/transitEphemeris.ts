@@ -364,6 +364,28 @@ export function generateClientTransitTimeline(
 ): TransitEphemerisPayload {
   const dStart = new Date(startDateStr);
   const dEnd = new Date(endDateStr);
+
+  if (isNaN(dStart.getTime()) || isNaN(dEnd.getTime()) || dStart >= dEnd) {
+    return {
+      requested_timeline: {
+        start_date: startDateStr || '2026-01-01',
+        end_date: endDateStr || '2028-01-01',
+        span_days: 0,
+        span_years: 0
+      },
+      natal_reference: {
+        natal_lagna_sign: RASHI_LIST_META[natalLagnaIdx - 1]?.eng || "Dhanus (Sagittarius)",
+        natal_lagna_index: natalLagnaIdx,
+        natal_rashi_sign: RASHI_LIST_META[natalRashiIdx - 1]?.eng || "Vrischigam (Scorpio)",
+        natal_rashi_index: natalRashiIdx
+      },
+      transit_snapshot_start: [],
+      transit_snapshot_end: [],
+      major_transits_timeline_count: 0,
+      major_transits_timeline: []
+    };
+  }
+
   const totalDays = Math.max(1, Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24)));
 
   const planets = ["Jupiter", "Saturn", "Mars", "Rahu", "Ketu", "Venus", "Mercury", "Sun", "Moon"];

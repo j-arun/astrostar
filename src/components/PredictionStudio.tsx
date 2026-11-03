@@ -77,25 +77,19 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     return meta ? meta.index : 8; // Default Vrischigam (Scorpio)
   }, [activeProfile]);
 
-  // 2. Continuous Timeline Controls (1 Year to 2 Years max)
+  // 2. Continuous Timeline Controls (Freely editable arbitrary date window)
   const [startDate, setStartDate] = useState<string>('2026-01-01');
-  const [endDate, setEndDate] = useState<string>('2028-01-01'); // 2 Years default
+  const [endDate, setEndDate] = useState<string>('2028-01-01'); // Default 2-year horizon
   const [timelineError, setTimelineError] = useState<string | null>(null);
 
   // Quick Preset Helper
   const applyPreset = (months: number) => {
     try {
       const dStart = new Date(startDate);
-      if (isNaN(dStart.getTime())) {
-        const fallbackStart = new Date('2026-01-01');
-        const dEnd = new Date(fallbackStart);
-        dEnd.setMonth(dEnd.getMonth() + months);
-        setStartDate('2026-01-01');
-        setEndDate(dEnd.toISOString().slice(0, 10));
-        return;
-      }
-      const dEnd = new Date(dStart);
+      const baseStart = isNaN(dStart.getTime()) ? new Date('2026-01-01') : dStart;
+      const dEnd = new Date(baseStart);
       dEnd.setMonth(dEnd.getMonth() + months);
+      setStartDate(baseStart.toISOString().slice(0, 10));
       setEndDate(dEnd.toISOString().slice(0, 10));
       setTimelineError(null);
     } catch {
@@ -103,23 +97,34 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     }
   };
 
-  // Validate Timeline Span (between 360 days and 731 days = 1 to 2 continuous years)
+  // Timeline Span calculation (supports any arbitrary custom date range)
   const timelineSpanDays = useMemo(() => {
-    const s = new Date(startDate).getTime();
-    const e = new Date(endDate).getTime();
-    if (isNaN(s) || isNaN(e) || s >= e) return 0;
-    return Math.round((e - s) / (1000 * 60 * 60 * 24));
+    try {
+      if (!startDate || !endDate) return 0;
+      const s = new Date(startDate).getTime();
+      const e = new Date(endDate).getTime();
+      if (isNaN(s) || isNaN(e) || s >= e) return 0;
+      return Math.round((e - s) / (1000 * 60 * 60 * 24));
+    } catch {
+      return 0;
+    }
   }, [startDate, endDate]);
 
   useEffect(() => {
-    if (timelineSpanDays < 360) {
-      setTimelineError('Timeline window must span at least 1 year (min 365 days).');
-    } else if (timelineSpanDays > 735) {
-      setTimelineError('Timeline window is capped at a continuous stretch of 2 years (max 731 days).');
+    if (!startDate || !endDate) {
+      setTimelineError('Please enter both start and end dates.');
     } else {
-      setTimelineError(null);
+      const s = new Date(startDate).getTime();
+      const e = new Date(endDate).getTime();
+      if (isNaN(s) || isNaN(e)) {
+        setTimelineError('Please enter valid dates.');
+      } else if (s >= e) {
+        setTimelineError('Start date must be before end date.');
+      } else {
+        setTimelineError(null);
+      }
     }
-  }, [timelineSpanDays]);
+  }, [startDate, endDate]);
 
   // 3. User Lived Experience Narratives (The LLM Test Framework)
   const [livedExperienceNarrative, setLivedExperienceNarrative] = useState<string>('');
@@ -131,20 +136,51 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [showDashaIntervals, setShowDashaIntervals] = useState<boolean>(true);
   const [showMajorTransits, setShowMajorTransits] = useState<boolean>(true);
 
-  // 4. Astrological Multi-Year Calculations
-  // Active Dasha intervals overlapping the selected 1-2 year window
+  // 4. Astrological Multi-Year Calculations (Safe with error boundaries)
+  // Active Dasha intervals overlapping the selected window
   const activeDashaIntervals: ActiveDashaIntervalRange[] = useMemo(() => {
-    return getDashaIntervalsForDateRange(startDate, endDate, activeProfile);
+    try {
+      if (!startDate || !endDate || startDate >= endDate) return [];
+      return getDashaIntervalsForDateRange(startDate, endDate, activeProfile);
+    } catch {
+      return [];
+    }
   }, [startDate, endDate, activeProfile]);
 
-  // Moon Transits: Calculate ALL ~312 ingresses across the continuous window (Packed into LLM prompt)
+  // Moon Transits: Calculate ALL ingresses across the window (Packed into LLM prompt)
   const multiYearMoonTransits: MultiYearMoonSpan[] = useMemo(() => {
-    return calculateMultiYearMoonSpans(startDate, endDate, natalLagnaIdx, natalRashiIdx);
+    try {
+      if (!startDate || !endDate || startDate >= endDate) return [];
+      return calculateMultiYearMoonSpans(startDate, endDate, natalLagnaIdx, natalRashiIdx);
+    } catch {
+      return [];
+    }
   }, [startDate, endDate, natalLagnaIdx, natalRashiIdx]);
 
-  // Major Planetary Transits: Sun, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu across 1-2 years
+  // Major Planetary Transits: Sun, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu
   const majorTransitsData = useMemo(() => {
-    return buildTransitEphemerisTimeline(startDate, endDate, natalLagnaIdx, natalRashiIdx);
+    try {
+      if (!startDate || !endDate || startDate >= endDate) {
+        return {
+          requested_timeline: { start_date: startDate || '', end_date: endDate || '', span_days: 0, span_years: 0 },
+          natal_reference: { natal_lagna_sign: '', natal_lagna_index: natalLagnaIdx, natal_rashi_sign: '', natal_rashi_index: natalRashiIdx },
+          transit_snapshot_start: [],
+          transit_snapshot_end: [],
+          major_transits_timeline_count: 0,
+          major_transits_timeline: []
+        };
+      }
+      return buildTransitEphemerisTimeline(startDate, endDate, natalLagnaIdx, natalRashiIdx);
+    } catch {
+      return {
+        requested_timeline: { start_date: startDate || '', end_date: endDate || '', span_days: 0, span_years: 0 },
+        natal_reference: { natal_lagna_sign: '', natal_lagna_index: natalLagnaIdx, natal_rashi_sign: '', natal_rashi_index: natalRashiIdx },
+        transit_snapshot_start: [],
+        transit_snapshot_end: [],
+        major_transits_timeline_count: 0,
+        major_transits_timeline: []
+      };
+    }
   }, [startDate, endDate, natalLagnaIdx, natalRashiIdx]);
 
   // Flattened D1 & D9 Natal Placements
@@ -301,34 +337,56 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         </div>
       </div>
 
-      {/* SECTION 1: TIMELINE CONTROLS (1 to 2 Years Continuous Stretch) */}
+      {/* SECTION 1: TIMELINE CONTROLS (Freely Editable Custom Date Range) */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div className="flex items-center gap-2 text-sm font-bold text-white">
             <Calendar className="w-4 h-4 text-amber-400" />
-            <span>Continuous Timeline Horizon (1 to 2 Years)</span>
+            <span>Continuous Timeline Horizon (Choose Any Custom Date Range)</span>
           </div>
 
           {/* Quick Presets */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-slate-400 uppercase font-semibold mr-1">Presets:</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-slate-400 uppercase font-semibold mr-1">Quick Presets:</span>
             <button
+              type="button"
+              onClick={() => applyPreset(6)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+            >
+              6 Months
+            </button>
+            <button
+              type="button"
               onClick={() => applyPreset(12)}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
             >
-              1 Year (12m)
+              1 Year
             </button>
             <button
+              type="button"
               onClick={() => applyPreset(18)}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
             >
-              1.5 Years (18m)
+              1.5 Years
             </button>
             <button
+              type="button"
               onClick={() => applyPreset(24)}
-              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer"
+              className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer"
             >
-              2 Years (Max 24m)
+              2 Years
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('2026-01-01');
+                setEndDate('2028-01-01');
+                setTimelineError(null);
+              }}
+              className="px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
+              title="Reset to 2026-01-01 to 2028-01-01"
+            >
+              Reset
             </button>
           </div>
         </div>
@@ -336,26 +394,28 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         {/* Date Inputs Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Start Date
+            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Start Date</span>
+              <span className="text-[10px] text-slate-500 font-mono">YYYY-MM-DD</span>
             </label>
             <input
               type="date"
               value={startDate}
               onChange={e => setStartDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400 transition"
+              className="w-full bg-slate-950 border border-slate-700 hover:border-amber-400 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none transition [color-scheme:dark] cursor-pointer"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              End Date (Max 2 Years from Start)
+            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>End Date</span>
+              <span className="text-[10px] text-slate-500 font-mono">YYYY-MM-DD</span>
             </label>
             <input
               type="date"
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-400 transition"
+              className="w-full bg-slate-950 border border-slate-700 hover:border-amber-400 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none transition [color-scheme:dark] cursor-pointer"
             />
           </div>
 

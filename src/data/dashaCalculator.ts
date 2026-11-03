@@ -256,3 +256,41 @@ export function getVimshottariDashaForDate(
     totalDays: 164
   };
 }
+
+export interface ActiveDashaIntervalRange {
+  mahadasha: string;
+  antardasha: string;
+  pratyantardasha: string;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Resolves all active Vimshottari Dasha intervals (MD, AD, and PD) that overlap
+ * with any user-selected 1-to-2 year continuous timeline window.
+ */
+export function getDashaIntervalsForDateRange(
+  startDateStr: string,
+  endDateStr: string,
+  profile?: any
+): ActiveDashaIntervalRange[] {
+  const fullTimeline = profile
+    ? calculateVimshottariTimelineForProfile(profile)
+    : getFullVimshottariTimeline();
+
+  const results: ActiveDashaIntervalRange[] = [];
+  for (const [md, ad, pd, s, e] of fullTimeline) {
+    // Check overlap: interval start <= range end && interval end >= range start
+    if (s <= endDateStr && e >= startDateStr) {
+      results.push({
+        mahadasha: md,
+        antardasha: ad,
+        pratyantardasha: pd,
+        startDate: s,
+        endDate: e
+      });
+    }
+  }
+  return results;
+}
+

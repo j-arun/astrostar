@@ -246,6 +246,41 @@ export interface VedicHouseContext {
     significations: string;
     outletImpact: string;
   };
+  // Prediction Studio Multi-Year Timeline & Ground-Truth Test Fields
+  isMultiYearPrediction?: boolean;
+  timelineStartDate?: string;
+  timelineEndDate?: string;
+  multiYearDashas?: Array<{
+    mahadasha: string;
+    antardasha: string;
+    pratyantardasha: string;
+    startDate: string;
+    endDate: string;
+  }>;
+  multiYearMoonTransits?: Array<{
+    startDate: string;
+    endDate: string;
+    signIndex: number;
+    signName: string;
+    signTamil?: string;
+    houseFromLagna: number;
+    houseFromMoon: number;
+    isChandrashtama: boolean;
+    nakshatraName?: string;
+    pada?: number;
+  }>;
+  multiYearMajorTransits?: Array<{
+    grahaKey: string;
+    grahaName: string;
+    signName: string;
+    startDate: string;
+    endDate: string;
+    houseFromLagna?: number;
+    houseFromMoon?: number;
+    isRetrograde?: boolean;
+  }>;
+  livedExperienceNarrative?: string;
+  currentEventsNarrative?: string;
   geminiApiKey?: string;
   geminiModel?: string;
   anthropicApiKey?: string;

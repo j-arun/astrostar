@@ -431,6 +431,9 @@ export function generateClientTransitTimeline(
   };
 }
 
+export const buildTransitEphemerisTimeline = generateClientTransitTimeline;
+
+
 export interface MonthlyMoonSpan {
   startDay: number;
   endDay: number;
@@ -499,3 +502,109 @@ export function calculateMonthlyMoonSpans(
 
   return spans;
 }
+
+export interface MultiYearMoonSpan {
+  startDate: string;
+  endDate: string;
+  signIndex: number;
+  signName: string;
+  signTamil: string;
+  houseFromLagna: number;
+  houseFromMoon: number;
+  isChandrashtama: boolean;
+  nakshatraName?: string;
+  pada?: number;
+}
+
+/**
+ * Calculates Moon's (Chandra's) continuous ~2.25-day sign progression across any 1 to 2 year window.
+ * For a 2-year window (730 days), this computes approximately 312 high-precision Moon sign ingresses.
+ * This precision payload is packed into the LLM prompt for acute micro-timing of life events.
+ */
+export function calculateMultiYearMoonSpans(
+  startDateStr: string,
+  endDateStr: string,
+  natalLagnaIdx: number = 9,
+  natalRashiIdx: number = 8
+): MultiYearMoonSpan[] {
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  const spans: MultiYearMoonSpan[] = [];
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
+    return spans;
+  }
+
+  let currentSpan: {
+    startDate: string;
+    endDate: string;
+    signIndex: number;
+    nakshatraName?: string;
+    pada?: number;
+  } | null = null;
+
+  // Step through by 12 hours (0.5 day) to accurately detect ingress boundaries across the 730 days
+  const stepMs = 12 * 60 * 60 * 1000;
+  for (let t = start.getTime(); t <= end.getTime(); t += stepMs) {
+    const dt = new Date(t);
+    const dateStr = dt.toISOString().slice(0, 10);
+    const pos = getGrahaTransitPosition('Moon', dt, natalLagnaIdx, natalRashiIdx);
+    const sIdx = pos.transit_rashi_index;
+
+    if (!currentSpan) {
+      currentSpan = {
+        startDate: dateStr,
+        endDate: dateStr,
+        signIndex: sIdx,
+        nakshatraName: pos.graha_pada_chara?.nakshatra_name,
+        pada: pos.graha_pada_chara?.pada
+      };
+    } else if (currentSpan.signIndex === sIdx) {
+      currentSpan.endDate = dateStr;
+    } else {
+      const meta = RASHI_LIST_META.find(r => r.index === currentSpan!.signIndex) || RASHI_LIST_META[0];
+      const hFromLagna = ((currentSpan!.signIndex - natalLagnaIdx + 12) % 12) + 1;
+      const hFromMoon = ((currentSpan!.signIndex - natalRashiIdx + 12) % 12) + 1;
+      spans.push({
+        startDate: currentSpan!.startDate,
+        endDate: currentSpan!.endDate,
+        signIndex: currentSpan!.signIndex,
+        signName: meta.eng.split(' ')[0],
+        signTamil: meta.tamil,
+        houseFromLagna: hFromLagna,
+        houseFromMoon: hFromMoon,
+        isChandrashtama: hFromMoon === 8,
+        nakshatraName: currentSpan!.nakshatraName,
+        pada: currentSpan!.pada
+      });
+      currentSpan = {
+        startDate: dateStr,
+        endDate: dateStr,
+        signIndex: sIdx,
+        nakshatraName: pos.graha_pada_chara?.nakshatra_name,
+        pada: pos.graha_pada_chara?.pada
+      };
+    }
+  }
+
+  if (currentSpan) {
+    const meta = RASHI_LIST_META.find(r => r.index === currentSpan.signIndex) || RASHI_LIST_META[0];
+    const hFromLagna = ((currentSpan.signIndex - natalLagnaIdx + 12) % 12) + 1;
+    const hFromMoon = ((currentSpan.signIndex - natalRashiIdx + 12) % 12) + 1;
+    spans.push({
+      startDate: currentSpan.startDate,
+      endDate: currentSpan.endDate,
+      signIndex: currentSpan.signIndex,
+      signName: meta.eng.split(' ')[0],
+      signTamil: meta.tamil,
+      houseFromLagna: hFromLagna,
+      houseFromMoon: hFromMoon,
+      isChandrashtama: hFromMoon === 8,
+      nakshatraName: currentSpan.nakshatraName,
+      pada: currentSpan.pada
+    });
+  }
+
+  return spans;
+}
+

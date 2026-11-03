@@ -490,7 +490,13 @@ export function buildVedicPromptV2(context: VedicHouseContext, providerName: str
   Outlet Impact: ${context.bhavaKarakaInfo.outletImpact}`
         : `Primary Karakas evaluate the real-world material and psychological manifestations of House ${context.houseNumber}.`);
 
-  const horizonSection = context.isComprehensiveMonthly
+  const horizonSection = context.isMultiYearPrediction
+    ? `### Continuous Multi-Year Timeline & Prediction Studio Horizon — ${context.timelineStartDate || 'Start'} to ${context.timelineEndDate || 'End'}
+- Prompt Architecture: PROMPT V2 (CLASSICAL PARASHARA — STRICT MOON GOCHARA & MULTI-PERIOD MATRIX)
+- Scope: Continuous 1 to 2-Year Astrological Timeline Window
+- Objective: Ground-truth test of LLM reasoning against native's lived experience narratives and transpired event footprints.
+- Resolution: Includes all active MD/AD/PDs, major planetary movements, and all ~312 complete Moon sign ingresses.`
+    : context.isComprehensiveMonthly
     ? `### Monthly Scope & Horizon — ${monthName} ${context.selectedYear}
 - Prompt Architecture: PROMPT V2 (CLASSICAL PARASHARA — STRICT MOON GOCHARA)
 - Focus: Comprehensive Full-Month Vedic Synthesis across All 12 Houses and Core Life Domains
@@ -504,7 +510,39 @@ export function buildVedicPromptV2(context: VedicHouseContext, providerName: str
 - Activation: ${(context.activationScore ?? 0).toFixed(2)} / 1.00 (${context.isEventActive ? 'Event Activated' : 'Standard Baseline'})
 ${rulesStr}`;
 
-  return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing monthly transit activations under classical Parashara and Jaimini principles.
+  const multiYearDashaSection = context.isMultiYearPrediction && context.multiYearDashas && context.multiYearDashas.length > 0
+    ? `
+### Active Vimshottari Dasha Intervals Spanning Window (${context.timelineStartDate} to ${context.timelineEndDate})
+| # | Window Period | Mahadasha (MD) | Antardasha (AD) | Pratyantardasha (PD) |
+|---|---|---|---|---|
+${context.multiYearDashas.map((d, idx) => `| ${idx + 1} | ${d.startDate} to ${d.endDate} | ${toCleanEnglishPlanet(d.mahadasha)} | ${toCleanEnglishPlanet(d.antardasha)} | ${toCleanEnglishPlanet(d.pratyantardasha)} |`).join('\n')}
+`
+    : '';
+
+  const multiYearMoonTransitsSection = context.isMultiYearPrediction && context.multiYearMoonTransits && context.multiYearMoonTransits.length > 0
+    ? `
+### Complete High-Resolution Moon (Chandra) Sign Ingresses (${context.multiYearMoonTransits.length} Entries across Continuous Timeline)
+[CRITICAL PARASHARA LAW: Moon transits govern the day-to-day fluctuations of the mind, emotional triggers, and exact fruition dates of karmic events. All ${context.multiYearMoonTransits.length} entries across the 1-2 year window are provided below so you can pinpoint acute timing windows for events such as visa stamping, passport renewal, institutional approvals, job offers, and travel.]
+| # | Date Window | Moon Sign | House from Janma Rashi (Moon) | House from Lagna | Nakshatra & Pada |
+|---|---|---|---|---|---|
+${context.multiYearMoonTransits.map((m, idx) => `| ${idx + 1} | ${m.startDate} to ${m.endDate} | ${m.signName} | House ${m.houseFromMoon} ${m.isChandrashtama ? '⚠️ CHANDRASHTAMA (8th)' : ''} | House ${m.houseFromLagna} | ${m.nakshatraName || 'N/A'} (Pada ${m.pada || 1}) |`).join('\n')}
+`
+    : '';
+
+  const livedExperienceSection = context.isMultiYearPrediction && (context.livedExperienceNarrative || context.currentEventsNarrative)
+    ? `
+### GROUND-TRUTH LIVED EXPERIENCE NARRATIVES (THE LLM TEST BENCHMARK)
+[CRITICAL INSTRUCTION: You are being rigorously tested against the native's ground truth lived reality. You MUST cross-reference the upcoming transits and Dasha periods with these past footprints to deduce realistic manifestation probabilities and timing rather than issuing generic textbook statements.]
+
+#### 1. Native's Past Lived Experience Footprint:
+"${context.livedExperienceNarrative?.trim() || 'No past narrative provided; calibrate from classical Parashara principles.'}"
+
+#### 2. Past Events & Native's Current Reality:
+"${context.currentEventsNarrative?.trim() || 'No current reality narrative provided.'}"
+`
+    : '';
+
+  return `You are an elite Vedic Astrologer & Data Reasoning Engine synthesizing ${context.isMultiYearPrediction ? 'multi-period continuous timeline' : 'monthly transit'} activations under classical Parashara and Jaimini principles.
 
 [PROMPT ARCHITECTURE: VERSION 2 — CLASSICAL PARASHARA PURE MOON-GOCHARA]
 ================================================================================
@@ -516,6 +554,7 @@ CRITICAL ASTROLOGICAL LAW:
 ================================================================================
 
 ${horizonSection}
+${livedExperienceSection}
 
 ### Natal Chart (Ascendant / Lagna Reference Frame — Promise & Capacity Only)
 [NATAL PROMISE ONLY — Evaluates native capacity, house lordships, and inherent yogas. DO NOT calculate transits from Lagna.]
@@ -528,7 +567,7 @@ ${natalD1Table}
 D9 Navamsha:
   ${natalD9Table}
 
-### Gochara Ephemeris — ${monthName} ${context.selectedYear} (STRICTLY Reckoned from Janma Rashi / Moon: ${context.natalMoonSignName || 'Moon Sign'})
+### Gochara Ephemeris — ${context.isMultiYearPrediction ? `${context.timelineStartDate} to ${context.timelineEndDate}` : `${monthName} ${context.selectedYear}`} (STRICTLY Reckoned from Janma Rashi / Moon: ${context.natalMoonSignName || 'Moon Sign'})
 [CRITICAL PARASHARA LAW: Transits (Gochara) MUST be read strictly relative to the Natal Moon sign (Janma Rashi), which governs the current timeline, mind (Manas), and environmental receptivity in the sky. Do NOT conflate Gochara with Natal Lagna. Natal Lagna represents the promised capacity (chapati batter); transit from Moon represents the environmental precipitation and timing (dosa batter). Do not mix them.]
 ${allTransitsTable}
 
@@ -538,6 +577,7 @@ ${taraBalaTable}
 
 ### Chandra Bala & Daily Progression
 ${chandraBalaTimelineStr}
+${multiYearMoonTransitsSection}
 
 ### Sarvashtakavarga (SAV)
 ${ashtakavargaStr}
@@ -549,15 +589,21 @@ ${ingressTable}
 ${dashaDelivery}
 Active PD Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
 ${dashaDossierStr}
+${multiYearDashaSection}
 
 ### Bhava Karakas & Significations
 ${karakaInfoStr}
 
 ### User Inquiry
-"${context.userQuery || (context.isComprehensiveMonthly ? `Provide a comprehensive monthly Vedic evaluation for ${monthName} ${context.selectedYear}` : `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`)}"
+"${context.userQuery || (context.isMultiYearPrediction ? `Synthesize a rigorous 1-to-2 year prediction from ${context.timelineStartDate} to ${context.timelineEndDate} testing against my lived experience footprint.` : context.isComprehensiveMonthly ? `Provide a comprehensive monthly Vedic evaluation for ${monthName} ${context.selectedYear}` : `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`)}"
 
 ### Task Instructions & Compact JSON Contract
-${context.isComprehensiveMonthly
+${context.isMultiYearPrediction
+  ? `Synthesize a comprehensive continuous Vedic prediction across the 1-to-2 year timeline (${context.timelineStartDate} to ${context.timelineEndDate}).
+Test your predictive reasoning against the native's supplied past lived experience and current events.
+Evaluate specific probabilities of real-world events (such as visa stamping, passport renewal, career milestones, institutional clearances, relocation, and financial restructuring).
+Utilize the ~312 Moon transits to isolate exact peak micro-timing windows across the continuous timeline.`
+  : context.isComprehensiveMonthly
   ? `Synthesize a comprehensive, multi-paragraph Vedic analysis for ${monthName} ${context.selectedYear} evaluating overarching Gochara transits across all 5 core life domains (career_job, love_romance, health_vitality, finance_wealth, family_home).`
   : `Synthesize a deep, multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).`}
 
@@ -847,7 +893,14 @@ function synthesizeAnalyticalVedicNarrative(
 
   // Derive micro-timing window dynamically from actual Moon transit spans if available!
   let peakDateRange = '';
-  if (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0) {
+  if (context.isMultiYearPrediction) {
+    if (context.multiYearMoonTransits && context.multiYearMoonTransits.length > 0) {
+      const favorableSpan = context.multiYearMoonTransits.find(m => !m.isChandrashtama && (m.houseFromMoon === 1 || m.houseFromMoon === 5 || m.houseFromMoon === 9 || m.houseFromMoon === 11)) || context.multiYearMoonTransits[0];
+      peakDateRange = `${favorableSpan.startDate} – ${favorableSpan.endDate}`;
+    } else {
+      peakDateRange = `${context.timelineStartDate || '2026-01-01'} to ${context.timelineEndDate || '2028-01-01'}`;
+    }
+  } else if (context.monthlyMoonSpans && context.monthlyMoonSpans.length > 0) {
     const directMoonSpan = !isMonthly ? context.monthlyMoonSpans.find(m => m.houseNumber === context.houseNumber) : undefined;
     const aspectingMoonSpan = !isMonthly ? context.monthlyMoonSpans.find(m => 
       ((m.houseNumber + 6 - 1) % 12) + 1 === context.houseNumber || // 7th aspect
@@ -868,7 +921,9 @@ function synthesizeAnalyticalVedicNarrative(
 
   const isTamil = context.language === 'ta';
 
-  const summary = isMonthly
+  const summary = context.isMultiYearPrediction
+    ? `Continuous 1-to-2 year Vedic timeline synthesis (${context.timelineStartDate || 'Start'} to ${context.timelineEndDate || 'End'}) evaluating multi-period Vimshottari Dashas and complete Moon transits calibrated against native's lived experience footprint.`
+    : isMonthly
     ? isTamil
       ? `${monthName} ${context.selectedYear}-க்கான விரிவான மாதாந்திர வேத ஜோதிட மதிப்பீடு: 12 பாவங்களின் கோச்சார கிரக நிலைகள் மற்றும் விம்சோத்தரி தசா புத்தி அமைப்பின் நேரடி பலன்கள்.`
       : `Comprehensive Vedic monthly synthesis for ${monthName} ${context.selectedYear} evaluating overarching Gochara transits across all 12 houses and Vimshottari Dasha Triad delivery capacity.`

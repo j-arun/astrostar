@@ -188,11 +188,13 @@ export function calculateGrahaDrishti(
 export interface MonthlyTransitViewProps {
   personId?: string;
   initialViewMode?: 'grid' | 'report';
+  onNavigateToPredictionStudio?: (context: VedicHouseContext) => void;
 }
 
 export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   personId = '001ME',
-  initialViewMode = 'grid'
+  initialViewMode = 'grid',
+  onNavigateToPredictionStudio
 }) => {
   // Current real-world date reference
   const realNow = useMemo(() => new Date(), []);
@@ -988,8 +990,14 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     };
 
     setInspectorHouseContext(ctx);
-    setViewMode('report');
     setIsInspectorOpen(false);
+
+    if (onNavigateToPredictionStudio && autoRun) {
+      onNavigateToPredictionStudio(ctx);
+      return;
+    }
+
+    setViewMode('report');
     if (autoRun) {
       setReportAutoRunTimestamp(Date.now());
     }

@@ -1211,15 +1211,15 @@ export async function generateAntardashaNarrative(
 
   // 3. Fallback: Synthesize grounded deterministic MD-AD analytical narrative from the feeds
   if (fallbackFeeds && fallbackFeeds.length > 0) {
-    const rated = fallbackFeeds.filter(f => (f.notes && f.notes.trim()) || f.evaluation_rating !== null);
+    const rated = fallbackFeeds.filter(f => f.notes && f.notes.trim().length > 0);
     if (rated.length === 0) {
-      throw new Error('This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.');
+      throw new Error('This Antardasha (MD-AD) has no saved PD notes to summarize yet.');
     }
 
     const narrativeLines = rated.map(f => {
       const ratingLabel = f.evaluation_rating === 10 ? 'favorable' : f.evaluation_rating === 0 ? 'challenging' : 'mixed';
-      const noteText = f.notes?.trim() || `Experienced ${ratingLabel} circumstances during ${f.pratyantardasha_lord} sub-period`;
-      return `[PD: ${f.pratyantardasha_lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}, evaluated as ${ratingLabel}).`;
+      const noteText = f.notes!.trim();
+      return `[PD: ${f.pratyantardasha_lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}${f.evaluation_rating !== null ? `, rated: ${ratingLabel}` : ''}).`;
     });
 
     const narrative = [

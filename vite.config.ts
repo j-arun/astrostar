@@ -791,18 +791,24 @@ function astroApiPlugin(): Plugin {
                 }
               }
 
-              const rated = feedsToUse.filter((f: any) => (f.notes && f.notes.trim()) || f.evaluation_rating !== null);
-              const narrativeLines = rated.length > 0
-                ? rated.map((f: any) => {
-                    const r = f.evaluation_rating;
-                    const rLabel = r === 10 ? 'positive' : r === 0 ? 'challenging' : 'favorable/mixed';
-                    const lord = f.pratyantardasha_lord || f.pratyantardasha_lord_pd || 'Graha';
-                    const noteText = (f.notes || '').trim() || `Experienced ${rLabel} circumstances during ${lord} sub-period`;
-                    return `[PD: ${lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}, evaluated as ${rLabel}).`;
-                  })
-                : [
-                    `[PD: ${ad}] Stable transit unfolding across the ${start} to ${end} window under ${md} Mahadasha influence.`
-                  ];
+              const humanNotes = feedsToUse.filter((f: any) => f.notes && typeof f.notes === 'string' && f.notes.trim().length > 0);
+              if (humanNotes.length === 0) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({
+                  success: false,
+                  error: 'This Antardasha (MD-AD) has no human-written PD notes to summarize yet. LLM only summarizes genuine human notes.'
+                }));
+                return;
+              }
+
+              const narrativeLines = humanNotes.map((f: any) => {
+                const lord = f.pratyantardasha_lord || f.pratyantardasha_lord_pd || 'Graha';
+                const noteText = f.notes.trim();
+                const r = f.evaluation_rating;
+                const rLabel = r === 10 ? 'positive' : r === 0 ? 'challenging' : r === 5 ? 'favorable/mixed' : null;
+                const ratingSuffix = rLabel ? `, evaluated as ${rLabel}` : '';
+                return `[PD: ${lord}] ${noteText.replace(/[.]+$/, '')}. (${f.start_date} to ${f.end_date}${ratingSuffix}).`;
+              });
 
               const narrative = [
                 `Chronological MD-AD Synthesis for ${md} - ${ad} (${start} to ${end}):`,

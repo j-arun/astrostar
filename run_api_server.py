@@ -869,20 +869,19 @@ def build_ad_narrative_prompt(
     end_date: str,
     observations: List[Dict[str, Any]]
 ) -> str:
-    rated_observations = [
+    human_observations = [
         obs for obs in observations
-        if (obs.get("notes") and str(obs["notes"]).strip())
-        or obs.get("evaluation_rating") is not None
+        if obs.get("notes") and str(obs["notes"]).strip()
     ]
-    if not rated_observations:
-        raise ValueError("This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.")
+    if not human_observations:
+        raise ValueError("This Antardasha (MD-AD) has no human-written PD notes to summarize yet.")
 
     rating_labels = {0: "BAD / DIFFICULT", 5: "AVERAGE / MIXED", 10: "GOOD / POSITIVE"}
     observation_lines = []
-    for obs in rated_observations:
+    for obs in human_observations:
         rating = obs.get("evaluation_rating")
         rating_desc = rating_labels.get(rating, "NOT RATED")
-        note = str(obs.get("notes") or "").strip() or "No landmark note recorded."
+        note = str(obs["notes"]).strip()
         lord = obs.get("pratyantardasha_lord") or obs.get("pratyantardasha_lord_pd") or "Graha"
         observation_lines.append(
             f"- {obs['start_date']} to {obs['end_date']} | "
@@ -960,21 +959,22 @@ def generate_ad_narrative(
     except Exception as e:
         print(f"Notice: Local Ollama unavailable ({e}), using deterministic synthesis")
 
-    # Fallback deterministic synthesizer from observations:
-    rated = [obs for obs in observations if (obs.get("notes") and str(obs["notes"]).strip()) or obs.get("evaluation_rating") is not None]
+    # Fallback deterministic synthesizer strictly from human-written observations:
+    rated = [obs for obs in observations if obs.get("notes") and str(obs["notes"]).strip()]
     if not rated:
-        raise ValueError("This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.")
+        raise ValueError("This Antardasha (MD-AD) has no human-written PD notes to summarize yet.")
 
     rating_labels = {0: "challenging", 5: "favorable/mixed", 10: "positive"}
     lines = []
     for obs in rated:
         r = obs.get("evaluation_rating")
-        r_label = rating_labels.get(r, "favorable")
+        r_label = rating_labels.get(r)
         lord = obs.get("pratyantardasha_lord") or obs.get("pratyantardasha_lord_pd") or "Graha"
         s = obs.get("start_date", "")
         e = obs.get("end_date", "")
-        note = (obs.get("notes") or "").strip() or f"Experienced {r_label} circumstances during {lord} sub-period"
-        lines.append(f"[PD: {lord}] {note.rstrip('.')}. ({s} to {e}, evaluated as {r_label}).")
+        note = str(obs.get("notes") or "").strip()
+        rating_suffix = f", evaluated as {r_label}" if r_label else ""
+        lines.append(f"[PD: {lord}] {note.rstrip('.')}. ({s} to {e}{rating_suffix}).")
 
     narrative = "\n".join([
         f"Chronological MD-AD Synthesis for {mahadasha_lord} - {antardasha_lord} ({start_date} to {end_date}):",

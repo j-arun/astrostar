@@ -321,21 +321,21 @@ export function buildAdNarrativePrompt(
   endDate: string,
   observations: PdFeedItem[]
 ): string {
-  const ratedObservations = observations.filter(
-    obs => (obs.notes && obs.notes.trim().length > 0) || obs.evaluation_rating !== null
+  const humanObservations = observations.filter(
+    obs => obs.notes && obs.notes.trim().length > 0
   );
 
-  if (ratedObservations.length === 0) {
-    throw new Error('This Antardasha (MD-AD) has no saved PD notes or ratings to summarize yet.');
+  if (humanObservations.length === 0) {
+    throw new Error('This Antardasha (MD-AD) has no human-written PD notes to summarize yet.');
   }
 
   const ratingLabels = { 0: 'BAD / DIFFICULT', 5: 'AVERAGE / MIXED', 10: 'GOOD / POSITIVE' };
   const lines: string[] = [];
 
-  for (const obs of ratedObservations) {
+  for (const obs of humanObservations) {
     const rating = obs.evaluation_rating;
     const ratingDesc = rating !== null ? ratingLabels[rating] : 'NOT RATED';
-    const note = (obs.notes || '').trim() || 'No landmark note recorded.';
+    const note = obs.notes!.trim();
     lines.push(
       `- ${obs.start_date} to ${obs.end_date} | PD: ${obs.pratyantardasha_lord} | Rating: ${rating ?? 'none'} (${ratingDesc}) | Note: ${note}`
     );
@@ -347,7 +347,7 @@ export function buildAdNarrativePrompt(
     `Antardasha Lord: ${antardashaLord} (MD-AD Window: ${startDate} to ${endDate})`,
     '',
     `Formatting & Attribution Requirement:`,
-    `- Prefix each chronological milestone or sentence with the explicit Pratyantardasha Lord tag, e.g. [PD: ${ratedObservations[0]?.pratyantardasha_lord || 'Lord'}] so the reader can attribute each event to its specific PD sub-period.`,
+    `- Prefix each chronological milestone or sentence with the explicit Pratyantardasha Lord tag, e.g. [PD: ${humanObservations[0]?.pratyantardasha_lord || 'Lord'}] so the reader can attribute each event to its specific PD sub-period.`,
     `- Keep the summary concise: 3 to 7 lines total.`,
     `- Ground solely on the recorded PD observations; do not invent events, feelings, or predictions.`,
     `- Rating interpretation: 0 = Bad/Difficult, 5 = Average/Mixed, 10 = Good/Positive.`,

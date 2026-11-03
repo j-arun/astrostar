@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Sparkles,
   Eye,
+  EyeOff,
   Save,
   RotateCcw,
   CheckCircle2,
@@ -206,7 +207,28 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
   const [promptText, setPromptText] = useState<string>(customPromptOverride || '');
   const [promptLoading, setPromptLoading] = useState<boolean>(false);
   const [promptSaved, setPromptSaved] = useState<boolean>(false);
-  const [isHighlightEnabled, setIsHighlightEnabled] = useState<boolean>(true);
+  const [isHighlightEnabled, setIsHighlightEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const saved = localStorage.getItem('astro_ad_highlights_enabled');
+      return saved === 'true'; // Default is strictly OFF (false)
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleHighlights = useCallback(() => {
+    setIsHighlightEnabled(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('astro_ad_highlights_enabled', next ? 'true' : 'false');
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
   const [selectedGrahaFilter, setSelectedGrahaFilter] = useState<GrahaLord | 'ALL'>('ALL');
   const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
 
@@ -537,15 +559,15 @@ export const DashaAdNarrativeCard: React.FC<DashaAdNarrativeCardProps> = ({
           {activeNarrativeText && !isEditingNarrative && (
             <button
               type="button"
-              onClick={() => setIsHighlightEnabled(!isHighlightEnabled)}
+              onClick={toggleHighlights}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition cursor-pointer ${
                 isHighlightEnabled
                   ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-200'
                   : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200'
               }`}
-              title="Toggle PD Planetary Color Highlighting"
+              title="Toggle PD Planetary Color Highlighting (Default: OFF)"
             >
-              <Palette className="h-3.5 w-3.5 text-indigo-400" />
+              <Palette className={`h-3.5 w-3.5 ${isHighlightEnabled ? 'text-indigo-400' : 'text-slate-400'}`} />
               <span>Highlights: {isHighlightEnabled ? 'ON' : 'OFF'}</span>
             </button>
           )}

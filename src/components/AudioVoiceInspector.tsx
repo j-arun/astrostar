@@ -70,6 +70,7 @@ interface AudioVoiceInspectorProps {
   onChangeProvider: (provider: LLMProviderId) => void;
   inlineView?: boolean;
   runTriggerTimestamp?: number;
+  onNarrativeGenerated?: (narrative: LLMThreePartNarrative) => void;
 }
 
 const SAMPLE_QUICK_CHIPS = [
@@ -125,7 +126,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   activeProvider,
   onChangeProvider,
   inlineView = false,
-  runTriggerTimestamp
+  runTriggerTimestamp,
+  onNarrativeGenerated
 }) => {
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [queryText, setQueryText] = useState<string>('');
@@ -323,6 +325,13 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         abortSignal: controller.signal
       });
       setNarrative(result);
+      if (onNarrativeGenerated) {
+        try {
+          onNarrativeGenerated(result);
+        } catch (callbackErr) {
+          console.warn('onNarrativeGenerated callback error:', callbackErr);
+        }
+      }
       if (context && result.connectionStatus !== 'cancelled') {
         saveReportToServerDocs(context, result).catch(() => {});
       }
@@ -2972,6 +2981,97 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                       </div>
                     );
                   })()}
+                </div>
+              )}
+
+              {/* PREDICTED POSSIBLE REAL-WORLD EVENTS (PF TRANSFER, VISA PAPERS DELAY, PASSPORT, APPROVALS) */}
+              {narrative.predictedSpecificEvents && narrative.predictedSpecificEvents.length > 0 && (
+                <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-lg animate-fadeIn">
+                  <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-3 gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                        <Sparkles className="w-4 h-4 fill-current" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <span>Predicted Possible Real-World Events &amp; Milestones</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            {narrative.predictedSpecificEvents.length} Forecasts
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          Specific administrative, financial, immigration, and career manifestations deduced from active Gochara transits and Dasha authorization.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {narrative.predictedSpecificEvents.map((ev, idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 space-y-3 transition shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                              {ev.categoryLabel || ev.category}
+                            </span>
+                            <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
+                              {ev.category === 'visa_immigration' && <span>🛂</span>}
+                              {ev.category === 'financial_pf' && <span>🏛️</span>}
+                              {ev.category === 'property_asset' && <span>📘</span>}
+                              {ev.category === 'career_job' && <span>💼</span>}
+                              <span>{ev.eventTitle}</span>
+                            </h5>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 border ${
+                            ev.likelihood.toLowerCase().includes('delay') || ev.likelihood.toLowerCase().includes('frictional')
+                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                              : ev.likelihood.toLowerCase().includes('high')
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                              : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                          }`}>
+                            {ev.likelihood}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-amber-300/90 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800/80">
+                          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Window: {ev.projectedWindow}</span>
+                        </div>
+
+                        <div className="space-y-1.5 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Astrological Trigger &amp; Mechanism:
+                            </span>
+                            <p className="text-slate-300 text-[11.5px] leading-relaxed">
+                              {ev.astrologicalTrigger}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Concrete Real-World Implication:
+                            </span>
+                            <p className="text-slate-200 text-[11.5px] font-medium leading-relaxed">
+                              {ev.concreteImplication}
+                            </p>
+                          </div>
+
+                          {ev.preventiveRemedy && (
+                            <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-200/90 text-[11px] leading-relaxed">
+                              <strong className="text-amber-400 block text-[10px] uppercase mb-0.5">
+                                Practical Strategic Action / Precaution:
+                              </strong>
+                              {ev.preventiveRemedy}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

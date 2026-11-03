@@ -382,6 +382,18 @@ export interface NatalPromiseVsTransitDelivery {
   synthesisVerdict: string;
 }
 
+export interface PredictedSpecificEvent {
+  category: 'visa_immigration' | 'financial_pf' | 'career_job' | 'property_asset' | 'legal_institutional';
+  categoryLabel: string;
+  eventTitle: string;
+  likelihood: 'High' | 'Moderate' | 'Frictional Delay' | 'Caution / Obstacle' | string;
+  likelihoodScore: number;
+  projectedWindow: string;
+  astrologicalTrigger: string;
+  concreteImplication: string;
+  preventiveRemedy: string;
+}
+
 export interface LLMThreePartNarrative {
   part1_probabilityAndScope: string;
   part2_financialAndResources: string;
@@ -398,6 +410,9 @@ export interface LLMThreePartNarrative {
 
   // Supplementary Cross-Domain Karakatwa Scenarios (Career, Love/Crush, Health, Finance, Family)
   supplementaryScenarios?: SupplementaryDomainScenario[];
+
+  // Predicted Specific Real-World Events & Timing (PF Transfer, Visa Papers Delay, Passport, Institutional Approvals)
+  predictedSpecificEvents?: PredictedSpecificEvent[];
 
   // Private LLM Verification & Wire Telemetry
   endpointUsed: string;

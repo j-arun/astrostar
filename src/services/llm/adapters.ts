@@ -758,6 +758,41 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
       },
       "detailedParagraphs": ["Paragraph 1: Domestic living sanctuary.", "Paragraph 2: Maternal harmony & family alignment."]
     }
+  ],
+  "predictedSpecificEvents": [
+    {
+      "category": "visa_immigration",
+      "categoryLabel": "Visa & Immigration Processing",
+      "eventTitle": "Visa Papers Processing & Potential Consular Delay",
+      "likelihood": "Frictional Delay followed by Clearance",
+      "likelihoodScore": 0.82,
+      "projectedWindow": "${monthName} DD – DD, ${context.selectedYear}",
+      "astrologicalTrigger": "Rahu/Saturn transits and 9th/12th foreign karaka alignments from Moon",
+      "concreteImplication": "Expect administrative scrutiny or delay in visa documentation before clearance.",
+      "preventiveRemedy": "Ensure certified paperwork is submitted well ahead of deadlines."
+    },
+    {
+      "category": "financial_pf",
+      "categoryLabel": "PF & Institutional Capital",
+      "eventTitle": "Provident Fund (PF) Transfer / 401(k) Rollover",
+      "likelihood": "High Probability",
+      "likelihoodScore": 0.88,
+      "projectedWindow": "${monthName} DD – DD, ${context.selectedYear}",
+      "astrologicalTrigger": "Jupiter transit trine to 11th Labha house and 2nd Dhana lord activation",
+      "concreteImplication": "Employer PF or retirement funds transfer will settle successfully.",
+      "preventiveRemedy": "Track online portal submissions early to prevent clerical hold-ups."
+    },
+    {
+      "category": "property_asset",
+      "categoryLabel": "Passport & Government Clearances",
+      "eventTitle": "Passport Renewal & Sovereign Identity Stamping",
+      "likelihood": "Favorable Clearance",
+      "likelihoodScore": 0.85,
+      "projectedWindow": "${monthName} DD – DD, ${context.selectedYear}",
+      "astrologicalTrigger": "Sun and Mercury in auspicious Gochara signs from Janma Rashi",
+      "concreteImplication": "Passport renewal and official verifications proceed smoothly.",
+      "preventiveRemedy": "Schedule appointment early during auspicious waxing Moon days."
+    }
   ]
 }`;
 }
@@ -1311,6 +1346,52 @@ ${part3}
       synthesisVerdict
     },
     supplementaryScenarios,
+    predictedSpecificEvents: [
+      {
+        category: 'visa_immigration',
+        categoryLabel: 'Visa & Immigration Processing',
+        eventTitle: 'Visa Papers Processing & Possible Consular Delay',
+        likelihood: 'Frictional Delay (4–8 Weeks) Followed by Clearance',
+        likelihoodScore: 0.82,
+        projectedWindow: peakDateRange,
+        astrologicalTrigger: 'Rahu-Ketu transit axis across 4th/10th houses from Janma Rashi + Saturn aspect to 9th/12th foreign houses.',
+        concreteImplication: 'Visa papers, petition adjudication, or consular stamping will encounter initial clerical administrative delay before eventual clearance.',
+        preventiveRemedy: 'Submit all certified employer documentation 60 days early; file official expedite requests with tracking.'
+      },
+      {
+        category: 'financial_pf',
+        categoryLabel: 'Provident Fund (PF) & Institutional Capital',
+        eventTitle: 'Provident Fund (PF) Transfer / 401(k) / Pension Rollover',
+        likelihood: 'High Probability',
+        likelihoodScore: 0.88,
+        projectedWindow: peakDateRange,
+        astrologicalTrigger: 'Jupiter aspect to 11th house (Labha Bhava) and Dhana (2nd) lord activation releasing institutional blocked capital.',
+        concreteImplication: 'Pending Provident Fund (EPFO) transfer or institutional retirement fund rollover moves toward successful disbursement into account.',
+        preventiveRemedy: 'Verify Universal Account Number (UAN) credentials and past employer digital signature approvals early.'
+      },
+      {
+        category: 'property_asset',
+        categoryLabel: 'Identity & Government Clearances',
+        eventTitle: 'Passport Renewal & Sovereign Identity Stamping',
+        likelihood: 'Favorable Clearance Window',
+        likelihoodScore: 0.85,
+        projectedWindow: peakDateRange,
+        astrologicalTrigger: 'Sun (Surya - Karaka for sovereign clearance and state identity) in harmonious transit from natal Moon.',
+        concreteImplication: 'Passport renewal, official police clearance verification, or national identification updates proceed with minimal friction.',
+        preventiveRemedy: 'Book appointment slots during auspicious waxing Moon (Shukla Paksha) days.'
+      },
+      {
+        category: 'career_job',
+        categoryLabel: 'Career & Contractual Milestone',
+        eventTitle: 'Formal Offer Letter / Organizational Role Shift',
+        likelihood: isHigh ? 'High Manifestation Window' : 'Preparatory Momentum',
+        likelihoodScore: computedConfidence,
+        projectedWindow: peakDateRange,
+        astrologicalTrigger: `Active Vimshottari Pratyantardasha Lord ${pdLord} activating vocational houses in D1/D9.`,
+        concreteImplication: 'Key organizational shifts, internal role reorganization, or formal appointment letter release becomes probable.',
+        preventiveRemedy: 'Consolidate accomplishments and maintain steady negotiation posture without premature exit declarations.'
+      }
+    ],
     rawRequestBody: {
       provider,
       mode: 'deterministic_analytical_engine',
@@ -1587,6 +1668,18 @@ function extractFieldsViaRegex(raw: string, fallback: import('./types').LLMThree
       try {
         const repaired = repairTruncatedJson(suppMatch[1]);
         result.supplementaryScenarios = JSON.parse(repaired);
+      } catch {}
+    }
+  }
+
+  const eventsMatch = raw.match(/"predictedSpecificEvents"\s*:\s*(\[[\s\S]*?\])/);
+  if (eventsMatch && eventsMatch[1]) {
+    try {
+      result.predictedSpecificEvents = JSON.parse(eventsMatch[1]);
+    } catch {
+      try {
+        const repaired = repairTruncatedJson(eventsMatch[1]);
+        result.predictedSpecificEvents = JSON.parse(repaired);
       } catch {}
     }
   }

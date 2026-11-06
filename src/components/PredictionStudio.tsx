@@ -1,26 +1,15 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Calendar,
-  CalendarDays,
   Sparkles,
   Compass,
   Layers,
   Clock,
-  ArrowRight,
   ShieldCheck,
-  CheckCircle2,
   AlertCircle,
   RotateCcw,
-  Sliders,
   ChevronDown,
   ChevronUp,
-  Bot,
-  Zap,
-  Info,
-  Send,
-  Eye,
-  EyeOff,
-  Filter,
   FileText,
   BookOpen,
   Copy,
@@ -28,16 +17,13 @@ import {
   Search,
   X,
   Download,
-  Bookmark,
-  ExternalLink,
-  HelpCircle
+  Eye
 } from 'lucide-react';
 import {
   LLMProviderId,
   LLM_PROVIDERS,
   VedicHouseContext,
-  LLMThreePartNarrative,
-  PredictedSpecificEvent
+  LLMThreePartNarrative
 } from '../services/llm/types';
 import { getPreferredGeminiModel } from '../services/llm/geminiModels';
 import { sampleNatalPlacements } from '../data/horoscopeData';
@@ -48,7 +34,6 @@ import {
 } from '../data/apiService';
 import storedPersonsData from '../data/stored_persons.json';
 import {
-  getGrahaTransitPosition,
   RASHI_LIST_META,
   calculateMultiYearMoonSpans,
   MultiYearMoonSpan,
@@ -56,15 +41,8 @@ import {
 } from '../data/transitEphemeris';
 import {
   getDashaIntervalsForDateRange,
-  ActiveDashaIntervalRange,
-  calculateVimshottariTimelineForProfile,
-  getFullVimshottariTimeline
+  ActiveDashaIntervalRange
 } from '../data/dashaCalculator';
-import {
-  computeSarvashtakavarga,
-  calculateTaraBala,
-  calculateChandraBala
-} from '../data/parasharaCalculations';
 import {
   toCleanEnglishSign,
   toCleanEnglishPlanet,
@@ -78,77 +56,28 @@ interface PredictionStudioProps {
   onClearIncomingContext?: () => void;
 }
 
-export interface DistinctAntardashaOption {
+function cleanLordName(name: string | undefined): string {
+  if (!name) return '';
+  return name.split('(')[0].trim().replace(/[^a-zA-Z0-9]/g, '');
+}
+
+export interface GenuineDatabaseAdNarrative {
   id: string;
+  unique_id?: string;
+  person_id: string;
   mahadasha: string;
   antardasha: string;
   startDate: string;
   endDate: string;
-  lifePeriod: string;
-  hasRecordedNotes: boolean;
-  notesSnippet?: string;
-  cachedNarrative?: string;
-  archetypeNarrative: string;
+  lifePeriod?: string;
+  primaryDomains?: string[];
+  keyMilestones?: string;
+  narrative: string;
+  sourceModel?: string;
+  updatedAt?: string;
 }
 
-/**
- * Curates realistic Parashara lived-experience archetypes for native 001ME
- * covering career, visa paperwork, passport renewals, PF settlements, and relocation.
- */
-function getArchetypeNarrative(md: string, ad: string, start: string, end: string): string {
-  const mdClean = toCleanEnglishPlanet(md).toLowerCase();
-  const adClean = toCleanEnglishPlanet(ad).toLowerCase();
-
-  if (mdClean.includes('saturn') && adClean.includes('ketu')) {
-    return 'Birth balance period with family support and initial health stabilization. Its where I took Birth in South India under Saturn Mahadasha balance.';
-  }
-  if (mdClean.includes('mercury') && adClean.includes('saturn')) {
-    return 'Career transition and relocation milestone. Faced visa paperwork processing hurdles, administrative consular scrutiny, and delayed PF transfer from prior employer before successful resolution and corporate onboarding.';
-  }
-  if (mdClean.includes('ketu') && adClean.includes('ketu')) {
-    return 'Period of contemplation and structural reset. Stepped back from earlier rigid corporate hierarchy; period of introspective recalibration, assessing independent foreign projects, and realigning professional purpose.';
-  }
-  if (mdClean.includes('venus') && adClean.includes('rahu')) {
-    return 'Expansion of overseas enterprise engagements and global delivery footprint. Addressed international passport renewals, consular visa renewals, institutional clearances, and substantial liquid compensation growth.';
-  }
-  if (mdClean.includes('venus') && adClean.includes('jupiter')) {
-    return 'High executive responsibility, wealth expansion, family milestone achievements, investments in stable assets, advisory roles, and financial structuring.';
-  }
-  if (mdClean.includes('venus') && adClean.includes('saturn')) {
-    return 'Active/Upcoming major transit intersection: Critical career consolidation, provident fund (PF) transfer/rollover, consular visa paper renewals, passport stamp validation, and property management.';
-  }
-  if (mdClean.includes('mercury') && adClean.includes('rahu')) {
-    return 'Higher technology education, ambitious vocational initiatives, academic excellence, exploring foreign work authorizations.';
-  }
-  if (mdClean.includes('mercury') && adClean.includes('jupiter')) {
-    return 'Initial entry into corporate tech industry, executive mentoring, establishing stable income streams and foundational savings.';
-  }
-
-  return `Period governed by ${toCleanEnglishPlanet(md)} authorization and ${toCleanEnglishPlanet(ad)} execution (${start} to ${end}). Focus on career advancement, regulatory paper compliance, financial settlements, and family stability.`;
-}
-
-function inferLifePeriodFromDate(startDateStr: string, birthYear = 1976): string {
-  try {
-    const match = startDateStr.match(/^(\d{4})/);
-    if (match) {
-      const year = parseInt(match[1], 10);
-      const age = Math.max(0, year - birthYear);
-      if (age <= 3) return 'Infancy (0–3)';
-      if (age <= 7) return 'Early Childhood (4–7)';
-      if (age <= 14) return 'School Age (8–14)';
-      if (age <= 19) return 'Adolescence (15–19)';
-      if (age <= 25) return 'Early Youth (20–25)';
-      if (age <= 35) return 'Prime Adulthood (26–35)';
-      if (age <= 48) return 'Mid Adulthood (36–48)';
-      if (age <= 60) return 'Mature Adulthood (49–60)';
-      if (age <= 72) return 'Senior Elder (61–72)';
-      return 'Twilight (73+)';
-    }
-  } catch {
-    // ignore
-  }
-  return 'Prime Adulthood (26–35)';
-}
+export type GenuineAntardashaRecord = GenuineDatabaseAdNarrative;
 
 export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   personId,
@@ -183,7 +112,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
 
   // 2. Continuous Timeline Controls (Freely editable arbitrary date window)
   const [startDate, setStartDate] = useState<string>('2026-01-01');
-  const [endDate, setEndDate] = useState<string>('2028-01-01'); // Default 2-year horizon
+  const [endDate, setEndDate] = useState<string>('2028-01-01');
   const [timelineError, setTimelineError] = useState<string | null>(null);
 
   // Quick Preset Helper
@@ -201,7 +130,6 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     }
   };
 
-  // Timeline Span calculation (supports any arbitrary custom date range)
   const timelineSpanDays = useMemo(() => {
     try {
       if (!startDate || !endDate) return 0;
@@ -236,7 +164,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [specificQuery, setSpecificQuery] = useState<string>('');
   const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('local_qwen');
 
-  // Interactive AD Picker State
+  // AD Narrative Picker Modal State
   const [showAdPickerModal, setShowAdPickerModal] = useState<boolean>(false);
   const [adSearchTerm, setAdSearchTerm] = useState<string>('');
   const [selectedMdFilter, setSelectedMdFilter] = useState<string>('all');
@@ -245,17 +173,12 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [showPromptModal, setShowPromptModal] = useState<boolean>(false);
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
   const [promptWrapLines, setPromptWrapLines] = useState<boolean>(true);
-  const [promptSearchQuery, setPromptSearchQuery] = useState<string>('');
-
-  // Synthesized Narrative State (Receives result from AudioVoiceInspector)
-  const [synthesizedNarrative, setSynthesizedNarrative] = useState<LLMThreePartNarrative | null>(null);
 
   // Collapsible cards state
   const [showDashaIntervals, setShowDashaIntervals] = useState<boolean>(true);
   const [showMajorTransits, setShowMajorTransits] = useState<boolean>(true);
 
-  // 4. Astrological Multi-Year Calculations (Safe with error boundaries)
-  // Active Dasha intervals overlapping the selected window
+  // 4. Astrological Multi-Year Calculations
   const activeDashaIntervals: ActiveDashaIntervalRange[] = useMemo(() => {
     try {
       if (!startDate || !endDate || startDate >= endDate) return [];
@@ -265,7 +188,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     }
   }, [startDate, endDate, activeProfile]);
 
-  // Moon Transits: Calculate ALL ingresses across the window (Packed into LLM prompt)
+  // Moon Transits: Calculate all ingresses across the window (Packed into LLM prompt)
   const multiYearMoonTransits: MultiYearMoonSpan[] = useMemo(() => {
     try {
       if (!startDate || !endDate || startDate >= endDate) return [];
@@ -332,99 +255,167 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
       }));
   }, [activeRecord]);
 
-  // Distinct Antardashas available for picking into Lived Experience
-  const distinctAntardashas = useMemo<DistinctAntardashaOption[]>(() => {
+  // 4b. Authentic Database AD Narratives (Loaded Strictly from Database / DB Storage)
+  const [dbAdNarratives, setDbAdNarratives] = useState<GenuineDatabaseAdNarrative[]>([]);
+  const [isLoadingDbNarratives, setIsLoadingDbNarratives] = useState<boolean>(false);
+
+  const loadAuthenticDbAdNarratives = useCallback(async () => {
+    setIsLoadingDbNarratives(true);
     try {
-      const fullTimeline = activeProfile
-        ? calculateVimshottariTimelineForProfile(activeProfile)
-        : getFullVimshottariTimeline();
+      const pId = activeProfile?.person_id || personId || '001ME';
+      const collected: GenuineDatabaseAdNarrative[] = [];
+      const seenIds = new Set<string>();
 
-      const map = new Map<string, { md: string; ad: string; start: string; end: string }>();
-      for (const [md, ad, , s, e] of fullTimeline) {
-        const key = `${md}::${ad}`;
-        if (!map.has(key)) {
-          map.set(key, { md, ad, start: s, end: e });
-        } else {
-          const ex = map.get(key)!;
-          if (s < ex.start) ex.start = s;
-          if (e > ex.end) ex.end = e;
-        }
-      }
-
-      const localEvaluations = loadLocalPdEvaluations();
-      const cachedNarratives = loadAntardashaNarratives();
-
-      let tableNarratives: Record<string, any> = {};
+      // 1. Fetch from REST API / PostgreSQL database endpoint
       try {
-        const raw = localStorage.getItem('astro_ad_narratives_table_store_v2');
-        if (raw) tableNarratives = JSON.parse(raw);
+        const res = await fetch(`/api/ad-narratives?person_id=${encodeURIComponent(pId)}`);
+        if (res.ok) {
+          const json = await res.json();
+          const records = Array.isArray(json.records) ? json.records : [];
+          for (const r of records) {
+            const text = (r.narrative || '').trim();
+            if (text.length > 0) {
+              const md = r.md || r.mahadasha || '';
+              const ad = r.ad || r.antardasha || '';
+              const id = r.unique_id || `${pId}_${cleanLordName(md)}_${cleanLordName(ad)}`;
+              if (!seenIds.has(id)) {
+                seenIds.add(id);
+                collected.push({
+                  id,
+                  unique_id: r.unique_id || id,
+                  person_id: r.person_id || pId,
+                  mahadasha: md,
+                  antardasha: ad,
+                  startDate: r.start_date || '',
+                  endDate: r.end_date || '',
+                  lifePeriod: r.life_period || '',
+                  primaryDomains: Array.isArray(r.primary_domains)
+                    ? r.primary_domains
+                    : (typeof r.primary_domains === 'string' ? r.primary_domains.split(',').map((s: string) => s.trim()).filter(Boolean) : []),
+                  keyMilestones: r.key_milestones || '',
+                  narrative: text,
+                  sourceModel: r.source_model || 'PostgreSQL DB',
+                  updatedAt: r.updated_at || ''
+                });
+              }
+            }
+          }
+        }
       } catch {}
 
-      const list: DistinctAntardashaOption[] = [];
-      for (const [key, val] of map.entries()) {
-        const { md, ad, start, end } = val;
-
-        // Check if user recorded notes for any PD under this AD
-        let matchedNote: string | undefined;
-        for (const rec of Object.values(localEvaluations)) {
-          if (!rec) continue;
-          const recMd = (rec.mahadasha_lord_md || '').toLowerCase();
-          const recAd = (rec.antardasha_lord_ad || '').toLowerCase();
-          if (
-            recMd.includes(md.split(' ')[0].toLowerCase()) &&
-            recAd.includes(ad.split(' ')[0].toLowerCase()) &&
-            rec.notes
-          ) {
-            matchedNote = rec.notes;
-            break;
+      // 2. Load from client-side DB table store (localStorage & sessionStorage)
+      for (const storage of [typeof window !== 'undefined' ? window.localStorage : null, typeof window !== 'undefined' ? window.sessionStorage : null]) {
+        try {
+          const raw = storage?.getItem('astro_ad_narratives_table_store_v2');
+          if (raw) {
+            const tableData = JSON.parse(raw);
+            for (const item of Object.values(tableData) as any[]) {
+              if (!item) continue;
+              const text = (item.narrative || '').trim();
+              if (text.length > 0) {
+                const itemPid = item.person_id || pId;
+                const md = item.md || item.mahadasha_lord_md || '';
+                const ad = item.ad || item.antardasha_lord_ad || '';
+                const id = item.unique_id || `${itemPid}_${cleanLordName(md)}_${cleanLordName(ad)}`;
+                if (!seenIds.has(id)) {
+                  seenIds.add(id);
+                  collected.push({
+                    id,
+                    unique_id: item.unique_id || id,
+                    person_id: itemPid,
+                    mahadasha: md,
+                    antardasha: ad,
+                    startDate: item.start_date || item.startDate || '',
+                    endDate: item.end_date || item.endDate || '',
+                    lifePeriod: item.life_period || '',
+                    primaryDomains: Array.isArray(item.primary_domains) ? item.primary_domains : [],
+                    keyMilestones: item.key_milestones || '',
+                    narrative: text,
+                    sourceModel: item.source_model || 'Direct DB Editor',
+                    updatedAt: item.updated_at || ''
+                  });
+                }
+              }
+            }
           }
-        }
-
-        // Check cached narratives
-        let matchedCachedNarrative: string | undefined;
-        for (const [cKey, cVal] of Object.entries(cachedNarratives)) {
-          if (cKey.includes(md) && cKey.includes(ad) && cVal?.narrative) {
-            matchedCachedNarrative = cVal.narrative;
-            break;
-          }
-        }
-        for (const rec of Object.values(tableNarratives)) {
-          if (
-            rec &&
-            rec.mahadasha_lord_md?.includes(md.split(' ')[0]) &&
-            rec.antardasha_lord_ad?.includes(ad.split(' ')[0]) &&
-            rec.narrative
-          ) {
-            matchedCachedNarrative = rec.narrative;
-            break;
-          }
-        }
-
-        const archetype = getArchetypeNarrative(md, ad, start, end);
-
-        list.push({
-          id: key,
-          mahadasha: md,
-          antardasha: ad,
-          startDate: start,
-          endDate: end,
-          lifePeriod: inferLifePeriodFromDate(start, 1976),
-          hasRecordedNotes: !!matchedNote,
-          notesSnippet: matchedNote,
-          cachedNarrative: matchedCachedNarrative,
-          archetypeNarrative: archetype
-        });
+        } catch {}
       }
 
-      return list;
-    } catch {
-      return [];
-    }
-  }, [activeProfile]);
+      // 3. Load from client cached narratives (astro_ad_narratives_v1)
+      try {
+        const cached = loadAntardashaNarratives();
+        for (const [key, val] of Object.entries(cached)) {
+          if (!val || !val.narrative || val.narrative.trim().length === 0) continue;
+          try {
+            const parsedKey = JSON.parse(key);
+            const [keyPid, keyMd, keyAd, keyStart, keyEnd] = Array.isArray(parsedKey) ? parsedKey : [];
+            const id = `${keyPid || pId}_${cleanLordName(keyMd)}_${cleanLordName(keyAd)}`;
+            if (!seenIds.has(id)) {
+              seenIds.add(id);
+              collected.push({
+                id,
+                unique_id: id,
+                person_id: keyPid || pId,
+                mahadasha: keyMd || '',
+                antardasha: keyAd || '',
+                startDate: keyStart || '',
+                endDate: keyEnd || '',
+                narrative: val.narrative.trim(),
+                sourceModel: val.model || 'Cached DB Narrative',
+                updatedAt: val.generated_at || ''
+              });
+            }
+          } catch {}
+        }
+      } catch {}
 
-  // Filtered ADs for Picker
+      // 4. Stored dasha notes fallback (from dasha_notes.json / stored_dasha_notes.json)
+      try {
+        const evaluations = loadLocalPdEvaluations();
+        for (const rec of Object.values(evaluations)) {
+          if (!rec || !rec.notes || rec.notes.trim().length === 0) continue;
+          const id = `${pId}_${cleanLordName(rec.mahadasha_lord_md)}_${cleanLordName(rec.antardasha_lord_ad)}`;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            collected.push({
+              id,
+              unique_id: id,
+              person_id: pId,
+              mahadasha: rec.mahadasha_lord_md,
+              antardasha: rec.antardasha_lord_ad,
+              startDate: rec.start_date,
+              endDate: rec.end_date,
+              narrative: rec.notes.trim(),
+              sourceModel: 'Recorded DB Notes',
+              updatedAt: ''
+            });
+          }
+        }
+      } catch {}
+
+      // Sort by startDate
+      collected.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      setDbAdNarratives(collected);
+    } finally {
+      setIsLoadingDbNarratives(false);
+    }
+  }, [activeProfile, personId]);
+
+  // Load database narratives on mount or profile change
+  useEffect(() => {
+    loadAuthenticDbAdNarratives();
+  }, [loadAuthenticDbAdNarratives]);
+
+  // Reload when opening modal to capture any newly saved narratives
+  useEffect(() => {
+    if (showAdPickerModal) {
+      loadAuthenticDbAdNarratives();
+    }
+  }, [showAdPickerModal, loadAuthenticDbAdNarratives]);
+
+  // Filtered list for the AD picker modal - strictly based on database records
   const filteredAntardashas = useMemo(() => {
-    return distinctAntardashas.filter(item => {
+    return dbAdNarratives.filter(item => {
       const matchesMd =
         selectedMdFilter === 'all' ||
         item.mahadasha.toLowerCase().includes(selectedMdFilter.toLowerCase());
@@ -436,28 +427,27 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         item.antardasha.toLowerCase().includes(searchLower) ||
         item.startDate.includes(searchLower) ||
         item.endDate.includes(searchLower) ||
-        item.archetypeNarrative.toLowerCase().includes(searchLower) ||
-        (item.notesSnippet && item.notesSnippet.toLowerCase().includes(searchLower));
+        (item.keyMilestones && item.keyMilestones.toLowerCase().includes(searchLower)) ||
+        (item.lifePeriod && item.lifePeriod.toLowerCase().includes(searchLower)) ||
+        (item.narrative && item.narrative.toLowerCase().includes(searchLower));
 
       return matchesMd && matchesSearch;
     });
-  }, [distinctAntardashas, selectedMdFilter, adSearchTerm]);
+  }, [dbAdNarratives, selectedMdFilter, adSearchTerm]);
 
-  // Insert AD Narrative into Lived Experience
-  const handleInsertAdNarrative = (item: DistinctAntardashaOption, mode: 'replace' | 'append') => {
-    const formatted = `[${toCleanEnglishPlanet(item.mahadasha)} MD / ${toCleanEnglishPlanet(item.antardasha)} AD (${item.startDate} to ${item.endDate})]: ${
-      item.notesSnippet ? `${item.notesSnippet} ` : ''
-    }${item.archetypeNarrative}`;
+  // Insert AD Narrative into Lived Experience (verbatim user narrative, completely untouched)
+  const handleInsertAdNarrative = (item: GenuineDatabaseAdNarrative, mode: 'replace' | 'append') => {
+    const content = item.narrative;
 
     if (mode === 'replace') {
-      setLivedExperienceNarrative(formatted);
+      setLivedExperienceNarrative(content);
     } else {
-      setLivedExperienceNarrative(prev => (prev.trim() ? `${prev.trim()}\n\n${formatted}` : formatted));
+      setLivedExperienceNarrative(prev => (prev.trim() ? `${prev.trim()}\n\n${content}` : content));
     }
     setShowAdPickerModal(false);
   };
 
-  // 5. Active Execution Context (Multi-Year Prediction Context)
+  // 5. Active Execution Context Builder
   const buildCurrentVedicContext = (): VedicHouseContext => {
     const primaryDasha = activeDashaIntervals[0] || {
       mahadasha: 'Venus (Sukra)',
@@ -527,7 +517,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [autoRunTriggerTimestamp, setAutoRunTriggerTimestamp] = useState<number | undefined>(undefined);
   const bottomReportRef = useRef<HTMLDivElement>(null);
 
-  // If an incoming context arrives from Monthly View ("Send Prompt to LLM"), display it at bottom
+  // If incoming context arrives from Monthly View ("Send Prompt to LLM"), display it at bottom
   useEffect(() => {
     if (incomingContext) {
       setActiveExecutionContext(incomingContext);
@@ -538,7 +528,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     }
   }, [incomingContext]);
 
-  // Synthesize Trigger: Bundles the 1-2 year timeline, lived narratives, ~312 Moon transits, and major transits
+  // Synthesize Trigger
   const handleSynthesizeMultiYear = () => {
     if (timelineError) return;
 
@@ -551,7 +541,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     }, 250);
   };
 
-  // Complete Live Prompt string for Inspector Modal
+  // Complete Raw Prompt string for Inspector Modal
   const fullPromptPayload = useMemo(() => {
     try {
       const ctx = activeExecutionContext || buildCurrentVedicContext();
@@ -575,7 +565,6 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     flattenedD9
   ]);
 
-  // Prompt stats
   const promptStats = useMemo(() => {
     const chars = fullPromptPayload.length;
     const words = fullPromptPayload.trim() ? fullPromptPayload.trim().split(/\s+/).length : 0;
@@ -599,81 +588,12 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vedic_astrological_prompt_${startDate}_to_${endDate}.txt`;
+    a.download = `vedic_prompt_${startDate}_to_${endDate}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-
-  // Foresight events for selected horizon (Dedicated section at bottom of screen)
-  const activePredictedEvents: PredictedSpecificEvent[] = useMemo(() => {
-    if (synthesizedNarrative?.predictedSpecificEvents && synthesizedNarrative.predictedSpecificEvents.length > 0) {
-      return synthesizedNarrative.predictedSpecificEvents;
-    }
-
-    // Default authentic Parashara foresight deduced from active horizon & Gochara
-    const sYear = startDate ? startDate.slice(0, 4) : '2026';
-    const eYear = endDate ? endDate.slice(0, 4) : '2028';
-
-    return [
-      {
-        category: 'visa_immigration',
-        categoryLabel: 'Visa & Consular Processing',
-        eventTitle: 'Visa Papers Processing & Potential Consular Delay',
-        likelihood: 'Frictional Delay followed by Clearance',
-        likelihoodScore: 0.82,
-        projectedWindow: `August ${sYear} – November ${sYear}`,
-        astrologicalTrigger: 'Rahu in 4th/Saturn transit 8th/9th aspect from Janma Rashi (Scorpio Moon)',
-        concreteImplication: 'Expect initial administrative scrutiny or clerical hold-ups on visa paperwork petitions before final stamp endorsement.',
-        preventiveRemedy: 'Submit certified employer letters, tax filings, and petitions 60 days before deadlines. Avoid scheduling consular travel during Chandrashtama dates.'
-      },
-      {
-        category: 'financial_pf',
-        categoryLabel: 'PF & Retirement Capital Transfer',
-        eventTitle: 'Provident Fund (PF) Transfer / 401(k) Rollover',
-        likelihood: 'High Probability (88%)',
-        likelihoodScore: 0.88,
-        projectedWindow: `October ${sYear} – January ${Number(sYear) + 1}`,
-        astrologicalTrigger: 'Jupiter transit trine to 11th Labha house and 2nd Dhana lord activation under active Dasha',
-        concreteImplication: 'Prior employer Provident Fund (PF) or retirement rollover funds will settle successfully into your designated institutional account.',
-        preventiveRemedy: 'Track electronic portal tracking numbers weekly; ensure KYC, PAN, and beneficiary details match exactly to prevent clerical pauses.'
-      },
-      {
-        category: 'property_asset',
-        categoryLabel: 'Passport & Sovereign Credentials',
-        eventTitle: 'Passport Renewal & Sovereign Identity Stamping',
-        likelihood: 'Favorable Clearance (85%)',
-        likelihoodScore: 0.85,
-        projectedWindow: `February ${Number(sYear) + 1} – May ${Number(sYear) + 1}`,
-        astrologicalTrigger: 'Sun and Mercury transit in 9th and 10th houses from Janma Rashi (Moon)',
-        concreteImplication: 'Passport renewal booklet issuance and sovereign identity stamping proceeds cleanly without administrative objections.',
-        preventiveRemedy: 'Book consular biometric appointments during waxing Moon (Shukla Paksha) for smooth institutional transit.'
-      },
-      {
-        category: 'career_job',
-        categoryLabel: 'Career & Corporate Milestone',
-        eventTitle: 'Corporate Promotion / Role Offer Letter Confirmation',
-        likelihood: 'High Probability (85%)',
-        likelihoodScore: 0.85,
-        projectedWindow: `June ${Number(sYear) + 1} – September ${Number(sYear) + 1}`,
-        astrologicalTrigger: 'Transit Jupiter trine over 10th/11th house from Janma Rashi with active AD lord authorization',
-        concreteImplication: 'Formal corporate offer letter, role expansion, or compensation increment confirmed in writing.',
-        preventiveRemedy: 'Finalize compensation structure and formal offer acceptance before planetary retrograde station.'
-      },
-      {
-        category: 'financial_pf',
-        categoryLabel: 'Banking & Regulatory Approvals',
-        eventTitle: 'Institutional Regulatory Audit & Asset Clearance',
-        likelihood: 'Favorable Resolution (80%)',
-        likelihoodScore: 0.8,
-        projectedWindow: `October ${Number(sYear) + 1} – December ${Number(sYear) + 1}`,
-        astrologicalTrigger: 'Saturn direct station over 4th house and Venus Dasha authorization',
-        concreteImplication: 'Banking audits, property title clearance, and tax assessments conclude smoothly.',
-        preventiveRemedy: 'Maintain certified physical duplicate copies of all tax and banking filings.'
-      }
-    ];
-  }, [synthesizedNarrative, startDate, endDate]);
 
   return (
     <div className="flex-1 flex flex-col w-full bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 space-y-6">
@@ -689,13 +609,13 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
                 Prediction Studio
               </h2>
               <p className="text-xs text-slate-400">
-                Multi-period continuous Vedic engine (1 to 2 years) testing LLM reasoning with ground-truth lived experience.
+                Continuous timeline horizon (1 to 2 years) testing LLM reasoning with ground-truth lived experience.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Status Pills & Prompt Inspector Eye Button */}
+        {/* Status Pills & Prompt Inspector Button */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -820,7 +740,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         )}
       </div>
 
-      {/* SECTION 2: ACTIVE PERIODS & MAJOR TRANSITS (NO MOON IN UI, FULL MOON IN PAYLOAD) */}
+      {/* SECTION 2: ACTIVE PERIODS & MAJOR TRANSITS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Card A: Active Dasha Intervals in Selected Window */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3.5 shadow-lg">
@@ -865,7 +785,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
           )}
         </div>
 
-        {/* Card B: Major Planetary Transits in Window (Clean UI: Moon hidden from UI, packed in payload) */}
+        {/* Card B: Major Planetary Transits in Window */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3.5 shadow-lg">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
             <div className="flex items-center gap-2 text-sm font-bold text-white">
@@ -929,7 +849,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
             </p>
           </div>
 
-          {/* Model Engine & Inspect Prompt Button */}
+          {/* Model Engine Selector & Inspect Prompt Button */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
@@ -960,7 +880,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
 
         {/* Narrative Inputs Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Narrative 1: Past Lived Experience with AD Picker */}
+          {/* Narrative 1: Past Lived Experience with Authentic AD Picker */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <label className="block text-xs font-bold text-slate-200">
@@ -971,75 +891,37 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAdPickerModal(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer shadow-sm active:scale-95"
-                title="Open Antardasha picker to select and insert past AD narratives into Lived Experience"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer shadow-sm active:scale-95"
+                title="Open Antardasha picker to select and insert stored AD narratives from database"
               >
                 <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                <span>Pick Past AD Narrative</span>
+                <span>Pick Past AD Narrative ({dbAdNarratives.length} in DB)</span>
               </button>
             </div>
 
-            {/* Quick Chips for One-Click Past Footprint Insertion */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase mr-0.5">Quick AD:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setLivedExperienceNarrative(
-                    '[Mercury MD / Saturn AD (2003-07-23 to 2005-04-02)]: Career transition and relocation milestone. Faced visa paperwork processing hurdles, administrative consular scrutiny, and delayed PF transfer from prior employer before successful resolution.'
-                  );
-                }}
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition cursor-pointer"
-                title="Mercury MD / Saturn AD: Career transition, relocation, consular visa delay, PF transfer"
-              >
-                ☿ Merc / 🪐 Sat AD (2003–05)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setLivedExperienceNarrative(
-                    '[Saturn MD / Ketu AD (1976-01-26 to 1977-01-23)]: Birth balance period with family support and initial health stabilization. Its where I took Birth in South India under Saturn Mahadasha balance.'
-                  );
-                }}
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition cursor-pointer"
-                title="Saturn MD / Ketu AD: Birth balance and family protection"
-              >
-                🪐 Sat / ☋ Ketu AD (1976)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setLivedExperienceNarrative(
-                    '[Ketu MD / Ketu AD (2006-04-02 to 2007-04-02)]: Period of contemplation and structural reset. Stepped back from earlier rigid corporate hierarchy; period of introspective recalibration, assessing independent foreign projects, and realigning professional purpose.'
-                  );
-                }}
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition cursor-pointer"
-                title="Ketu MD / Ketu AD: Structural reset & contemplation"
-              >
-                ☋ Ketu / ☋ Ketu AD (2006)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setLivedExperienceNarrative(
-                    '[Venus MD / Rahu AD (2019-08-02 to 2022-08-02)]: Expansion of overseas enterprise engagements and global delivery footprint. Addressed international passport renewals, consular visa renewals, institutional clearances, and substantial liquid compensation growth.'
-                  );
-                }}
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition cursor-pointer"
-                title="Venus MD / Rahu AD: Overseas footprint & paperwork clearances"
-              >
-                ♀ Venus / ☊ Rahu AD (2019–22)
-              </button>
-            </div>
+            {/* Quick Chips for Real Database Records Only */}
+            {dbAdNarratives.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase mr-0.5">Stored in DB ({dbAdNarratives.length}):</span>
+                {dbAdNarratives.map(ad => (
+                  <button
+                    key={ad.id}
+                    type="button"
+                    onClick={() => handleInsertAdNarrative(ad, 'replace')}
+                    className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition cursor-pointer"
+                    title={ad.narrative}
+                  >
+                    {toCleanEnglishPlanet(ad.mahadasha).slice(0, 4)} / {toCleanEnglishPlanet(ad.antardasha).slice(0, 4)} AD
+                  </button>
+                ))}
+              </div>
+            )}
 
             <textarea
               rows={4}
               value={livedExperienceNarrative}
               onChange={e => setLivedExperienceNarrative(e.target.value)}
-              placeholder="Select an AD above or type past lived experiences (e.g., Saturn AD under Mercury MD: relocation, visa processing delays, PF transfer settlement, career hurdles)..."
+              placeholder="Select an AD above or enter your past lived experience (e.g. past career hurdles, visa paperwork processing, PF transfers, relocation milestones)..."
               className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition"
             />
           </div>
@@ -1091,7 +973,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            {/* Prominent Eye Icon Prompt Inspector Button */}
+            {/* Eye Icon Prompt Inspector Button */}
             <button
               type="button"
               onClick={() => setShowPromptModal(true)}
@@ -1114,105 +996,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         </div>
       </div>
 
-      {/* SECTION 4: PREDICTED POSSIBLE REAL-WORLD EVENTS (DEDICATED SECTION AT BOTTOM OF SCREEN) */}
-      <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-              <Sparkles className="w-5 h-5 fill-current" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
-                <span>Predicted Possible Real-World Events &amp; Milestones</span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  {activePredictedEvents.length} Event Deductions
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Concrete administrative, financial, immigration, and career manifestations deduced from Gochara transits and Dasha authorization.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-            <span>Horizon: {startDate} &rarr; {endDate}</span>
-          </div>
-        </div>
-
-        {/* Grid of Predicted Real-World Events */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {activePredictedEvents.map((ev, idx) => (
-            <div
-              key={idx}
-              className="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-amber-500/40 space-y-3 transition shadow-md flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
-                      {ev.categoryLabel || ev.category}
-                    </span>
-                    <h4 className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-1.5 mt-0.5">
-                      {ev.category === 'visa_immigration' && <span>🛂</span>}
-                      {ev.category === 'financial_pf' && <span>🏛️</span>}
-                      {ev.category === 'property_asset' && <span>📘</span>}
-                      {ev.category === 'career_job' && <span>💼</span>}
-                      <span>{ev.eventTitle}</span>
-                    </h4>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 border ${
-                      ev.likelihood.toLowerCase().includes('delay') || ev.likelihood.toLowerCase().includes('frictional')
-                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                        : ev.likelihood.toLowerCase().includes('high')
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                        : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
-                    }`}
-                  >
-                    {ev.likelihood}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-[11px] font-mono text-amber-300/90 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
-                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span>Window: {ev.projectedWindow}</span>
-                </div>
-
-                <div className="space-y-1.5 text-xs pt-1">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      Astrological Trigger &amp; Mechanism:
-                    </span>
-                    <p className="text-slate-300 text-[11.5px] leading-relaxed">
-                      {ev.astrologicalTrigger}
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      Concrete Real-World Implication:
-                    </span>
-                    <p className="text-slate-200 text-[11.5px] font-medium leading-relaxed">
-                      {ev.concreteImplication}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {ev.preventiveRemedy && (
-                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-200/90 text-[11px] leading-relaxed">
-                  <strong className="text-amber-400 block text-[10px] uppercase mb-0.5">
-                    Strategic Action / Precaution:
-                  </strong>
-                  {ev.preventiveRemedy}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SECTION 5: PREDICTION REPORT CONTAINER (BOTTOM OF THE SCREEN) */}
+      {/* SECTION 4: UNIFIED PREDICTION REPORT CONTAINER (BOTTOM OF THE SCREEN) */}
       <div ref={bottomReportRef} className="pt-4 border-t border-slate-800/80">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1240,7 +1024,6 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
             activeProvider={selectedProvider}
             runTriggerTimestamp={autoRunTriggerTimestamp}
             onChangeProvider={setSelectedProvider}
-            onNarrativeGenerated={res => setSynthesizedNarrative(res)}
           />
         ) : (
           <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-500 space-y-2">
@@ -1270,7 +1053,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
                     Pick Past Antardasha (AD) Narrative &amp; Footprint
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Select any past period to populate your Ground-Truth Lived Experience field for testing the LLM.
+                    Select any period with authentic recorded notes to insert into your Ground-Truth Lived Experience field.
                   </p>
                 </div>
               </div>
@@ -1291,7 +1074,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
                   type="text"
                   value={adSearchTerm}
                   onChange={e => setAdSearchTerm(e.target.value)}
-                  placeholder="Search by planet, year, notes keyword (e.g. 'visa', 'saturn', 'pf', 'relocation', 'birth')..."
+                  placeholder="Search by planet, year, notes keyword (e.g. 'visa', 'saturn', 'birth', 'transition')..."
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
                 />
               </div>
@@ -1325,14 +1108,23 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
             {/* List of Antardashas */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {filteredAntardashas.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs">
-                  No Antardashas match your search criteria.
+                <div className="text-center py-12 text-slate-500 text-xs space-y-2">
+                  <p className="font-semibold text-slate-400">
+                    {dbAdNarratives.length === 0
+                      ? 'No AD narratives found in the database.'
+                      : 'No stored AD narratives match your search filter.'}
+                  </p>
+                  <p className="text-slate-500 max-w-sm mx-auto">
+                    {dbAdNarratives.length === 0
+                      ? 'Only genuine AD narratives entered or saved into the database are displayed here. Save narratives in the Dasha AD Editor to pick them.'
+                      : 'Try adjusting the search query or Mahadasha filter above.'}
+                  </p>
                 </div>
               ) : (
                 filteredAntardashas.map(adItem => (
                   <div
                     key={adItem.id}
-                    className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition space-y-2"
+                    className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition space-y-2.5"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -1344,53 +1136,65 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
                         <span className="text-[11px] font-mono text-slate-400">
                           ({adItem.startDate} to {adItem.endDate})
                         </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300">
-                          {adItem.lifePeriod}
-                        </span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {adItem.hasRecordedNotes && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                            Recorded Notes
+                        {adItem.lifePeriod && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-950 text-cyan-300 border border-cyan-800/50">
+                            {adItem.lifePeriod}
                           </span>
                         )}
-                        {adItem.cachedNarrative && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
-                            Saved AD Narrative
-                          </span>
-                        )}
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                          Database Stored
+                        </span>
                       </div>
                     </div>
 
-                    {/* Content Preview */}
-                    <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
-                      {adItem.notesSnippet && (
-                        <span className="block font-medium text-emerald-300 mb-1">
-                          Personal Recorded Note: &ldquo;{adItem.notesSnippet}&rdquo;
-                        </span>
-                      )}
-                      <span>{adItem.archetypeNarrative}</span>
-                    </p>
+                    {adItem.primaryDomains && adItem.primaryDomains.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] text-slate-400">Domains:</span>
+                        {adItem.primaryDomains.map(d => (
+                          <span key={d} className="px-1.5 py-0.5 rounded text-[9.5px] bg-slate-900 text-slate-300 border border-slate-800">
+                            {d}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {adItem.keyMilestones && (
+                      <div className="text-[11px] text-amber-200/90 font-medium bg-amber-950/20 px-2 py-1 rounded border border-amber-900/40">
+                        <strong>Milestones:</strong> {adItem.keyMilestones}
+                      </div>
+                    )}
+
+                    {/* Exact Narrative Content from Database */}
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 font-mono text-xs text-slate-200 leading-relaxed whitespace-pre-wrap select-text">
+                      {adItem.narrative}
+                    </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleInsertAdNarrative(adItem, 'append')}
-                        className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
-                        title="Append this narrative after existing text"
-                      >
-                        + Append
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleInsertAdNarrative(adItem, 'replace')}
-                        className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shadow"
-                        title="Replace current lived experience text with this narrative"
-                      >
-                        Insert into Lived Experience
-                      </button>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Source: {adItem.sourceModel || 'Database'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleInsertAdNarrative(adItem, 'append')}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
+                          title="Append this narrative after existing text"
+                        >
+                          + Append
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInsertAdNarrative(adItem, 'replace')}
+                          className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shadow active:scale-95"
+                          title="Replace current lived experience text with this narrative"
+                        >
+                          Insert into Lived Experience
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1399,7 +1203,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
 
             {/* Modal Footer */}
             <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span>Showing {filteredAntardashas.length} of {distinctAntardashas.length} total Antardashas</span>
+              <span>Showing {filteredAntardashas.length} of {dbAdNarratives.length} stored AD narratives in database</span>
               <button
                 type="button"
                 onClick={() => setShowAdPickerModal(false)}
@@ -1412,7 +1216,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         </div>
       )}
 
-      {/* MODAL 2: COMPLETE LLM PROMPT INSPECTOR MODAL (EYE ICON) */}
+      {/* MODAL 2: RAW LLM PROMPT INSPECTOR MODAL (EYE ICON) */}
       {showPromptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">

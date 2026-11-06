@@ -690,16 +690,16 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
     },
     {
       "id": "love_romance",
-      "title": "Love, Romance & Relationship Horizon",
+      "title": "Love, Romance, Relationship & Interpersonal Horizon",
       "verdict": "Moderate Progress",
       "confidenceScore": 0.78,
       "timingWindow": "${monthName} DD – DD, ${context.selectedYear}",
-      "astrologicalReasoning": "Venus transit aspecting 5th/7th houses.",
+      "astrologicalReasoning": "Venus transit aspecting 5th/7th houses and Dasha lord interaction.",
       "practicalGuidance": "Heartfelt communication and emotional balance.",
       "crushStatusInference": {
-        "existingCrushTrajectory": "Trajectory of existing affections",
+        "existingCrushTrajectory": "Trajectory of existing affections or personal bond",
         "newCrushProbability": "High",
-        "newCrushDetails": "Transit trigger in 5th house for new attraction"
+        "newCrushDetails": "Transit trigger in 5th/7th houses for relationship or romantic attraction"
       },
       "romanceAtmosphere": {
         "emotionalWeather": "Atmosphere and chemistry description",
@@ -711,7 +711,7 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
         "manifestationLikelihood": "Likelihood of long-term union",
         "astrologicalPathReasoning": "5th/7th lords and Venus/Jupiter rays"
       },
-      "detailedParagraphs": ["Paragraph 1: Romantic weather & openness.", "Paragraph 2: Crush evolution & mutual chemistry.", "Paragraph 3: Manifestation outcome & marriage viability."]
+      "detailedParagraphs": ["Paragraph 1: Interpersonal & relationship weather.", "Paragraph 2: Bond evolution & mutual resonance.", "Paragraph 3: Manifestation outcome & long-term viability."]
     },
     {
       "id": "health_vitality",

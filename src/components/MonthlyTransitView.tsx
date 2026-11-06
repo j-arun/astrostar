@@ -46,6 +46,7 @@ import {
   BHAVA_KARAKAS_METADATA
 } from '../data/parasharaCalculations';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
+import { EventManufacturingEngine } from './EventManufacturingEngine';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext } from '../services/llm/types';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 
@@ -262,6 +263,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   // Collapsible section toggles for Monthly View
   const [expandTimelineControls, setExpandTimelineControls] = useState<boolean>(true);
   const [expandTransitChart, setExpandTransitChart] = useState<boolean>(true);
+  const [expandEventEngine, setExpandEventEngine] = useState<boolean>(true);
 
 
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>(() => {
@@ -1117,6 +1119,17 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           >
             <span>2. 4x4 Transit Chart</span>
             {expandTransitChart ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setExpandEventEngine(!expandEventEngine)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
+              expandEventEngine
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>3. Event Manufacturing Engine</span>
+            {expandEventEngine ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
         </div>
 
@@ -2278,6 +2291,22 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* SECTION 3: EVENT MANUFACTURING ENGINE */}
+      {expandEventEngine && (
+        <EventManufacturingEngine
+          personId={personId}
+          activeProfile={activeProfile}
+          natalLagnaIdx={natalLagnaIdx}
+          natalRashiIdx={natalRashiIdx}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          activeDashaHierarchy={activeDashaHierarchy}
+          flattenedD1={natalD1Placements}
+          transitPlacements={transitPlacements}
+          monthlyMoonSpans={monthlyMoonSpans}
+        />
+      )}
         </>
       )}
 

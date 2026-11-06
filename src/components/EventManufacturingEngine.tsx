@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Zap,
   Sparkles,
@@ -16,12 +16,15 @@ import {
   RefreshCw,
   Info,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Key,
+  Flame,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import {
   LLMProviderId,
-  LLM_PROVIDERS,
-  VedicHouseContext
+  LLM_PROVIDERS
 } from '../services/llm/types';
 import { getPreferredGeminiModel } from '../services/llm/geminiModels';
 import {
@@ -45,15 +48,11 @@ export type PerspectiveMode = 'lagna' | 'rashi' | 'dual';
 export interface ManufacturedEventItem {
   id: string;
   title: string;
-  category: 'health_chronic' | 'accident_friction' | 'wealth_capital' | 'communication_admin' | 'relationship_bond' | 'career_status';
-  categoryLabel: string;
-  polarity: 'positive' | 'negative' | 'mixed';
-  narrative: string; // 1-2 line crisp narrative
+  narrative: string; // 1-2 line crisp narrative of what is going to happen
   probabilityScore: number; // 0..100
   isHighProbability: boolean; // >= 60%
-  astrologicalRootCause: string;
-  transitTrigger: string;
-  affectedAnatomyOrDomain: string;
+  portfolio?: string; // Work, Life, Health, Money, Friends, Love, Trip
+  gateTrigger?: string; // Specific Nakshatra gate & transit trigger
 }
 
 export interface NakshatraGateInfo {
@@ -103,50 +102,51 @@ const LORD_NAKSHATRA_GATES: Record<string, { nakshatras: string[]; rashis: numbe
   },
   'Sun (Surya)': {
     nakshatras: ['Krittika', 'Uttara Phalguni', 'Uttara Ashadha'],
-    rashis: [1, 5, 9],
-    anatomies: ['Crown & Vital Fire', 'Upper Back & Heart', 'Knees & Bone Structure'],
-    signs: ['Sovereign authority, state recognition, father, ocular heat, dignity']
+    rashis: [2, 6, 10],
+    anatomies: ['Neck & Vocal Chords', 'Upper Abdomen & Gut Flora', 'Knees & Skeletal Structure'],
+    signs: ['Vitality, father, authority, government orders, bone density, ego expression']
   },
   'Moon (Chandra)': {
     nakshatras: ['Rohini', 'Hasta', 'Shravana'],
-    rashis: [2, 6, 10], // Rishabam, Kanni, Makaram
-    anatomies: ['Face, Throat & Mouth', 'Hands, Intestines & Digestion', 'Ears, Gait & Knee Joints'],
-    signs: ['Mental equilibrium, lymphatic fluids, public receptivity, mother, sleep']
+    rashis: [2, 6, 10],
+    anatomies: ['Throat & Thyroid', 'Digestive Organs & Bowels', 'Lymphatic Fluid & Knees'],
+    signs: ['Mind, emotional fluctuations, mother, home sanctuary, liquids, travel']
   },
   'Mars (Sevvai)': {
     nakshatras: ['Mrigashira', 'Chitra', 'Dhanishta'],
-    rashis: [2, 6, 10],
-    anatomies: ['Vocal cords & Neck', 'Abdominal wall & Kidneys', 'Ankles & Motor Nerves'],
-    signs: ['Pitta fire, acute inflammation, surgical interventions, motor friction, courage']
+    rashis: [3, 7, 11],
+    anatomies: ['Shoulders & Upper Arms', 'Lower Abdomen & Kidneys', 'Shin Bones & Circulatory Heat'],
+    signs: ['Pitta burning, digestive heat, conflicts, surgery, muscular exertion, siblings, land']
   },
   Rahu: {
     nakshatras: ['Ardra', 'Swati', 'Shatabhisha'],
-    rashis: [3, 7, 11], // Mithunam, Thulaam, Kumbam
-    anatomies: ['Shoulders, Arms & Lungs', 'Kidneys & Lower Abdomen', 'Calves, Shins & Nervous Circulation'],
-    signs: ['Foreign documentation, sudden expansions, obsession, toxic exposure, unconventional gains']
+    rashis: [3, 7, 11],
+    anatomies: ['Respiratory Bronchials & Arms', 'Pelvic Organs & Bladder', 'Calves, Ankles & Nervous Signals'],
+    signs: ['Obsession, sudden twists, foreign connections, toxic exposure, unconventional gains']
   },
   'Jupiter (Guru)': {
     nakshatras: ['Punarvasu', 'Vishakha', 'Purva Bhadrapada'],
-    rashis: [3, 7, 11],
-    anatomies: ['Thorax & Lungs', 'Bladder & Groin', 'Feet, Soles & Cellular Lipids'],
-    signs: ['Wisdom, institutional grace, financial recovery, liver, expansion, legal favor']
+    rashis: [4, 8, 12],
+    anatomies: ['Chest & Lungs', 'Reproductive Tissues & Excretory', 'Feet & Toes'],
+    signs: ['Wisdom, divine grace, wealth clearance, advisory roles, children, liver']
   },
   'Saturn (Sani)': {
     nakshatras: ['Pushya', 'Anuradha', 'Uttara Bhadrapada'],
-    rashis: [4, 8, 12], // Katakam, Vrischigam, Meenam
-    anatomies: ['Chest Cavity & Lungs', 'Genitals, Colon & Excretory Organ', 'Feet, Lymph & Sleep Depth'],
-    signs: ['Chronic conditions, prolonged delays, structural discipline, deep karmic retribution']
+    rashis: [4, 8, 12],
+    anatomies: ['Stomach, Ribcage & Lungs', 'Bladder, Groin & Chronic Tissues', 'Feet & Nervous Terminals'],
+    signs: ['Delay, chronic friction, cold conditions, institutional duty, dental/bone wear, persistent marks']
   },
   'Mercury (Budha)': {
     nakshatras: ['Ashlesha', 'Jyeshtha', 'Revati'],
     rashis: [4, 8, 12],
-    anatomies: ['Gut Flora, Intestines & Nerve Impulses', 'Sensory Nerves & Rectum', 'Lymphatic Extremities & Sleep Cycle'],
-    signs: ['Nerves, communication gaps, food digestion, sleep balance, contracts, commerce']
+    anatomies: ['Stomach Lining, Gut Flora & Sleep', 'Secret Parts, Colon & Sensory Nerves', 'Feet, Lymph & Peripheral Nerves'],
+    signs: ['Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion']
   }
 };
 
-function normalizeLordKey(lordName: string): string {
-  const norm = (lordName || '').toLowerCase();
+function normalizeLordKey(lordStr: string): string {
+  if (!lordStr) return 'Mercury (Budha)';
+  const norm = lordStr.toLowerCase();
   if (norm.includes('ketu')) return 'Ketu';
   if (norm.includes('venus') || norm.includes('sukra')) return 'Venus (Sukra)';
   if (norm.includes('sun') || norm.includes('surya')) return 'Sun (Surya)';
@@ -157,6 +157,64 @@ function normalizeLordKey(lordName: string): string {
   if (norm.includes('saturn') || norm.includes('sani')) return 'Saturn (Sani)';
   if (norm.includes('mercury') || norm.includes('budha')) return 'Mercury (Budha)';
   return 'Mercury (Budha)';
+}
+
+function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
+  let cleaned = (rawText || '').trim();
+  
+  // Strip markdown code fences if present (```json ... ```)
+  if (cleaned.includes('```')) {
+    cleaned = cleaned.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  }
+
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const firstBracket = cleaned.indexOf('[');
+  const lastBracket = cleaned.lastIndexOf(']');
+
+  let parsedData: any = null;
+
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    try {
+      parsedData = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  if (!parsedData && firstBracket !== -1 && lastBracket !== -1) {
+    try {
+      parsedData = JSON.parse(cleaned.substring(firstBracket, lastBracket + 1));
+    } catch {}
+  }
+
+  if (!parsedData) {
+    try {
+      parsedData = JSON.parse(cleaned);
+    } catch {}
+  }
+
+  const rawList: any[] = Array.isArray(parsedData)
+    ? parsedData
+    : Array.isArray(parsedData?.events)
+    ? parsedData.events
+    : Array.isArray(parsedData?.manufacturedEvents)
+    ? parsedData.manufacturedEvents
+    : [];
+
+  return rawList.map((item: any, idx: number) => {
+    const rawProb = item.probabilityScore ?? item.probability ?? item.score ?? 60;
+    const probNum = typeof rawProb === 'number' ? rawProb : parseInt(String(rawProb).replace(/\D/g, '') || '60', 10);
+    const clampedProb = Math.max(10, Math.min(95, isNaN(probNum) ? 60 : probNum));
+
+    return {
+      id: item.id || `evt-${Date.now()}-${idx + 1}`,
+      title: item.title || item.eventTitle || item.name || `Event ${idx + 1}`,
+      narrative: item.narrative || item.description || item.manifestation || 'Lived manifestation manufactured during this period.',
+      probabilityScore: clampedProb,
+      isHighProbability: clampedProb >= 60,
+      portfolio: item.portfolio || item.category || 'Life',
+      gateTrigger: item.gateTrigger || item.astrologicalRootCause || item.trigger || 'Active Dasha Lord + Nakshatra Gate Passage'
+    };
+  });
 }
 
 export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> = ({
@@ -171,7 +229,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   transitPlacements,
   monthlyMoonSpans
 }) => {
-  // 1. Available Delivering Hands for Selection (AD and PD levels of current period)
+  // 1. Available Delivering Hands for Selection
   const availableHands = useMemo(() => {
     const list: { id: string; label: string; role: 'AD' | 'PD' | 'MD'; rawName: string }[] = [];
     
@@ -192,7 +250,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     }
 
     // Complementary key lords (Saturn and Mercury often active in sub-periods)
-    for (const complementary of ['Mercury (Budha)', 'Saturn (Sani)', 'Venus (Sukra)', 'Mars (Sevvai)']) {
+    for (const complementary of ['Mercury (Budha)', 'Saturn (Sani)', 'Venus (Sukra)', 'Mars (Sevvai)', 'Jupiter (Guru)', 'Rahu', 'Sun (Surya)']) {
       if (!list.some(item => item.rawName === complementary)) {
         list.push({ id: `SUB-${complementary}`, label: `${toCleanEnglishPlanet(complementary)}`, role: 'PD', rawName: complementary });
       }
@@ -209,11 +267,29 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   // Perspective Mode: Lagna, Rashi, or Dual
   const [perspective, setPerspective] = useState<PerspectiveMode>('dual');
 
-  // Model selection
-  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('local_qwen');
+  // Model & Provider Selection (Default: Google Gemini)
+  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('gemini_pro');
+  
+  // API Key management directly in the engine card
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
+  });
+  const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
+
+  // Synthesis & Result State (Starts empty - NO HARDCODED PRE-POPULATION)
+  const [manufacturedEvents, setManufacturedEvents] = useState<ManufacturedEventItem[]>([]);
   const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
+  const [synthesisSeconds, setSynthesisSeconds] = useState<number>(0);
+  const [lastSynthesizedModel, setLastSynthesizedModel] = useState<string | null>(null);
+  const [lastExecutionTimeMs, setLastExecutionTimeMs] = useState<number | null>(null);
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
+
+  // Prompt Inspector Modal State
   const [showPromptModal, setShowPromptModal] = useState<boolean>(false);
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
+
+  // Timer for active synthesis
+  const timerRef = useRef<any>(null);
 
   // 2. Compute the 3 Nakshatra Entry Gates for the Selected Delivering Hand
   const gateDetails = useMemo<NakshatraGateInfo[]>(() => {
@@ -248,117 +324,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     });
   }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyMoonSpans]);
 
-  // 3. Grounded Deterministic Event Manufacturing Engine (Instantly generated from user's exact Parashara rules)
-  const defaultManufacturedEvents = useMemo<ManufacturedEventItem[]>(() => {
-    const events: ManufacturedEventItem[] = [];
-    const cleanHand = toCleanEnglishPlanet(selectedHandKey);
-    const cleanMd = toCleanEnglishPlanet(activeDashaHierarchy.mahadasha);
-    const cleanAd = toCleanEnglishPlanet(activeDashaHierarchy.antardasha);
-
-    // Identify if Venus is in Lagna (Face / Countenance)
-    const venusInLagna = flattenedD1.some((p: any) => 
-      (p.body_name || '').toLowerCase().includes('venus') && 
-      (p.house_number === 1 || p.rashi_name?.toLowerCase().includes('dhanus'))
-    );
-
-    // Identify if Saturn is active or in 8th
-    const isSaturnActive = selectedHandKey.toLowerCase().includes('saturn') || cleanAd.toLowerCase().includes('saturn');
-    const isMercuryActive = selectedHandKey.toLowerCase().includes('mercury') || cleanAd.toLowerCase().includes('mercury');
-    const isMarsIn8th = gateDetails.some(g => g.houseFromLagna === 8 && g.transitingPlanets.some(p => p.toLowerCase().includes('mars')));
-
-    // Event 1: Face / Chronic Skin Issue (User's specific example)
-    if (venusInLagna || cleanMd.includes('Venus') || cleanAd.includes('Saturn')) {
-      events.push({
-        id: 'evt-1',
-        title: 'Facial Countenance & Chronic Dermatological Sensitivity',
-        category: 'health_chronic',
-        categoryLabel: 'Health / Chronic Condition',
-        polarity: 'negative',
-        narrative: 'With Venus situated in Lagna (face/countenance) under Saturnian delivering friction, an existing facial scar or skin irritation risks turning into a persistent, slow-healing chronic sensitivity.',
-        probabilityScore: 78,
-        isHighProbability: true,
-        astrologicalRootCause: `${cleanMd} MD + ${cleanAd} AD: Venus (Lagna seat/face) influenced by Saturnian cold delay and 8th house chronic aspect.`,
-        transitTrigger: 'Saturn / Venus transit rays across the 1st-8th house axis.',
-        affectedAnatomyOrDomain: 'Face, cheekbones, facial skin & ocular tissue.'
-      });
-    }
-
-    // Event 2: Digestive Burning & Acute Gut Inflammation (User's specific example)
-    if (isMercuryActive || isMarsIn8th || gateDetails.some(g => g.nakshatraName === 'Ashlesha')) {
-      events.push({
-        id: 'evt-2',
-        title: 'Digestive Burning Sensation, Acid Reflux & Sleep Disruption',
-        category: 'health_chronic',
-        categoryLabel: 'Health & Digestive Flora',
-        polarity: 'negative',
-        narrative: 'When Mars or acute transits cross the Ashlesha gate in Cancer (8th from Lagna, 9th from Moon), severe digestive heat, acid flare-ups, and nocturnal sleep interruptions manifest.',
-        probabilityScore: 72,
-        isHighProbability: true,
-        astrologicalRootCause: 'Ashlesha Nakshatra gate (Mercury lord) occupying House 8 from Lagna activated by Mars Pitta energy.',
-        transitTrigger: 'Mars / Moon ingress crossing Ashlesha in Cancer (8th house).',
-        affectedAnatomyOrDomain: 'Digestive tract, stomach lining, gut flora & nervous sleep depth.'
-      });
-    }
-
-    // Event 3: Communication Gaps & Administrative Friction
-    if (isMercuryActive) {
-      events.push({
-        id: 'evt-3',
-        title: 'Communication Misalignment, Document Delays & Clerical Misunderstandings',
-        category: 'communication_admin',
-        categoryLabel: 'Communication & Paperwork',
-        polarity: 'negative',
-        narrative: 'Mercury PD teeth activate sensory nerve friction in 8th/12th houses, inducing momentary email misinterpretations, document verification lag, or delayed responses from counterparts.',
-        probabilityScore: 64,
-        isHighProbability: true,
-        astrologicalRootCause: 'Mercury PD gate in Jyeshtha (12th from Lagna, 1st from Moon) causing cognitive sensory fatigue.',
-        transitTrigger: 'Mercury transit alignment across Vrischigam (Scorpio) Jyeshtha gate.',
-        affectedAnatomyOrDomain: 'Nerve communication, written agreements & administrative clearances.'
-      });
-    }
-
-    // Event 4: Institutional Fund Release / Capital Realization
-    events.push({
-      id: 'evt-4',
-      title: 'Provident Fund (PF) Transfer / Blocked Capital Release',
-      category: 'wealth_capital',
-      categoryLabel: 'Wealth & Capital Recovery',
-      polarity: 'positive',
-      narrative: 'Dhana (2nd) and Labha (11th) lords trigger the release of institutional capital, successfully finalizing a pending retirement rollover, PF clearance, or back-owed dividend.',
-      probabilityScore: 68,
-      isHighProbability: true,
-      astrologicalRootCause: 'Jupiter aspect to 11th house from Janma Rashi sanctioning release of held institutional reserves.',
-      transitTrigger: 'Moon transit crossing Revati (Pisces) gate triggering 4th/5th house benefic exchange.',
-      affectedAnatomyOrDomain: 'Bank liquidity, Provident Fund (EPFO) / 401(k) accounts.'
-    });
-
-    // Event 5: Structural Career Reorganization / Responsibility Expansion
-    events.push({
-      id: 'evt-5',
-      title: 'Organizational Leadership Realignment & Autonomy Milestone',
-      category: 'career_status',
-      categoryLabel: 'Career & Authority',
-      polarity: 'positive',
-      narrative: 'Delivering hand commissions 10th house Karma Bhava authority, placing greater operational mandate and project architecture oversight into your direct hands after prior stagnation.',
-      probabilityScore: 58,
-      isHighProbability: false,
-      astrologicalRootCause: 'Active Dasha Triad lord aligning with vocational 10th/6th houses from Lagna.',
-      transitTrigger: 'Major planet transit crossing Kendra houses from Janma Rashi.',
-      affectedAnatomyOrDomain: 'Executive reporting structure & vocational responsibilities.'
-    });
-
-    return events;
-  }, [selectedHandKey, activeDashaHierarchy, flattenedD1, gateDetails]);
-
-  // Current Active Events
-  const [manufacturedEvents, setManufacturedEvents] = useState<ManufacturedEventItem[]>(defaultManufacturedEvents);
-
-  // Synchronize events when hand or perspective changes
-  useEffect(() => {
-    setManufacturedEvents(defaultManufacturedEvents);
-  }, [defaultManufacturedEvents]);
-
-  // 4. Complete Raw Prompt for the Eye Icon Inspector
+  // 3. Complete Raw Prompt Payload for Gemini / LLM Execution
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
     const cleanHand = toCleanEnglishPlanet(selectedHandKey);
@@ -369,49 +335,50 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     return `You are an elite Classical Vedic Astrologer executing the "EVENT MANUFACTURING ENGINE" under Parashara & Nadi timing laws.
 
 [HORIZON & DELIVERING HAND IDENTIFICATION]
-- Time Window: ${monthName} ${selectedYear}
+- Target Month: ${monthName} ${selectedYear}
 - Ascendant (Lagna): ${RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius'} (House 1)
 - Janma Rashi (Moon Sign): ${RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio'} (Janma Rashi)
 - Active Mahadasha (MD): ${cleanMd}
 - Active Antardasha (AD): ${cleanAd}
 - Active Pratyantardasha (PD) [Teeth of the Month]: ${cleanPd}
 - SELECTED DELIVERING HAND TARGET: ${cleanHand}
-- EVALUATION PERSPECTIVE: ${perspective === 'lagna' ? 'STRICTLY FROM LAGNA (Physical Body, Anatomy, Tangible Houses)' : perspective === 'rashi' ? 'STRICTLY FROM MOON (Psychological Reality, Perception, Fortune)' : 'DUAL COMBINED SYNTHESIS (Lagna Physical Reality + Moon Experiential Reality)'}
+- EVALUATION PERSPECTIVE: ${perspective === 'lagna' ? 'STRICTLY FROM LAGNA (Physical Body, Anatomy, Somatic Scars & Vulnerabilities)' : perspective === 'rashi' ? 'STRICTLY FROM MOON (Psychological Reality, Perception, Experiential Fruition)' : 'DUAL COMBINED SYNTHESIS (Lagna Physical Reality + Moon Experiential Reality)'}
 
 [THE THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND: ${cleanHand}]
 ${gateDetails.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 - House from Lagna: House ${g.houseFromLagna}
 - House from Janma Rashi (Moon): House ${g.houseFromRashi}
 - Anatomical Seat & Karakatwa: ${g.anatomicalSeat} — ${g.significations}
-- Transiting Planets Occupying/Crossing this Gate: ${g.transitingPlanets.length > 0 ? g.transitingPlanets.join(', ') : 'None'}
-- Moon (Chandra) Gate Trigger Window: ${g.moonIngressWindow || 'Approx. 2.25-day lunar transit'}
+- Transiting Planets Passing this Gate this Month: ${g.transitingPlanets.length > 0 ? g.transitingPlanets.join(', ') : 'None'}
+- Moon (Chandra) Gate Passage Window: ${g.moonIngressWindow || 'Approx. 2.25-day lunar transit'}
 `).join('\n')}
 
 [CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING]
-1. The Delivering Hand (${cleanHand}) commissions the event; the 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) act as the entry gates.
-2. When transiting planets (e.g. Mars, Sun, Saturn, Venus, Moon) pass through that gate, the event MANUFACTURES.
-3. Lagna determines physical vulnerability and bodily seats (e.g. Venus in Lagna/face + Saturn AD aspect = facial scar turning chronic; Mars in 8th Ashlesha = digestive acid heat, gut flora burning, nerve tension).
-4. Moon determines the experiential weather, timing of fruition, and psychological composure.
-5. Formulate 4 to 6 concrete, specific events with exact probability percentages (0 to 100%).
+1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
+2. Whenever a transiting planet (such as Mars, Saturn, Sun, Venus, or the Moon) crosses that gate, the event MANUFACTURES.
+3. Lagna determines physical vulnerability and bodily seats (e.g., Venus in Lagna + Saturn AD = facial scar or chronic skin delay; Mars in 8th house Ashlesha = digestive burning, gut flora inflammation, sleep disturbance).
+4. Moon determines the experiential weather, timing of fruition, and psychological impact.
+5. Manufacture 4 to 6 authentic, specific events that will manifest during this time frame.
+6. For each event, provide:
+   - title: Direct headline of the event
+   - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
+   - probabilityScore: Realistic integer probability (e.g. 75, 65, 55, 40, 25)
+   - portfolio: Assign to one portfolio category from: Work, Life, Health, Money, Friends, Love, Trip
+   - gateTrigger: The specific Nakshatra gate and planetary passage that triggered this event
 
 OUTPUT FORMAT REQUIREMENT:
-Return a valid JSON object with an array of events:
+Return ONLY a valid JSON object matching this schema:
 {
   "deliveringHand": "${cleanHand}",
   "perspective": "${perspective}",
   "events": [
     {
       "id": "evt-1",
-      "title": "Title of the specific event",
-      "category": "health_chronic | accident_friction | wealth_capital | communication_admin | career_status",
-      "categoryLabel": "Human readable category label",
-      "polarity": "positive | negative | mixed",
-      "narrative": "Crisp 1-to-2 line physical manifestation narrative explaining what happens and why.",
+      "title": "Specific event title",
+      "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
       "probabilityScore": 75,
-      "isHighProbability": true,
-      "astrologicalRootCause": "Exact MD-AD-PD + House from Lagna + House from Rashi mechanism",
-      "transitTrigger": "Transiting planet and gate trigger",
-      "affectedAnatomyOrDomain": "Physical anatomical seat or life department"
+      "portfolio": "Health | Work | Money | Life | Love | Friends | Trip",
+      "gateTrigger": "Nakshatra gate + transit planet passage"
     }
   ]
 }`;
@@ -426,15 +393,79 @@ Return a valid JSON object with an array of events:
     } catch {}
   };
 
-  // Synthesize via LLM
-  const handleSynthesize = async () => {
+  // Save custom key helper
+  const handleSaveApiKey = (keyVal: string) => {
+    const trimmed = keyVal.trim();
+    setGeminiApiKey(trimmed);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('astro_gemini_api_key', trimmed);
+    }
+  };
+
+  // Real LLM Synthesis Execution directly calling Gemini / Claude / Ollama
+  const handleSynthesizeEvents = async () => {
     setIsSynthesizing(true);
+    setSynthesisError(null);
+    setSynthesisSeconds(0);
+    const startMs = Date.now();
+
+    timerRef.current = setInterval(() => {
+      setSynthesisSeconds(prev => prev + 1);
+    }, 1000);
+
     try {
-      // Simulate / Execute engine synthesis
-      await new Promise(resolve => setTimeout(resolve, 800));
-      // In full implementation, calls selected LLM endpoint
-      setManufacturedEvents([...defaultManufacturedEvents]);
+      const activeKey = (
+        geminiApiKey ||
+        (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') ||
+        ''
+      ).trim();
+
+      const modelToUse = getPreferredGeminiModel();
+
+      // Dispatch request to server proxy endpoint
+      let endpoint = '/api/llm/gemini';
+      if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') {
+        endpoint = '/api/llm/claude';
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeKey ? { 'x-goog-api-key': activeKey, 'x-api-key': activeKey } : {})
+        },
+        body: JSON.stringify({
+          prompt: promptPayload,
+          model: modelToUse,
+          apiKey: activeKey || undefined
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.error) {
+        const errorMsg = data.error || `HTTP ${res.status}: Failed to reach LLM endpoint`;
+        setSynthesisError(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const rawLlmText = data.text || '';
+      const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
+
+      if (parsedEvents.length === 0) {
+        throw new Error('LLM responded, but returned an unparseable event list format. Inspect the prompt payload.');
+      }
+
+      setManufacturedEvents(parsedEvents);
+      setLastSynthesizedModel(data.model || modelToUse);
+      setLastExecutionTimeMs(Date.now() - startMs);
+    } catch (err: any) {
+      console.error('Event Manufacturing Engine Synthesis Error:', err);
+      // Keep synthesisError set for clear UI alert
     } finally {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
       setIsSynthesizing(false);
     }
   };
@@ -456,7 +487,7 @@ Return a valid JSON object with an array of events:
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Delivering Hand (PD Teeth) + 3 Nakshatra Gates + Planetary Passages = Concrete Real-World Event Manufacture.
+                Delivering Hand ({toCleanEnglishPlanet(selectedHandKey)}) + 3 Nakshatra Gates + Planetary Passages = Direct Event Manufacture.
               </p>
             </div>
           </div>
@@ -464,6 +495,22 @@ Return a valid JSON object with an array of events:
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Key toggle */}
+          <button
+            type="button"
+            onClick={() => setShowKeyInput(!showKeyInput)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+              geminiApiKey
+                ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/40'
+                : 'bg-slate-950 border-amber-500/50 text-amber-300 hover:bg-slate-800'
+            }`}
+            title="Configure or view Gemini API Key"
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>{geminiApiKey ? 'Gemini Key Configured' : 'Configure Gemini Key'}</span>
+          </button>
+
+          {/* Prompt Inspector */}
           <button
             type="button"
             onClick={() => setShowPromptModal(true)}
@@ -474,6 +521,7 @@ Return a valid JSON object with an array of events:
             <span>Inspect Prompt</span>
           </button>
 
+          {/* Model Selector */}
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-slate-400 font-semibold">Model:</span>
             <select
@@ -481,25 +529,85 @@ Return a valid JSON object with an array of events:
               onChange={e => setSelectedProvider(e.target.value as LLMProviderId)}
               className="bg-slate-950 border border-slate-700 text-purple-300 font-bold text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-400 cursor-pointer"
             >
-              {Object.values(LLM_PROVIDERS).map(prov => (
-                <option key={prov.id} value={prov.id} className="bg-slate-900 text-white font-medium">
-                  {prov.name}
-                </option>
-              ))}
+              <option value="gemini_pro" className="bg-slate-900 text-white">Google Gemini 2.5 Flash / Pro</option>
+              <option value="claude_sonnet" className="bg-slate-900 text-white">Anthropic Claude 3.5 Sonnet</option>
+              <option value="local_qwen" className="bg-slate-900 text-white">Local Qwen (Ollama)</option>
             </select>
           </div>
 
+          {/* Primary Action Button */}
           <button
             type="button"
-            onClick={handleSynthesize}
+            onClick={handleSynthesizeEvents}
             disabled={isSynthesizing}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSynthesizing ? 'animate-spin' : ''}`} />
-            <span>Synthesize Events</span>
+            <span>{isSynthesizing ? `Synthesizing via Gemini (${synthesisSeconds}s)...` : 'Synthesize Events via LLM'}</span>
           </button>
         </div>
       </div>
+
+      {/* OPTIONAL IN-CARD API KEY INPUT DRAWER */}
+      {showKeyInput && (
+        <div className="bg-slate-950 p-3.5 rounded-xl border border-purple-500/30 space-y-2 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span>Google Gemini API Key (Stored securely in browser localStorage):</span>
+            </label>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-amber-400 hover:underline"
+            >
+              Get free key &rarr;
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              value={geminiApiKey}
+              onChange={e => handleSaveApiKey(e.target.value)}
+              placeholder="Paste your AI Studio Gemini API Key (AIzaSy...)"
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKeyInput(false)}
+              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ERROR BANNER IF LLM CALL RETURNED AN ERROR */}
+      {synthesisError && (
+        <div className="bg-rose-950/60 border border-rose-500/70 p-3.5 rounded-xl space-y-2 text-rose-200 text-xs animate-shake">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-extrabold text-white">Gemini API Call Failed:</span>
+              <p className="font-mono text-[11.5px] text-rose-300 leading-snug">{synthesisError}</p>
+            </div>
+          </div>
+          <div className="pt-2 border-t border-rose-800/40 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-rose-300">
+              Enter your active Google Gemini API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline font-bold text-amber-300">aistudio.google.com</a> to generate directly:
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowKeyInput(true)}
+              className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]"
+            >
+              Update Key &amp; Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: DELIVERING HANDS SELECTION BUTTONS */}
       <div className="space-y-2.5">
@@ -520,7 +628,10 @@ Return a valid JSON object with an array of events:
               <button
                 key={hand.id}
                 type="button"
-                onClick={() => setSelectedHandKey(hand.rawName)}
+                onClick={() => {
+                  setSelectedHandKey(hand.rawName);
+                  setSynthesisError(null);
+                }}
                 className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
                   isSelected
                     ? 'bg-gradient-to-b from-purple-900/60 to-slate-950 border-purple-400 text-white ring-2 ring-purple-500/40 shadow-md shadow-purple-950/40'
@@ -608,7 +719,7 @@ Return a valid JSON object with an array of events:
             <span>3. Three Nakshatra Entry Gates for {toCleanEnglishPlanet(selectedHandKey)}:</span>
           </label>
           <span className="text-[11px] text-slate-400">
-            Planets transiting here trigger the event manufacture
+            Planetary passages across these gates manufacture the events
           </span>
         </div>
 
@@ -674,77 +785,120 @@ Return a valid JSON object with an array of events:
         </div>
       </div>
 
-      {/* SECTION 4: MANUFACTURED PROBABLE EVENTS (RANKED & SCORED) */}
+      {/* SECTION 4: MANUFACTURED EVENTS (DIRECT FROM LLM - NO HARDCODED PRE-POPULATION) */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wider">
             <Activity className="w-4 h-4 text-emerald-400" />
-            <span>4. Manufactured Probable Events for This Period ({manufacturedEvents.length} Forecasts):</span>
+            <span>4. Manufactured Probable Events ({manufacturedEvents.length} Events):</span>
           </label>
-          <span className="text-[11px] text-emerald-400 font-semibold">
-            Ranked by Manifestation Probability
-          </span>
+          {lastExecutionTimeMs !== null && (
+            <span className="text-[11px] text-emerald-400 font-mono font-semibold">
+              ✓ Generated in {(lastExecutionTimeMs / 1000).toFixed(1)}s via {lastSynthesizedModel}
+            </span>
+          )}
         </div>
 
-        <div className="space-y-3">
-          {manufacturedEvents.map((event, idx) => (
-            <div
-              key={event.id}
-              className={`p-4 rounded-xl border transition space-y-2.5 ${
-                event.isHighProbability
-                  ? 'bg-slate-950 border-purple-500/50 shadow-md shadow-purple-950/20'
-                  : 'bg-slate-950/70 border-slate-800'
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-slate-400">
-                    Event {idx + 1}.
-                  </span>
-                  <h4 className="text-sm font-extrabold text-white">
-                    {event.title}
-                  </h4>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Category Badge */}
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
-                    {event.categoryLabel}
-                  </span>
-
-                  {/* Probability Score Badge */}
-                  <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg border font-mono flex items-center gap-1 ${
-                    event.probabilityScore >= 70
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : event.probabilityScore >= 50
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}>
-                    <TrendingUp className="w-3 h-3" />
-                    <span>{event.probabilityScore}% Probable</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* 1-2 LINE MANIFESTATION NARRATIVE */}
-              <p className="text-xs sm:text-[13px] text-slate-200 leading-relaxed font-medium bg-slate-900/70 p-3 rounded-lg border border-slate-800">
-                {event.narrative}
+        {/* LOADING STATE */}
+        {isSynthesizing && (
+          <div className="bg-slate-950 border-2 border-dashed border-purple-500/50 rounded-xl p-8 text-center space-y-3 animate-pulse">
+            <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-white">
+                Contacting Google Gemini ({synthesisSeconds}s)...
+              </h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Synthesizing entry gate passages, Lagna somatic seats, and Rashi fortune conditions for Delivering Hand: <strong className="text-purple-300">{toCleanEnglishPlanet(selectedHandKey)}</strong>.
               </p>
-
-              {/* Astrological Trigger & Anatomical Seat Breakdown */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
-                <div className="text-slate-400">
-                  <strong className="text-purple-300">Root Cause: </strong>
-                  <span>{event.astrologicalRootCause}</span>
-                </div>
-                <div className="text-slate-400">
-                  <strong className="text-cyan-300">Target Anatomy/Domain: </strong>
-                  <span>{event.affectedAnatomyOrDomain}</span>
-                </div>
-              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* EMPTY STATE: INVITING ACTION TO MANUFACTURE VIA GEMINI */}
+        {!isSynthesizing && manufacturedEvents.length === 0 && (
+          <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400 flex items-center justify-center mx-auto">
+              <Sparkles className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-1 max-w-lg mx-auto">
+              <h4 className="text-sm font-bold text-white">
+                Ready to Manufacture Events for {toCleanEnglishPlanet(selectedHandKey)}
+              </h4>
+              <p className="text-xs text-slate-400">
+                The 3 Nakshatra entry gates are set. Click the button below to send the chart alignment to Google Gemini and generate the authentic list of manufactured events.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSynthesizeEvents}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95"
+            >
+              <Zap className="w-4 h-4 fill-current text-amber-300" />
+              <span>Manufacture Events via Google Gemini</span>
+            </button>
+          </div>
+        )}
+
+        {/* LIST OF EVENTS GENERATED BY LLM */}
+        {!isSynthesizing && manufacturedEvents.length > 0 && (
+          <div className="space-y-3">
+            {manufacturedEvents.map((event, idx) => (
+              <div
+                key={event.id}
+                className={`p-4 rounded-xl border transition space-y-2.5 ${
+                  event.isHighProbability
+                    ? 'bg-slate-950 border-purple-500/50 shadow-md shadow-purple-950/20'
+                    : 'bg-slate-950/70 border-slate-800'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-slate-400">
+                      Event {idx + 1}.
+                    </span>
+                    <h4 className="text-sm font-extrabold text-white">
+                      {event.title}
+                    </h4>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Optional Portfolio Tag */}
+                    {event.portfolio && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                        {event.portfolio}
+                      </span>
+                    )}
+
+                    {/* Probability Score Badge */}
+                    <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg border font-mono flex items-center gap-1 ${
+                      event.probabilityScore >= 70
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : event.probabilityScore >= 50
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}>
+                      <TrendingUp className="w-3 h-3" />
+                      <span>{event.probabilityScore}% Probable</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 1-2 LINE MANIFESTATION NARRATIVE */}
+                <p className="text-xs sm:text-[13px] text-slate-200 leading-relaxed font-medium bg-slate-900/70 p-3 rounded-lg border border-slate-800">
+                  {event.narrative}
+                </p>
+
+                {/* Astrological Gate Trigger */}
+                {event.gateTrigger && (
+                  <div className="text-[11px] text-slate-400 pt-0.5">
+                    <strong className="text-purple-300">Trigger Mechanism: </strong>
+                    <span>{event.gateTrigger}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* MODAL: RAW PROMPT INSPECTOR (EYE ICON) */}
@@ -760,7 +914,7 @@ Return a valid JSON object with an array of events:
                   <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
                     <span>Event Manufacturing Engine Prompt Payload</span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                      {LLM_PROVIDERS[selectedProvider]?.name || 'Local Qwen'}
+                      {LLM_PROVIDERS[selectedProvider]?.name || 'Google Gemini Pro'}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">

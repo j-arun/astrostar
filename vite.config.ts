@@ -1129,34 +1129,46 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
               }
             }
 
-            let response;
+            let response: any = null;
             let usedModel = targetModel;
-            try {
-              response = await ai.models.generateContent({
-                model: targetModel,
-                contents: prompt,
-                config: {
-                  temperature: 0.2,
-                  responseMimeType: 'application/json'
-                }
-              });
-            } catch (primaryError: any) {
-              usedModel = GEMINI_FALLBACK_MODEL;
-              try {
-                response = await ai.models.generateContent({
-                  model: usedModel,
-                  contents: prompt,
-                  config: {
-                    temperature: 0.2,
-                    responseMimeType: 'application/json'
+            const candidateModels = Array.from(new Set([
+              targetModel,
+              'gemini-flash-latest',
+              'gemini-4-argon',
+              GEMINI_PRIMARY_MODEL,
+              GEMINI_FALLBACK_MODEL
+            ]));
+
+            let lastError: any = null;
+            for (const candModel of candidateModels) {
+              for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                  response = await ai.models.generateContent({
+                    model: candModel,
+                    contents: prompt,
+                    config: {
+                      temperature: 0.2,
+                      responseMimeType: 'application/json'
+                    }
+                  });
+                  usedModel = candModel;
+                  break;
+                } catch (candErr: any) {
+                  lastError = candErr;
+                  const errMsg = candErr?.message || '';
+                  const isRetryable = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429');
+                  if (isRetryable && attempt === 1) {
+                    await new Promise(r => setTimeout(r, 800));
+                  } else {
+                    break;
                   }
-                });
-              } catch (fallbackError: any) {
-                throw new Error(
-                  `Primary model '${targetModel}' failed: ${primaryError.message}. ` +
-                  `Fallback model '${usedModel}' failed: ${fallbackError.message}`
-                );
+                }
               }
+              if (response) break;
+            }
+
+            if (!response) {
+              throw lastError || new Error(`All candidate models (${candidateModels.join(', ')}) failed.`);
             }
 
             res.statusCode = 200;

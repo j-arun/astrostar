@@ -567,7 +567,54 @@ Return ONLY a valid JSON object matching this schema:
       let endpoint = '/api/llm/gemini';
       let payloadBody: any = { prompt: promptPayload };
 
-      if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') {
+      if (selectedProvider === 'local_qwen') {
+        // 1. LOCAL QWEN (Ollama port 11434 on local machine)
+        const localModel = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'qwen2.5:7b-instruct';
+        const localEndpoint = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') || 'http://localhost:11434/api/generate';
+
+        let res: Response;
+        try {
+          res = await fetch(localEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: localModel,
+              prompt: promptPayload,
+              stream: false,
+              format: 'json',
+              keep_alive: '5m',
+              options: {
+                temperature: 0.3,
+                num_predict: 2500,
+                num_ctx: 8192
+              }
+            })
+          });
+        } catch (fetchErr: any) {
+          const msg = `Cannot connect to local Ollama on port 11434 (${fetchErr.message}). Please ensure Ollama is running locally with 'ollama serve' and model '${localModel}', or switch to Claude / Gemini above.`;
+          setSynthesisError(msg);
+          throw new Error(msg);
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const errorMsg = data.error || `Ollama HTTP ${res.status}: Failed to generate from ${localModel}`;
+          setSynthesisError(errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        const rawLlmText = data.response || data.text || '';
+        const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
+        if (parsedEvents.length === 0) {
+          throw new Error(`Qwen responded, but returned an unparseable event list format. Raw output: ${rawLlmText.slice(0, 150)}...`);
+        }
+
+        setManufacturedEvents(parsedEvents);
+        setLastSynthesizedModel(`Local ${localModel} (Ollama)`);
+        setLastExecutionTimeMs(Date.now() - startMs);
+
+      } else if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') {
+        // 2. ANTHROPIC CLAUDE
         endpoint = '/api/llm/claude';
         const activeClaudeKey = (
           anthropicApiKey ||
@@ -613,7 +660,7 @@ Return ONLY a valid JSON object matching this schema:
         setLastExecutionTimeMs(Date.now() - startMs);
 
       } else {
-        // Google Gemini or Local Qwen
+        // 3. GOOGLE GEMINI
         endpoint = '/api/llm/gemini';
         const activeGeminiKey = (
           geminiApiKey ||
@@ -648,7 +695,7 @@ Return ONLY a valid JSON object matching this schema:
         const rawLlmText = data.text || '';
         const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
         if (parsedEvents.length === 0) {
-          throw new Error('LLM responded, but returned an unparseable event list format. Inspect the prompt payload.');
+          throw new Error('Gemini responded, but returned an unparseable event list format. Inspect the prompt payload.');
         }
 
         setManufacturedEvents(parsedEvents);
@@ -767,7 +814,7 @@ Return ONLY a valid JSON object matching this schema:
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* 1. Google Gemini Key */}
             <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -823,30 +870,80 @@ Return ONLY a valid JSON object matching this schema:
                 {anthropicApiKey ? '✓ Stored in browser localStorage' : 'No key set — uses default server key if configured'}
               </span>
             </div>
+
+            {/* 3. Local Qwen 2.5 (Ollama) */}
+            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5 flex flex-col justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                    <Cpu className="w-3 h-3 text-emerald-400" />
+                    <span>Local Qwen (Ollama):</span>
+                  </span>
+                  <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
+                    Port 11434
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-tight">
+                  100% on-device private execution. No API keys or cloud billing needed.
+                </p>
+              </div>
+              <div className="text-[9.5px] text-slate-400 font-mono bg-slate-950 p-1.5 rounded border border-slate-800">
+                <span>Endpoint: </span>
+                <strong className="text-slate-200">http://localhost:11434</strong>
+                <span className="block text-slate-400">Model: qwen2.5:7b-instruct</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* ERROR BANNER IF LLM CALL RETURNED AN ERROR */}
       {synthesisError && (
-        <div className="bg-rose-950/60 border border-rose-500/70 p-3.5 rounded-xl space-y-2 text-rose-200 text-xs animate-shake">
+        <div className="bg-rose-950/60 border border-rose-500/70 p-3.5 rounded-xl space-y-2.5 text-rose-200 text-xs animate-shake">
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <span className="font-extrabold text-white">{activeProviderName} Generation Error:</span>
               <p className="font-mono text-[11.5px] text-rose-300 leading-snug">{synthesisError}</p>
+              {(synthesisError.includes('503') || synthesisError.includes('demand') || synthesisError.includes('UNAVAILABLE')) && (
+                <p className="text-[11px] text-amber-300 font-semibold mt-1">
+                  💡 Google Gemini servers are experiencing temporary high demand spikes. You can switch to Anthropic Claude 3.5 Sonnet below to synthesize immediately, or retry.
+                </p>
+              )}
             </div>
           </div>
           <div className="pt-2 border-t border-rose-800/40 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] text-rose-300">
-              Verify your API key or active balance, or configure keys directly:
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSynthesizeEvents}
+                className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] transition cursor-pointer"
+              >
+                ↻ Retry Now
+              </button>
+
+              {selectedProvider !== 'claude_sonnet' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProvider('claude_sonnet');
+                    setSynthesisError(null);
+                    setTimeout(() => handleSynthesizeEvents(), 100);
+                  }}
+                  className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] transition cursor-pointer flex items-center gap-1"
+                >
+                  <Cpu className="w-3 h-3" />
+                  <span>Switch to Claude Sonnet &amp; Generate</span>
+                </button>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => setShowKeyDrawer(true)}
-              className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]"
+              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-[11px] border border-slate-700 cursor-pointer"
             >
-              Open Key Settings
+              API Key Settings
             </button>
           </div>
         </div>

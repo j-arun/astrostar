@@ -3,6 +3,7 @@ import {
   Zap,
   Sparkles,
   Compass,
+  Moon,
   Layers,
   Clock,
   Eye,
@@ -18,9 +19,9 @@ import {
   ChevronDown,
   ChevronUp,
   Key,
-  Flame,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Cpu
 } from 'lucide-react';
 import {
   LLMProviderId,
@@ -326,14 +327,24 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     }));
   };
 
-  // Model & Provider Selection (Default: Google Gemini)
+  // Model & Provider Selection (Google Gemini / Anthropic Claude / Local Qwen)
   const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('gemini_pro');
   
-  // API Key management directly in the engine card
+  // API Keys: Both Google Gemini & Anthropic Claude
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
   });
-  const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
+  const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
+  });
+  const [showKeyDrawer, setShowKeyDrawer] = useState<boolean>(false);
+
+  // Active Key for current selected provider
+  const isCurrentProviderKeyConfigured = useMemo(() => {
+    if (selectedProvider === 'gemini_pro') return !!geminiApiKey.trim();
+    if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') return !!anthropicApiKey.trim();
+    return true; // local qwen does not need cloud key
+  }, [selectedProvider, geminiApiKey, anthropicApiKey]);
 
   // Synthesis & Result State (Starts empty - NO HARDCODED PRE-POPULATION)
   const [manufacturedEvents, setManufacturedEvents] = useState<ManufacturedEventItem[]>([]);
@@ -441,7 +452,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     });
   }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyGrahaSpans, flattenedD1, monthlyMoonSpans, selectedMonth]);
 
-  // 3. Complete Raw Prompt Payload for Gemini / LLM Execution with Per-Gate Perspectives
+  // 3. Complete Raw Prompt Payload for LLM Execution with Per-Gate Perspectives
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
     const cleanHand = toCleanEnglishPlanet(selectedHandKey);
@@ -524,8 +535,8 @@ Return ONLY a valid JSON object matching this schema:
     } catch {}
   };
 
-  // Save custom key helper
-  const handleSaveApiKey = (keyVal: string) => {
+  // Save custom keys
+  const handleSaveGeminiKey = (keyVal: string) => {
     const trimmed = keyVal.trim();
     setGeminiApiKey(trimmed);
     if (typeof window !== 'undefined') {
@@ -533,7 +544,15 @@ Return ONLY a valid JSON object matching this schema:
     }
   };
 
-  // Real LLM Synthesis Execution directly calling Gemini / Claude / Ollama
+  const handleSaveAnthropicKey = (keyVal: string) => {
+    const trimmed = keyVal.trim();
+    setAnthropicApiKey(trimmed);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('astro_anthropic_api_key', trimmed);
+    }
+  };
+
+  // Generic LLM Synthesis Execution supporting Gemini, Claude, and Ollama
   const handleSynthesizeEvents = async () => {
     setIsSynthesizing(true);
     setSynthesisError(null);
@@ -545,54 +564,99 @@ Return ONLY a valid JSON object matching this schema:
     }, 1000);
 
     try {
-      const activeKey = (
-        geminiApiKey ||
-        (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') ||
-        ''
-      ).trim();
-
-      const modelToUse = getPreferredGeminiModel();
-
-      // Dispatch request to server proxy endpoint
       let endpoint = '/api/llm/gemini';
+      let payloadBody: any = { prompt: promptPayload };
+
       if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') {
         endpoint = '/api/llm/claude';
-      }
+        const activeClaudeKey = (
+          anthropicApiKey ||
+          (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') ||
+          ''
+        ).trim();
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(activeKey ? { 'x-goog-api-key': activeKey, 'x-api-key': activeKey } : {})
-        },
-        body: JSON.stringify({
+        const activeClaudeModel = (
+          (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') ||
+          'claude-sonnet-5-5'
+        );
+
+        payloadBody = {
+          prompt: promptPayload,
+          model: activeClaudeModel,
+          apiKey: activeClaudeKey || undefined
+        };
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(activeClaudeKey ? { 'x-api-key': activeClaudeKey } : {})
+          },
+          body: JSON.stringify(payloadBody)
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+          const errorMsg = data.error || `HTTP ${res.status}: Failed to reach Claude endpoint`;
+          setSynthesisError(errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        const rawLlmText = data.text || '';
+        const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
+        if (parsedEvents.length === 0) {
+          throw new Error('Claude responded, but returned an unparseable event list format. Inspect the prompt payload.');
+        }
+
+        setManufacturedEvents(parsedEvents);
+        setLastSynthesizedModel(data.model || activeClaudeModel);
+        setLastExecutionTimeMs(Date.now() - startMs);
+
+      } else {
+        // Google Gemini or Local Qwen
+        endpoint = '/api/llm/gemini';
+        const activeGeminiKey = (
+          geminiApiKey ||
+          (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') ||
+          ''
+        ).trim();
+
+        const modelToUse = getPreferredGeminiModel();
+
+        payloadBody = {
           prompt: promptPayload,
           model: modelToUse,
-          apiKey: activeKey || undefined
-        })
-      });
+          apiKey: activeGeminiKey || undefined
+        };
 
-      const data = await res.json().catch(() => ({}));
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(activeGeminiKey ? { 'x-goog-api-key': activeGeminiKey, 'x-api-key': activeGeminiKey } : {})
+          },
+          body: JSON.stringify(payloadBody)
+        });
 
-      if (!res.ok || data.error) {
-        const errorMsg = data.error || `HTTP ${res.status}: Failed to reach LLM endpoint`;
-        setSynthesisError(errorMsg);
-        throw new Error(errorMsg);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+          const errorMsg = data.error || `HTTP ${res.status}: Failed to reach Gemini endpoint`;
+          setSynthesisError(errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        const rawLlmText = data.text || '';
+        const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
+        if (parsedEvents.length === 0) {
+          throw new Error('LLM responded, but returned an unparseable event list format. Inspect the prompt payload.');
+        }
+
+        setManufacturedEvents(parsedEvents);
+        setLastSynthesizedModel(data.model || modelToUse);
+        setLastExecutionTimeMs(Date.now() - startMs);
       }
-
-      const rawLlmText = data.text || '';
-      const parsedEvents = parseEventsFromLlmResponse(rawLlmText);
-
-      if (parsedEvents.length === 0) {
-        throw new Error('LLM responded, but returned an unparseable event list format. Inspect the prompt payload.');
-      }
-
-      setManufacturedEvents(parsedEvents);
-      setLastSynthesizedModel(data.model || modelToUse);
-      setLastExecutionTimeMs(Date.now() - startMs);
     } catch (err: any) {
       console.error('Event Manufacturing Engine Synthesis Error:', err);
-      // Keep synthesisError set for clear UI alert
     } finally {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -600,6 +664,13 @@ Return ONLY a valid JSON object matching this schema:
       setIsSynthesizing(false);
     }
   };
+
+  const activeProviderName = useMemo(() => {
+    if (selectedProvider === 'gemini_pro') return 'Gemini';
+    if (selectedProvider === 'claude_sonnet') return 'Claude Sonnet';
+    if (selectedProvider === 'local_qwen') return 'Qwen';
+    return 'LLM';
+  }, [selectedProvider]);
 
   return (
     <div className="bg-slate-900/95 border-2 border-purple-500/40 rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xl shadow-purple-950/20">
@@ -618,7 +689,7 @@ Return ONLY a valid JSON object matching this schema:
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Delivering Hand ({toCleanEnglishPlanet(selectedHandKey)}) + 3 Entry Gates + Graha Ingress Passages = Direct Event Manufacture.
+                Delivering Hand ({toCleanEnglishPlanet(selectedHandKey)}) + 3 Entry Gates + Graha Ingress Passages = Direct Event Manufacture in LLM.
               </p>
             </div>
           </div>
@@ -626,19 +697,19 @@ Return ONLY a valid JSON object matching this schema:
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Key toggle */}
+          {/* Dual API Keys toggle */}
           <button
             type="button"
-            onClick={() => setShowKeyInput(!showKeyInput)}
+            onClick={() => setShowKeyDrawer(!showKeyDrawer)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
-              geminiApiKey
+              isCurrentProviderKeyConfigured
                 ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/40'
                 : 'bg-slate-950 border-amber-500/50 text-amber-300 hover:bg-slate-800'
             }`}
-            title="Configure or view Gemini API Key"
+            title="Configure or verify Google Gemini & Anthropic Claude API keys"
           >
             <Key className="w-3.5 h-3.5" />
-            <span>{geminiApiKey ? 'Gemini Key Configured' : 'Configure Gemini Key'}</span>
+            <span>{isCurrentProviderKeyConfigured ? `${activeProviderName} Key Ready` : `Setup ${activeProviderName} Key`}</span>
           </button>
 
           {/* Prompt Inspector */}
@@ -666,7 +737,7 @@ Return ONLY a valid JSON object matching this schema:
             </select>
           </div>
 
-          {/* Primary Action Button */}
+          {/* Primary Action Button: MANUFACTURE EVENTS IN LLM */}
           <button
             type="button"
             onClick={handleSynthesizeEvents}
@@ -674,43 +745,84 @@ Return ONLY a valid JSON object matching this schema:
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSynthesizing ? 'animate-spin' : ''}`} />
-            <span>{isSynthesizing ? `Synthesizing via Gemini (${synthesisSeconds}s)...` : 'Manufacture Events in Gemini'}</span>
+            <span>{isSynthesizing ? `Synthesizing via ${activeProviderName} (${synthesisSeconds}s)...` : 'Manufacture Events in LLM'}</span>
           </button>
         </div>
       </div>
 
-      {/* OPTIONAL IN-CARD API KEY INPUT DRAWER */}
-      {showKeyInput && (
-        <div className="bg-slate-950 p-3.5 rounded-xl border border-purple-500/30 space-y-2 animate-fadeIn">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5 text-amber-400" />
-              <span>Google Gemini API Key (Stored securely in browser localStorage):</span>
-            </label>
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[11px] text-amber-400 hover:underline"
-            >
-              Get free key &rarr;
-            </a>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="password"
-              value={geminiApiKey}
-              onChange={e => handleSaveApiKey(e.target.value)}
-              placeholder="Paste your AI Studio Gemini API Key (AIzaSy...)"
-              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
-            />
+      {/* DUAL API KEYS DRAWER (GEMINI & CLAUDE) */}
+      {showKeyDrawer && (
+        <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/30 space-y-3 animate-fadeIn">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-extrabold text-white">LLM API Key Settings</span>
+            </div>
             <button
               type="button"
-              onClick={() => setShowKeyInput(false)}
-              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition"
+              onClick={() => setShowKeyDrawer(false)}
+              className="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-900"
             >
-              Done
+              Close
             </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* 1. Google Gemini Key */}
+            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-cyan-300 flex items-center gap-1">
+                  <span>Google Gemini API Key:</span>
+                  {geminiApiKey ? <Check className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                </span>
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-amber-400 hover:underline"
+                >
+                  Get key &rarr;
+                </a>
+              </div>
+              <input
+                type="password"
+                value={geminiApiKey}
+                onChange={e => handleSaveGeminiKey(e.target.value)}
+                placeholder="AIzaSy... (Gemini key stored in browser)"
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+              />
+              <span className="text-[10px] text-slate-500 block">
+                {geminiApiKey ? '✓ Stored in browser localStorage' : 'No key set — uses default service environment'}
+              </span>
+            </div>
+
+            {/* 2. Anthropic Claude Key */}
+            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
+                  <span>Anthropic Claude API Key:</span>
+                  {anthropicApiKey ? <Check className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                </span>
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-amber-400 hover:underline"
+                >
+                  Get key &rarr;
+                </a>
+              </div>
+              <input
+                type="password"
+                value={anthropicApiKey}
+                onChange={e => handleSaveAnthropicKey(e.target.value)}
+                placeholder="sk-ant-... (Claude key stored in browser)"
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+              />
+              <span className="text-[10px] text-slate-500 block">
+                {anthropicApiKey ? '✓ Stored in browser localStorage' : 'No key set — uses default server key if configured'}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -721,20 +833,20 @@ Return ONLY a valid JSON object matching this schema:
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <span className="font-extrabold text-white">Gemini API Call Failed:</span>
+              <span className="font-extrabold text-white">{activeProviderName} Generation Error:</span>
               <p className="font-mono text-[11.5px] text-rose-300 leading-snug">{synthesisError}</p>
             </div>
           </div>
           <div className="pt-2 border-t border-rose-800/40 flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] text-rose-300">
-              Enter your active Google Gemini API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline font-bold text-amber-300">aistudio.google.com</a> to generate directly:
+              Verify your API key or active balance, or configure keys directly:
             </span>
             <button
               type="button"
-              onClick={() => setShowKeyInput(true)}
+              onClick={() => setShowKeyDrawer(true)}
               className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]"
             >
-              Update Key &amp; Retry
+              Open Key Settings
             </button>
           </div>
         </div>
@@ -795,7 +907,7 @@ Return ONLY a valid JSON object matching this schema:
         </div>
       </div>
 
-      {/* SECTION 2 (FORMERLY SECTION 3): THREE NAKSHATRA ENTRY GATES WITH DEDICATED PER-GATE EVALUATION BUTTONS & COMPLETE GRAHA PASSAGES */}
+      {/* SECTION 2: THREE NAKSHATRA ENTRY GATES WITH ICON-BASED PERSPECTIVE SWITCHES */}
       <div className="space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
@@ -803,7 +915,7 @@ Return ONLY a valid JSON object matching this schema:
             <span>2. Three Nakshatra Entry Gates for {toCleanEnglishPlanet(selectedHandKey)}:</span>
           </label>
           <span className="text-[11px] text-purple-300">
-            Choose evaluation perspective per gate &bull; Graha passages shown inside
+            Switch perspectives with icons: <strong className="text-cyan-300">Asc</strong> (Lagna) &bull; <strong className="text-amber-300">Moon</strong> (Janma) &bull; <strong className="text-purple-300">Both</strong> (Combined)
           </span>
         </div>
 
@@ -905,52 +1017,57 @@ Return ONLY a valid JSON object matching this schema:
                   </div>
                 </div>
 
-                {/* DEDICATED PER-GATE EVALUATION PERSPECTIVE BUTTONS (FROM LAGNA / FROM JANMA / COMBINED) */}
-                <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                      Event Perspective:
-                    </span>
-                    <span className="text-[9.5px] font-mono font-bold text-purple-300">
-                      {currentGatePerspective === 'lagna' ? 'From Lagna' : currentGatePerspective === 'rashi' ? 'From Janma' : 'Combined'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
+                {/* COMPACT SEGMENTED ICON SWITCH: [Asc] [Moon] [Asc + Moon] */}
+                <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                    <span>Perspective:</span>
+                  </span>
+
+                  <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 shadow-inner">
+                    {/* Switch 1: Ascendant (Lagna) */}
                     <button
                       type="button"
                       onClick={() => handleSetGatePerspective(idx, 'lagna')}
-                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
                         currentGatePerspective === 'lagna'
                           ? 'bg-cyan-500 text-slate-950 font-black shadow'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          : 'text-slate-400 hover:text-slate-200'
                       }`}
-                      title="Evaluate event possibilities from Lagna (Physical body, tangible anatomy, scars, somatic vulnerability)"
+                      title="From Lagna (Ascendant - Physical Body, Anatomy & Scars)"
                     >
-                      From Lagna
+                      <Compass className="w-3 h-3" />
+                      <span>Asc</span>
                     </button>
+
+                    {/* Switch 2: Janma (Moon) */}
                     <button
                       type="button"
                       onClick={() => handleSetGatePerspective(idx, 'rashi')}
-                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
                         currentGatePerspective === 'rashi'
                           ? 'bg-amber-500 text-slate-950 font-black shadow'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          : 'text-slate-400 hover:text-slate-200'
                       }`}
-                      title="Evaluate event possibilities from Janma Rashi (Mental perception, fortune, psychological fruition)"
+                      title="From Janma Rashi (Moon - Psychological Weather & Fortune)"
                     >
-                      From Janma
+                      <Moon className="w-3 h-3 fill-current" />
+                      <span>Moon</span>
                     </button>
+
+                    {/* Switch 3: Combined (Both Ascendant + Moon) */}
                     <button
                       type="button"
                       onClick={() => handleSetGatePerspective(idx, 'combined')}
-                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition cursor-pointer ${
                         currentGatePerspective === 'combined'
                           ? 'bg-purple-500 text-white font-black shadow'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          : 'text-slate-400 hover:text-slate-200'
                       }`}
-                      title="Evaluate event possibilities from combined Lagna somatic reality and Moon experiential reality"
+                      title="Combined Dual Perspective (Ascendant + Moon)"
                     >
-                      Combined
+                      <Compass className="w-3 h-3" />
+                      <span className="text-[8.5px] font-black">+</span>
+                      <Moon className="w-3 h-3 fill-current" />
                     </button>
                   </div>
                 </div>
@@ -960,7 +1077,7 @@ Return ONLY a valid JSON object matching this schema:
         </div>
       </div>
 
-      {/* SECTION 3 (FORMERLY SECTION 4): MANUFACTURED EVENTS (DIRECT FROM LLM - NO HARDCODED PRE-POPULATION) */}
+      {/* SECTION 3: MANUFACTURED EVENTS (DIRECT FROM LLM - NO HARDCODED PRE-POPULATION) */}
       <div className="space-y-3 pt-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wider">
@@ -980,16 +1097,16 @@ Return ONLY a valid JSON object matching this schema:
             <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-white">
-                Contacting Google Gemini ({synthesisSeconds}s)...
+                Contacting {activeProviderName} ({synthesisSeconds}s)...
               </h4>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Synthesizing entry gate passages, Lagna somatic seats, and Rashi fortune conditions for Delivering Hand: <strong className="text-purple-300">{toCleanEnglishPlanet(selectedHandKey)}</strong> with custom per-gate evaluation perspectives.
+                Synthesizing entry gate passages, Lagna somatic seats, and Rashi fortune conditions for Delivering Hand: <strong className="text-purple-300">{toCleanEnglishPlanet(selectedHandKey)}</strong> with customized icon perspectives.
               </p>
             </div>
           </div>
         )}
 
-        {/* EMPTY STATE: INVITING ACTION TO MANUFACTURE VIA GEMINI */}
+        {/* EMPTY STATE: INVITING ACTION TO MANUFACTURE IN LLM */}
         {!isSynthesizing && manufacturedEvents.length === 0 && (
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400 flex items-center justify-center mx-auto">
@@ -1000,7 +1117,7 @@ Return ONLY a valid JSON object matching this schema:
                 Ready to Manufacture Events for {toCleanEnglishPlanet(selectedHandKey)}
               </h4>
               <p className="text-xs text-slate-400">
-                The 3 Nakshatra entry gates, their transiting grahas, and your selected per-gate perspectives are configured. Click below to synthesize and manifest the probable events in Google Gemini.
+                The 3 Nakshatra entry gates, their transiting grahas, and your selected per-gate icon switches are set. Click below to synthesize and manifest the probable events in {activeProviderName}.
               </p>
             </div>
             <button
@@ -1009,7 +1126,7 @@ Return ONLY a valid JSON object matching this schema:
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95"
             >
               <Zap className="w-4 h-4 fill-current text-amber-300" />
-              <span>Manufacture Events in Gemini</span>
+              <span>Manufacture Events in LLM</span>
             </button>
           </div>
         )}
@@ -1089,11 +1206,11 @@ Return ONLY a valid JSON object matching this schema:
                   <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
                     <span>Event Manufacturing Engine Prompt Payload</span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                      {LLM_PROVIDERS[selectedProvider]?.name || 'Google Gemini Pro'}
+                      {LLM_PROVIDERS[selectedProvider]?.name || activeProviderName}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Exact string payload transmitted to the LLM engine containing delivering hands, 3 Nakshatra gates, per-gate Lagna/Rashi perspectives, and all transiting grahas.
+                    Exact string payload transmitted to the LLM engine containing delivering hands, 3 Nakshatra gates, per-gate Lagna/Rashi icon switch states, and all transiting grahas.
                   </p>
                 </div>
               </div>

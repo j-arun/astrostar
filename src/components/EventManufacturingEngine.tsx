@@ -43,7 +43,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export type PerspectiveMode = 'lagna' | 'rashi' | 'dual';
+export type GatePerspective = 'lagna' | 'rashi' | 'combined';
 
 export interface ManufacturedEventItem {
   id: string;
@@ -55,6 +55,14 @@ export interface ManufacturedEventItem {
   gateTrigger?: string; // Specific Nakshatra gate & transit trigger
 }
 
+export interface ActiveTransitGrahaDetail {
+  name: string;
+  key: string;
+  type: 'transit_current' | 'monthly_passage' | 'natal';
+  passageWindow?: string;
+  isExalted?: boolean;
+}
+
 export interface NakshatraGateInfo {
   nakshatraName: string;
   rashiIndex: number; // 1..12
@@ -63,7 +71,7 @@ export interface NakshatraGateInfo {
   houseFromRashi: number;
   anatomicalSeat: string;
   significations: string;
-  transitingPlanets: string[];
+  activeGrahasInGate: ActiveTransitGrahaDetail[];
   moonIngressWindow?: string;
 }
 
@@ -84,6 +92,7 @@ interface EventManufacturingEngineProps {
   flattenedD1: any[];
   transitPlacements: any[];
   monthlyMoonSpans: any[];
+  monthlyGrahaSpans?: any[];
 }
 
 // 9 Planetary Lords & their 3 Nakshatra Gates
@@ -227,32 +236,70 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   activeDashaHierarchy,
   flattenedD1,
   transitPlacements,
-  monthlyMoonSpans
+  monthlyMoonSpans,
+  monthlyGrahaSpans
 }) => {
-  // 1. Available Delivering Hands for Selection
+  // 1. Available Delivering Hands for Selection (Including Mercury PD, Saturn PD, Saturn AD, Venus MD, etc.)
   const availableHands = useMemo(() => {
-    const list: { id: string; label: string; role: 'AD' | 'PD' | 'MD'; rawName: string }[] = [];
+    const list: { id: string; label: string; subLabel: string; role: 'PD' | 'AD' | 'MD'; rawName: string }[] = [];
     
-    // MD
-    const mdKey = normalizeLordKey(activeDashaHierarchy.mahadasha);
-    list.push({ id: `MD-${mdKey}`, label: `${toCleanEnglishPlanet(mdKey)} MD`, role: 'MD', rawName: mdKey });
+    // Active PD (Active Month Teeth)
+    const pdKey = normalizeLordKey(activeDashaHierarchy.pratyantardasha);
+    list.push({
+      id: `PD-${pdKey}`,
+      label: `${toCleanEnglishPlanet(pdKey)} PD`,
+      subLabel: 'Active Teeth',
+      role: 'PD',
+      rawName: pdKey
+    });
+
+    // Previous Saral Delivery / Complementary Key Hand: Saturn PD
+    const saturnKey = 'Saturn (Sani)';
+    if (!list.some(item => item.id === `PD-${saturnKey}`)) {
+      list.push({
+        id: `PD-${saturnKey}`,
+        label: `${toCleanEnglishPlanet(saturnKey)} PD`,
+        subLabel: 'Previous Saral Hand',
+        role: 'PD',
+        rawName: saturnKey
+      });
+    }
 
     // AD (Delivering Antardasha)
     const adKey = normalizeLordKey(activeDashaHierarchy.antardasha);
-    if (!list.some(item => item.rawName === adKey)) {
-      list.push({ id: `AD-${adKey}`, label: `${toCleanEnglishPlanet(adKey)} AD (Delivering Hand)`, role: 'AD', rawName: adKey });
+    if (!list.some(item => item.rawName === adKey && item.role === 'AD')) {
+      list.push({
+        id: `AD-${adKey}`,
+        label: `${toCleanEnglishPlanet(adKey)} AD`,
+        subLabel: 'Delivering Hand',
+        role: 'AD',
+        rawName: adKey
+      });
     }
 
-    // PD (Active Month Teeth)
-    const pdKey = normalizeLordKey(activeDashaHierarchy.pratyantardasha);
-    if (!list.some(item => item.rawName === pdKey)) {
-      list.push({ id: `PD-${pdKey}`, label: `${toCleanEnglishPlanet(pdKey)} PD (Month Teeth)`, role: 'PD', rawName: pdKey });
+    // MD (Mahadasha Canvas)
+    const mdKey = normalizeLordKey(activeDashaHierarchy.mahadasha);
+    if (!list.some(item => item.rawName === mdKey && item.role === 'MD')) {
+      list.push({
+        id: `MD-${mdKey}`,
+        label: `${toCleanEnglishPlanet(mdKey)} MD`,
+        subLabel: 'Dasha Lord',
+        role: 'MD',
+        rawName: mdKey
+      });
     }
 
-    // Complementary key lords (Saturn and Mercury often active in sub-periods)
-    for (const complementary of ['Mercury (Budha)', 'Saturn (Sani)', 'Venus (Sukra)', 'Mars (Sevvai)', 'Jupiter (Guru)', 'Rahu', 'Sun (Surya)']) {
-      if (!list.some(item => item.rawName === complementary)) {
-        list.push({ id: `SUB-${complementary}`, label: `${toCleanEnglishPlanet(complementary)}`, role: 'PD', rawName: complementary });
+    // Complementary key lords so user can test any hand
+    const remainingLords = ['Venus (Sukra)', 'Mars (Sevvai)', 'Jupiter (Guru)', 'Rahu', 'Sun (Surya)', 'Moon (Chandra)', 'Ketu'];
+    for (const lord of remainingLords) {
+      if (!list.some(item => item.rawName === lord)) {
+        list.push({
+          id: `GRAHA-${lord}`,
+          label: `${toCleanEnglishPlanet(lord)}`,
+          subLabel: '3 Gates',
+          role: 'PD',
+          rawName: lord
+        });
       }
     }
 
@@ -264,8 +311,20 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     return normalizeLordKey(activeDashaHierarchy.pratyantardasha) || 'Mercury (Budha)';
   });
 
-  // Perspective Mode: Lagna, Rashi, or Dual
-  const [perspective, setPerspective] = useState<PerspectiveMode>('dual');
+  // Per-Gate Evaluation Perspective State: Gate 0, Gate 1, Gate 2
+  // Options: 'lagna' | 'rashi' | 'combined'
+  const [gatePerspectives, setGatePerspectives] = useState<Record<number, GatePerspective>>({
+    0: 'combined',
+    1: 'combined',
+    2: 'combined'
+  });
+
+  const handleSetGatePerspective = (gateIdx: number, mode: GatePerspective) => {
+    setGatePerspectives(prev => ({
+      ...prev,
+      [gateIdx]: mode
+    }));
+  };
 
   // Model & Provider Selection (Default: Google Gemini)
   const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('gemini_pro');
@@ -291,7 +350,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   // Timer for active synthesis
   const timerRef = useRef<any>(null);
 
-  // 2. Compute the 3 Nakshatra Entry Gates for the Selected Delivering Hand
+  // 2. Compute the 3 Nakshatra Entry Gates with COMPLETE Planetary Passages (Transit + Spans + Natal)
   const gateDetails = useMemo<NakshatraGateInfo[]>(() => {
     const lordMeta = LORD_NAKSHATRA_GATES[selectedHandKey] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
     
@@ -301,14 +360,72 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
       const hLagna = ((rIdx - natalLagnaIdx + 12) % 12) + 1;
       const hRashi = ((rIdx - natalRashiIdx + 12) % 12) + 1;
 
-      // Find transiting planets in this sign this month
-      const planetsInSign = (transitPlacements || [])
-        .filter((t: any) => t.sign_index === rIdx || t.house_from_lagna === hLagna)
-        .map((t: any) => t.graha_name || t.graha_key);
+      const grahaMap = new Map<string, ActiveTransitGrahaDetail>();
 
-      // Find Moon ingress dates for this sign
+      // A. Match Current Transits in this sign (from transitPlacements)
+      for (const t of (transitPlacements || [])) {
+        const signMatch = (
+          t.transit_rashi_index === rIdx ||
+          t.signIndex === rIdx ||
+          t.sign_index === rIdx ||
+          t.relative_to_natal_lagna?.house_number === hLagna
+        );
+        if (signMatch) {
+          const gKey = t.graha_key || t.graha_name;
+          const cleanName = toCleanEnglishPlanet(gKey);
+          grahaMap.set(cleanName, {
+            name: cleanName,
+            key: gKey,
+            type: 'transit_current',
+            passageWindow: 'Active in House'
+          });
+        }
+      }
+
+      // B. Match Monthly Graha Spans passing through this sign during the selected month
+      for (const span of (monthlyGrahaSpans || [])) {
+        if (span.sign_index === rIdx || span.signIndex === rIdx) {
+          const cleanName = toCleanEnglishPlanet(span.graha_key || span.graha_name);
+          const windowStr = `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${span.start_day}–${span.end_day}`;
+          const existing = grahaMap.get(cleanName);
+          if (existing) {
+            existing.passageWindow = windowStr;
+            existing.isExalted = span.is_exalted;
+          } else {
+            grahaMap.set(cleanName, {
+              name: cleanName,
+              key: span.graha_key,
+              type: 'monthly_passage',
+              passageWindow: windowStr,
+              isExalted: span.is_exalted
+            });
+          }
+        }
+      }
+
+      // C. Match Natal Occupants situated at birth in this sign (from flattenedD1)
+      for (const np of (flattenedD1 || [])) {
+        const rashiNorm = (np.rashi_name || '').toLowerCase();
+        const signNorm = (rMeta.eng || '').toLowerCase();
+        if (signNorm.includes(rashiNorm) || rashiNorm.includes(signNorm.slice(0, 4))) {
+          const cleanName = toCleanEnglishPlanet(np.body_name);
+          const existing = grahaMap.get(cleanName);
+          if (existing) {
+            existing.passageWindow = `${existing.passageWindow || 'Transit'} + Natal Seat`;
+          } else {
+            grahaMap.set(cleanName, {
+              name: `${cleanName} (Natal)`,
+              key: np.body_name,
+              type: 'natal',
+              passageWindow: 'Fixed Natal Position'
+            });
+          }
+        }
+      }
+
+      // D. Find Moon ingress dates for this sign
       const moonSpan = (monthlyMoonSpans || []).find((m: any) => m.signIndex === rIdx || m.houseNumber === hLagna);
-      const moonIngressWindow = moonSpan ? `Day ${moonSpan.startDay}–${moonSpan.endDay}` : undefined;
+      const moonIngressWindow = moonSpan ? `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${moonSpan.startDay}–${moonSpan.endDay}` : undefined;
 
       return {
         nakshatraName: nakName,
@@ -318,13 +435,13 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
         houseFromRashi: hRashi,
         anatomicalSeat: lordMeta.anatomies[idx] || 'Vital Organs & Nerves',
         significations: lordMeta.signs[0] || 'Karmic fruition gate',
-        transitingPlanets: Array.from(new Set(planetsInSign)),
+        activeGrahasInGate: Array.from(grahaMap.values()),
         moonIngressWindow
       };
     });
-  }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyMoonSpans]);
+  }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyGrahaSpans, flattenedD1, monthlyMoonSpans, selectedMonth]);
 
-  // 3. Complete Raw Prompt Payload for Gemini / LLM Execution
+  // 3. Complete Raw Prompt Payload for Gemini / LLM Execution with Per-Gate Perspectives
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
     const cleanHand = toCleanEnglishPlanet(selectedHandKey);
@@ -342,35 +459,49 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
 - Active Antardasha (AD): ${cleanAd}
 - Active Pratyantardasha (PD) [Teeth of the Month]: ${cleanPd}
 - SELECTED DELIVERING HAND TARGET: ${cleanHand}
-- EVALUATION PERSPECTIVE: ${perspective === 'lagna' ? 'STRICTLY FROM LAGNA (Physical Body, Anatomy, Somatic Scars & Vulnerabilities)' : perspective === 'rashi' ? 'STRICTLY FROM MOON (Psychological Reality, Perception, Experiential Fruition)' : 'DUAL COMBINED SYNTHESIS (Lagna Physical Reality + Moon Experiential Reality)'}
 
 [THE THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND: ${cleanHand}]
-${gateDetails.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
+${gateDetails.map((g, idx) => {
+  const pMode = gatePerspectives[idx] || 'combined';
+  const pLabel = pMode === 'lagna'
+    ? 'EVALUATED FROM LAGNA (Physical Body, Anatomy, Somatic Scars & Vulnerability)'
+    : pMode === 'rashi'
+    ? 'EVALUATED FROM JANMA RASHI (Psychological Fruition, Mental Perception & Fortunes)'
+    : 'COMBINED DUAL SYNTHESIS (Lagna Somatic Vulnerability + Moon Experiential Fruition)';
+
+  const grahasStr = g.activeGrahasInGate.length > 0
+    ? g.activeGrahasInGate.map(gr => `${gr.name} [${gr.passageWindow || 'In Gate'}]`).join(', ')
+    : 'None (Clear Gate)';
+
+  return `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
+- Chosen Evaluation Perspective: ${pLabel}
 - House from Lagna: House ${g.houseFromLagna}
 - House from Janma Rashi (Moon): House ${g.houseFromRashi}
 - Anatomical Seat & Karakatwa: ${g.anatomicalSeat} — ${g.significations}
-- Transiting Planets Passing this Gate this Month: ${g.transitingPlanets.length > 0 ? g.transitingPlanets.join(', ') : 'None'}
-- Moon (Chandra) Gate Passage Window: ${g.moonIngressWindow || 'Approx. 2.25-day lunar transit'}
-`).join('\n')}
+- Transiting Grahas & People Passing/Crashing in this Gate: ${grahasStr}
+- Moon (Chandra) Gate Passage Window: ${g.moonIngressWindow || 'Approx. 2.25-day lunar trigger'}
+`;
+}).join('\n')}
 
 [CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING]
 1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
-2. Whenever a transiting planet (such as Mars, Saturn, Sun, Venus, or the Moon) crosses that gate, the event MANUFACTURES.
-3. Lagna determines physical vulnerability and bodily seats (e.g., Venus in Lagna + Saturn AD = facial scar or chronic skin delay; Mars in 8th house Ashlesha = digestive burning, gut flora inflammation, sleep disturbance).
-4. Moon determines the experiential weather, timing of fruition, and psychological impact.
-5. Manufacture 4 to 6 authentic, specific events that will manifest during this time frame.
+2. Whenever transiting planets (e.g. Mars, Sun, Venus, Mercury, Jupiter, Saturn, Rahu, Ketu, Moon) pass or crash through that gate, the event MANUFACTURES.
+3. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
+4. For example:
+   - When multiple grahas (Mars, Venus, Mercury, Jupiter) pass through Ashlesha in Cancer (8th from Lagna, 9th from Moon), acute digestive heat, acid flare-ups, communication bursts, or sleep disturbances manifest.
+   - When Saturn/Venus activate 1st-8th houses, scars or existing marks turn into chronic dermatological delays.
+5. Manufacture 4 to 6 authentic, specific events that will manifest during this period based on the planets crossing these gates and each gate's chosen perspective.
 6. For each event, provide:
    - title: Direct headline of the event
    - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
    - probabilityScore: Realistic integer probability (e.g. 75, 65, 55, 40, 25)
    - portfolio: Assign to one portfolio category from: Work, Life, Health, Money, Friends, Love, Trip
-   - gateTrigger: The specific Nakshatra gate and planetary passage that triggered this event
+   - gateTrigger: The specific Nakshatra gate, chosen perspective, and planetary transit passage that triggered this event
 
 OUTPUT FORMAT REQUIREMENT:
 Return ONLY a valid JSON object matching this schema:
 {
   "deliveringHand": "${cleanHand}",
-  "perspective": "${perspective}",
   "events": [
     {
       "id": "evt-1",
@@ -378,11 +509,11 @@ Return ONLY a valid JSON object matching this schema:
       "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
       "probabilityScore": 75,
       "portfolio": "Health | Work | Money | Life | Love | Friends | Trip",
-      "gateTrigger": "Nakshatra gate + transit planet passage"
+      "gateTrigger": "Nakshatra gate + transit planet passage + evaluation perspective"
     }
   ]
 }`;
-  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, activeDashaHierarchy, selectedHandKey, perspective, gateDetails]);
+  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, activeDashaHierarchy, selectedHandKey, gateDetails, gatePerspectives]);
 
   // Copy prompt helper
   const handleCopyPrompt = async () => {
@@ -487,7 +618,7 @@ Return ONLY a valid JSON object matching this schema:
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Delivering Hand ({toCleanEnglishPlanet(selectedHandKey)}) + 3 Nakshatra Gates + Planetary Passages = Direct Event Manufacture.
+                Delivering Hand ({toCleanEnglishPlanet(selectedHandKey)}) + 3 Entry Gates + Graha Ingress Passages = Direct Event Manufacture.
               </p>
             </div>
           </div>
@@ -543,7 +674,7 @@ Return ONLY a valid JSON object matching this schema:
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSynthesizing ? 'animate-spin' : ''}`} />
-            <span>{isSynthesizing ? `Synthesizing via Gemini (${synthesisSeconds}s)...` : 'Synthesize Events via LLM'}</span>
+            <span>{isSynthesizing ? `Synthesizing via Gemini (${synthesisSeconds}s)...` : 'Manufacture Events in Gemini'}</span>
           </button>
         </div>
       </div>
@@ -614,11 +745,13 @@ Return ONLY a valid JSON object matching this schema:
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>1. Select Delivering Hand (Click to activate teeth &amp; gates):</span>
+            <span>1. Select Delivering Hand (Saral Delivery &amp; Month Teeth):</span>
           </label>
-          <span className="text-[11px] text-slate-400 font-mono">
-            Active Month PD: <strong className="text-amber-300">{toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)}</strong>
-          </span>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+            <span>Teeth: <strong className="text-amber-300">{toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)} PD</strong></span>
+            <span className="text-slate-600">&bull;</span>
+            <span>Delivery: <strong className="text-cyan-300">{toCleanEnglishPlanet(activeDashaHierarchy.antardasha)} AD</strong></span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
@@ -651,10 +784,10 @@ Return ONLY a valid JSON object matching this schema:
                   {isSelected && <Zap className="w-3 h-3 text-amber-400 fill-current animate-pulse" />}
                 </div>
                 <span className="text-xs font-black truncate block">
-                  {toCleanEnglishPlanet(hand.rawName)}
+                  {hand.label}
                 </span>
-                <span className="text-[9.5px] text-slate-400 truncate block mt-0.5">
-                  3 Gates Active
+                <span className="text-[9px] text-slate-400 truncate block mt-0.5">
+                  {hand.subLabel}
                 </span>
               </button>
             );
@@ -662,135 +795,177 @@ Return ONLY a valid JSON object matching this schema:
         </div>
       </div>
 
-      {/* SECTION 2: DUAL PERSPECTIVE TOGGLE (FROM LAGNA vs. FROM RASHI) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-        <div className="flex items-center gap-2">
-          <Compass className="w-4 h-4 text-cyan-400" />
-          <span className="text-xs font-bold text-slate-200">
-            2. Evaluation Perspective:
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setPerspective('lagna')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              perspective === 'lagna'
-                ? 'bg-cyan-500 text-slate-950 shadow'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-            title="Focus on physical anatomy, Lagna houses, scars, bodily symptoms, and structural reality"
-          >
-            From Lagna (Physical Body &amp; Anatomy)
-          </button>
-          <button
-            type="button"
-            onClick={() => setPerspective('rashi')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              perspective === 'rashi'
-                ? 'bg-amber-500 text-slate-950 shadow'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-            title="Focus on Moon perspective, psychological weather, fortune, and emotional fruition"
-          >
-            From Janma Rashi (Mind &amp; Fortune)
-          </button>
-          <button
-            type="button"
-            onClick={() => setPerspective('dual')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              perspective === 'dual'
-                ? 'bg-purple-500 text-white shadow'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-            title="Complete Parashara dual synthesis combining Lagna physical reality and Moon experiential reality"
-          >
-            Dual Combined (Lagna + Rashi)
-          </button>
-        </div>
-      </div>
-
-      {/* SECTION 3: THE 3 NAKSHATRA ENTRY GATES OF THIS DELIVERING HAND */}
+      {/* SECTION 2 (FORMERLY SECTION 3): THREE NAKSHATRA ENTRY GATES WITH DEDICATED PER-GATE EVALUATION BUTTONS & COMPLETE GRAHA PASSAGES */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
             <Layers className="w-3.5 h-3.5 text-purple-400" />
-            <span>3. Three Nakshatra Entry Gates for {toCleanEnglishPlanet(selectedHandKey)}:</span>
+            <span>2. Three Nakshatra Entry Gates for {toCleanEnglishPlanet(selectedHandKey)}:</span>
           </label>
-          <span className="text-[11px] text-slate-400">
-            Planetary passages across these gates manufacture the events
+          <span className="text-[11px] text-purple-300">
+            Choose evaluation perspective per gate &bull; Graha passages shown inside
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {gateDetails.map((gate, idx) => (
-            <div
-              key={gate.nakshatraName}
-              className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2 hover:border-purple-500/40 transition"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-300 font-mono text-xs flex items-center justify-center font-bold">
-                    {idx + 1}
-                  </span>
-                  <span className="text-sm font-extrabold text-white">
-                    {gate.nakshatraName}
-                  </span>
-                </div>
-                <span className="text-xs font-bold text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/50">
-                  {gate.rashiName.split(' ')[0]}
-                </span>
-              </div>
+          {gateDetails.map((gate, idx) => {
+            const currentGatePerspective = gatePerspectives[idx] || 'combined';
 
-              {/* Dual House Coordinates */}
-              <div className="grid grid-cols-2 gap-1.5 text-center text-xs">
-                <div className="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block font-semibold">From Lagna</span>
-                  <span className="font-extrabold text-cyan-300">House {gate.houseFromLagna}</span>
-                </div>
-                <div className="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block font-semibold">From Rashi</span>
-                  <span className="font-extrabold text-amber-300">House {gate.houseFromRashi}</span>
-                </div>
-              </div>
-
-              {/* Anatomy & Significations */}
-              <div className="text-[11px] text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800/70 space-y-0.5">
-                <span className="font-bold text-purple-300 block">Anatomical Seat:</span>
-                <p className="text-slate-300 leading-tight">{gate.anatomicalSeat}</p>
-              </div>
-
-              {/* Transit Occupants / Passages */}
-              <div className="text-[11px] pt-1 border-t border-slate-800/80 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-semibold">Transits Inside Gate:</span>
-                  <span className="font-bold text-white">
-                    {gate.transitingPlanets.length > 0 ? (
-                      <span className="text-rose-400 font-mono">{gate.transitingPlanets.join(', ')}</span>
-                    ) : (
-                      <span className="text-slate-500 italic">None</span>
-                    )}
-                  </span>
-                </div>
-                {gate.moonIngressWindow && (
-                  <div className="flex items-center justify-between text-[10px] text-amber-300 font-mono">
-                    <span>Moon Ingress Trigger:</span>
-                    <span>{gate.moonIngressWindow}</span>
+            return (
+              <div
+                key={gate.nakshatraName}
+                className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5 hover:border-purple-500/40 transition flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  {/* Gate Title & Rashi */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-300 font-mono text-xs flex items-center justify-center font-bold">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-extrabold text-white">
+                        {gate.nakshatraName}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/50">
+                      {gate.rashiName.split(' ')[0]}
+                    </span>
                   </div>
-                )}
+
+                  {/* Dual House Coordinates */}
+                  <div className="grid grid-cols-2 gap-1.5 text-center text-xs">
+                    <div className="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block font-semibold">From Lagna</span>
+                      <span className="font-extrabold text-cyan-300">House {gate.houseFromLagna}</span>
+                    </div>
+                    <div className="bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block font-semibold">From Janma</span>
+                      <span className="font-extrabold text-amber-300">House {gate.houseFromRashi}</span>
+                    </div>
+                  </div>
+
+                  {/* Anatomy & Significations */}
+                  <div className="text-[11px] text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800/70 space-y-0.5">
+                    <span className="font-bold text-purple-300 block text-[10.5px]">Anatomical Seat:</span>
+                    <p className="text-slate-300 leading-tight">{gate.anatomicalSeat}</p>
+                  </div>
+
+                  {/* ALL TRANSITING GRAHAS PASSING THROUGH / CRASHED IN THIS GATE */}
+                  <div className="text-[11px] pt-1 border-t border-slate-800/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 font-semibold text-[10.5px]">
+                        Grahas Active in Gate ({gate.activeGrahasInGate.length}):
+                      </span>
+                      {gate.activeGrahasInGate.length > 0 ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                          Active Ingress
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 italic">Clear Gate</span>
+                      )}
+                    </div>
+
+                    {gate.activeGrahasInGate.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {gate.activeGrahasInGate.map(gr => (
+                          <span
+                            key={gr.name}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${
+                              gr.type === 'natal'
+                                ? 'bg-slate-800 border-slate-600 text-slate-300'
+                                : gr.isExalted
+                                ? 'bg-amber-950/80 border-amber-500/70 text-amber-200'
+                                : 'bg-gradient-to-r from-rose-950/80 to-purple-950/80 border-rose-500/50 text-rose-200'
+                            }`}
+                            title={`${gr.name}: ${gr.passageWindow || 'In Gate'}`}
+                          >
+                            <span className="text-amber-400 text-[8px]">{gr.isExalted ? '★' : '•'}</span>
+                            <span>{gr.name}</span>
+                            {gr.passageWindow && (
+                              <span className="text-[8.5px] opacity-75 font-mono">
+                                ({gr.passageWindow.replace(`${MONTH_NAMES[selectedMonth].slice(0, 3)} `, '')})
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10.5px] text-slate-500 italic">
+                        No planets currently occupying this sign
+                      </p>
+                    )}
+
+                    {/* Moon Ingress Window */}
+                    {gate.moonIngressWindow && (
+                      <div className="flex items-center justify-between text-[10px] text-amber-300 font-mono bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/30">
+                        <span>Moon Trigger:</span>
+                        <span>{gate.moonIngressWindow}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* DEDICATED PER-GATE EVALUATION PERSPECTIVE BUTTONS (FROM LAGNA / FROM JANMA / COMBINED) */}
+                <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      Event Perspective:
+                    </span>
+                    <span className="text-[9.5px] font-mono font-bold text-purple-300">
+                      {currentGatePerspective === 'lagna' ? 'From Lagna' : currentGatePerspective === 'rashi' ? 'From Janma' : 'Combined'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSetGatePerspective(idx, 'lagna')}
+                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                        currentGatePerspective === 'lagna'
+                          ? 'bg-cyan-500 text-slate-950 font-black shadow'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                      title="Evaluate event possibilities from Lagna (Physical body, tangible anatomy, scars, somatic vulnerability)"
+                    >
+                      From Lagna
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetGatePerspective(idx, 'rashi')}
+                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                        currentGatePerspective === 'rashi'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                      title="Evaluate event possibilities from Janma Rashi (Mental perception, fortune, psychological fruition)"
+                    >
+                      From Janma
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetGatePerspective(idx, 'combined')}
+                      className={`px-1.5 py-1 rounded text-[10px] font-bold text-center transition cursor-pointer ${
+                        currentGatePerspective === 'combined'
+                          ? 'bg-purple-500 text-white font-black shadow'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      }`}
+                      title="Evaluate event possibilities from combined Lagna somatic reality and Moon experiential reality"
+                    >
+                      Combined
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* SECTION 4: MANUFACTURED EVENTS (DIRECT FROM LLM - NO HARDCODED PRE-POPULATION) */}
+      {/* SECTION 3 (FORMERLY SECTION 4): MANUFACTURED EVENTS (DIRECT FROM LLM - NO HARDCODED PRE-POPULATION) */}
       <div className="space-y-3 pt-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wider">
             <Activity className="w-4 h-4 text-emerald-400" />
-            <span>4. Manufactured Probable Events ({manufacturedEvents.length} Events):</span>
+            <span>3. Manufactured Probable Events ({manufacturedEvents.length} Events):</span>
           </label>
           {lastExecutionTimeMs !== null && (
             <span className="text-[11px] text-emerald-400 font-mono font-semibold">
@@ -808,7 +983,7 @@ Return ONLY a valid JSON object matching this schema:
                 Contacting Google Gemini ({synthesisSeconds}s)...
               </h4>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Synthesizing entry gate passages, Lagna somatic seats, and Rashi fortune conditions for Delivering Hand: <strong className="text-purple-300">{toCleanEnglishPlanet(selectedHandKey)}</strong>.
+                Synthesizing entry gate passages, Lagna somatic seats, and Rashi fortune conditions for Delivering Hand: <strong className="text-purple-300">{toCleanEnglishPlanet(selectedHandKey)}</strong> with custom per-gate evaluation perspectives.
               </p>
             </div>
           </div>
@@ -825,7 +1000,7 @@ Return ONLY a valid JSON object matching this schema:
                 Ready to Manufacture Events for {toCleanEnglishPlanet(selectedHandKey)}
               </h4>
               <p className="text-xs text-slate-400">
-                The 3 Nakshatra entry gates are set. Click the button below to send the chart alignment to Google Gemini and generate the authentic list of manufactured events.
+                The 3 Nakshatra entry gates, their transiting grahas, and your selected per-gate perspectives are configured. Click below to synthesize and manifest the probable events in Google Gemini.
               </p>
             </div>
             <button
@@ -834,7 +1009,7 @@ Return ONLY a valid JSON object matching this schema:
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95"
             >
               <Zap className="w-4 h-4 fill-current text-amber-300" />
-              <span>Manufacture Events via Google Gemini</span>
+              <span>Manufacture Events in Gemini</span>
             </button>
           </div>
         )}
@@ -918,7 +1093,7 @@ Return ONLY a valid JSON object matching this schema:
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Exact string payload transmitted to the LLM engine containing delivering hands, 3 Nakshatra gates, Lagna/Rashi dual coordinates, and transit trigger events.
+                    Exact string payload transmitted to the LLM engine containing delivering hands, 3 Nakshatra gates, per-gate Lagna/Rashi perspectives, and all transiting grahas.
                   </p>
                 </div>
               </div>

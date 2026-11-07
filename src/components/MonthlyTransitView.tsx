@@ -2305,6 +2305,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           flattenedD1={natalD1Placements}
           transitPlacements={transitPlacements}
           monthlyMoonSpans={monthlyMoonSpans}
+          monthlyGrahaSpans={monthlyGrahaSpans}
         />
       )}
         </>

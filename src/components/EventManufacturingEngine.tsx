@@ -32,6 +32,10 @@ import {
   EventEngineReportData
 } from '../services/eventEngineReportExport';
 import {
+  testGeminiConnection,
+  testClaudeConnection
+} from '../services/apiHealthService';
+import {
   LLMProviderId,
   LLM_PROVIDERS
 } from '../services/llm/types';
@@ -41,6 +45,7 @@ import {
   NAKSHATRAS,
   NAKSHATRA_LORDS
 } from '../data/transitEphemeris';
+import { calculateVimshottariTimelineForProfile } from '../data/dashaCalculator';
 import {
   toCleanEnglishPlanet,
   toCleanEnglishSign
@@ -62,6 +67,19 @@ export interface ManufacturedEventItem {
   isHighProbability: boolean; // >= 60%
   portfolio?: string; // Work, Life, Health, Money, Friends, Love, Trip
   gateTrigger?: string; // Specific Nakshatra gate & transit trigger
+  hasMoonSupport?: boolean; // Whether Moon traverses this gate in the active month (~2.5 days)
+  moonWindowDates?: string; // e.g. "Oct 6–8" (the acute ignition window)
+  latencyStatus?: 'acute_moon_triggered' | 'dormant_latent'; // Acute felt manifestation vs dormant/latent potential
+}
+
+export interface DashaPdItem {
+  index: number; // 1..9
+  pdLord: string; // e.g. "Mercury (Budha)"
+  cleanName: string; // e.g. "Mercury"
+  startDate: string;
+  endDate: string;
+  isMonthActive: boolean;
+  isSelected: boolean;
 }
 
 export interface ActiveTransitGrahaDetail {
@@ -223,6 +241,18 @@ function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
     const probNum = typeof rawProb === 'number' ? rawProb : parseInt(String(rawProb).replace(/\D/g, '') || '60', 10);
     const clampedProb = Math.max(10, Math.min(95, isNaN(probNum) ? 60 : probNum));
 
+    const hasMoonSupport = Boolean(
+      item.hasMoonSupport ??
+      item.hasMoonTrigger ??
+      item.moonSupport ??
+      (item.latencyStatus ? item.latencyStatus === 'acute_moon_triggered' : undefined) ??
+      (clampedProb >= 65)
+    );
+    const moonWindowDates = item.moonWindowDates || item.moonWindow || item.windowDates || undefined;
+    const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' = (
+      item.latencyStatus === 'dormant_latent' || (!hasMoonSupport && clampedProb < 60)
+    ) ? 'dormant_latent' : 'acute_moon_triggered';
+
     return {
       id: item.id || `evt-${Date.now()}-${idx + 1}`,
       title: item.title || item.eventTitle || item.name || `Event ${idx + 1}`,
@@ -230,7 +260,10 @@ function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
       probabilityScore: clampedProb,
       isHighProbability: clampedProb >= 60,
       portfolio: item.portfolio || item.category || 'Life',
-      gateTrigger: item.gateTrigger || item.astrologicalRootCause || item.trigger || 'Active Dasha Lord + Nakshatra Gate Passage'
+      gateTrigger: item.gateTrigger || item.astrologicalRootCause || item.trigger || 'Active Dasha Lord + Nakshatra Gate Passage',
+      hasMoonSupport,
+      moonWindowDates,
+      latencyStatus
     };
   });
 }
@@ -248,77 +281,187 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   monthlyMoonSpans,
   monthlyGrahaSpans
 }) => {
-  // 1. Available Delivering Hands for Selection (Including Mercury PD, Saturn PD, Saturn AD, Venus MD, etc.)
-  const availableHands = useMemo(() => {
-    const list: { id: string; label: string; subLabel: string; role: 'PD' | 'AD' | 'MD'; rawName: string }[] = [];
-    
-    // Active PD (Active Month Teeth)
-    const pdKey = normalizeLordKey(activeDashaHierarchy.pratyantardasha);
-    list.push({
-      id: `PD-${pdKey}`,
-      label: `${toCleanEnglishPlanet(pdKey)} PD`,
-      subLabel: 'Active Teeth',
-      role: 'PD',
-      rawName: pdKey
-    });
+  // 1. Dasha Hierarchy State: MD, AD, and Delivering Hand (PD or AD)
+  const [selectedMd, setSelectedMd] = useState<string>(() => {
+    return normalizeLordKey(activeDashaHierarchy.mahadasha) || 'Venus (Sukra)';
+  });
+  const [selectedAd, setSelectedAd] = useState<string>(() => {
+    return normalizeLordKey(activeDashaHierarchy.antardasha) || 'Saturn (Sani)';
+  });
+  const [selectedHandKey, setSelectedHandKey] = useState<string>(() => {
+    return normalizeLordKey(activeDashaHierarchy.pratyantardasha) || 'Mercury (Budha)';
+  });
 
-    // Previous Saral Delivery / Complementary Key Hand: Saturn PD
-    const saturnKey = 'Saturn (Sani)';
-    if (!list.some(item => item.id === `PD-${saturnKey}`)) {
-      list.push({
-        id: `PD-${saturnKey}`,
-        label: `${toCleanEnglishPlanet(saturnKey)} PD`,
-        subLabel: 'Previous Saral Hand',
-        role: 'PD',
-        rawName: saturnKey
-      });
-    }
+  // Keep in sync when user navigates to a different month
+  useEffect(() => {
+    setSelectedMd(normalizeLordKey(activeDashaHierarchy.mahadasha));
+    setSelectedAd(normalizeLordKey(activeDashaHierarchy.antardasha));
+    setSelectedHandKey(normalizeLordKey(activeDashaHierarchy.pratyantardasha));
+  }, [activeDashaHierarchy.mahadasha, activeDashaHierarchy.antardasha, activeDashaHierarchy.pratyantardasha]);
 
-    // AD (Delivering Antardasha)
-    const adKey = normalizeLordKey(activeDashaHierarchy.antardasha);
-    if (!list.some(item => item.rawName === adKey && item.role === 'AD')) {
-      list.push({
-        id: `AD-${adKey}`,
-        label: `${toCleanEnglishPlanet(adKey)} AD`,
-        subLabel: 'Delivering Hand',
-        role: 'AD',
-        rawName: adKey
-      });
-    }
+  // All Lifetime Mahadashas available for selection
+  const mdList = useMemo(() => {
+    const timeline = calculateVimshottariTimelineForProfile(activeProfile);
+    const seen = new Set<string>();
+    const list: { key: string; label: string; startYear: string; endYear: string }[] = [];
 
-    // MD (Mahadasha Canvas)
-    const mdKey = normalizeLordKey(activeDashaHierarchy.mahadasha);
-    if (!list.some(item => item.rawName === mdKey && item.role === 'MD')) {
-      list.push({
-        id: `MD-${mdKey}`,
-        label: `${toCleanEnglishPlanet(mdKey)} MD`,
-        subLabel: 'Dasha Lord',
-        role: 'MD',
-        rawName: mdKey
-      });
-    }
-
-    // Complementary key lords so user can test any hand
-    const remainingLords = ['Venus (Sukra)', 'Mars (Sevvai)', 'Jupiter (Guru)', 'Rahu', 'Sun (Surya)', 'Moon (Chandra)', 'Ketu'];
-    for (const lord of remainingLords) {
-      if (!list.some(item => item.rawName === lord)) {
+    for (const [md] of timeline) {
+      const key = normalizeLordKey(md);
+      if (!seen.has(key)) {
+        seen.add(key);
+        const allForMd = timeline.filter(t => normalizeLordKey(t[0]) === key);
+        const startY = allForMd[0]?.[3]?.slice(0, 4) || '';
+        const endY = allForMd[allForMd.length - 1]?.[4]?.slice(0, 4) || '';
         list.push({
-          id: `GRAHA-${lord}`,
-          label: `${toCleanEnglishPlanet(lord)}`,
-          subLabel: '3 Gates',
-          role: 'PD',
-          rawName: lord
+          key,
+          label: `${toCleanEnglishPlanet(key)} MD (${startY}–${endY})`,
+          startYear: startY,
+          endYear: endY
+        });
+      }
+    }
+
+    const ALL_NINE = [
+      'Saturn (Sani)', 'Mercury (Budha)', 'Ketu', 'Venus (Sukra)',
+      'Sun (Surya)', 'Moon (Chandra)', 'Mars (Sevvai)', 'Rahu', 'Jupiter (Guru)'
+    ];
+    for (const l of ALL_NINE) {
+      if (!seen.has(l)) {
+        list.push({
+          key: l,
+          label: `${toCleanEnglishPlanet(l)} MD`,
+          startYear: '',
+          endYear: ''
         });
       }
     }
 
     return list;
-  }, [activeDashaHierarchy]);
+  }, [activeProfile]);
 
-  // Selected Delivering Hand
-  const [selectedHandKey, setSelectedHandKey] = useState<string>(() => {
-    return normalizeLordKey(activeDashaHierarchy.pratyantardasha) || 'Mercury (Budha)';
-  });
+  // All 9 Antardashas under the selected Mahadasha (in proper Vimshottari order)
+  const adList = useMemo(() => {
+    const timeline = calculateVimshottariTimelineForProfile(activeProfile);
+    const seen = new Set<string>();
+    const list: { key: string; label: string; startDate: string; endDate: string }[] = [];
+
+    for (const [md, ad, pd, s, e] of timeline) {
+      if (normalizeLordKey(md) === normalizeLordKey(selectedMd)) {
+        const adKey = normalizeLordKey(ad);
+        if (!seen.has(adKey)) {
+          seen.add(adKey);
+          const allForAd = timeline.filter(t => normalizeLordKey(t[0]) === normalizeLordKey(selectedMd) && normalizeLordKey(t[1]) === adKey);
+          const start = allForAd[0]?.[3] || s;
+          const end = allForAd[allForAd.length - 1]?.[4] || e;
+          list.push({
+            key: adKey,
+            label: `${toCleanEnglishPlanet(adKey)} AD (${start.slice(0, 7)} to ${end.slice(0, 7)})`,
+            startDate: start,
+            endDate: end
+          });
+        }
+      }
+    }
+
+    if (list.length < 9) {
+      const ALL_NINE = [
+        'Ketu', 'Venus (Sukra)', 'Sun (Surya)', 'Moon (Chandra)',
+        'Mars (Sevvai)', 'Rahu', 'Jupiter (Guru)', 'Saturn (Sani)', 'Mercury (Budha)'
+      ];
+      const mdIdx = Math.max(0, ALL_NINE.findIndex(l => l.startsWith(selectedMd.split(' ')[0])));
+      for (let i = 0; i < 9; i++) {
+        const lord = ALL_NINE[(mdIdx + i) % 9];
+        if (!seen.has(lord)) {
+          list.push({
+            key: lord,
+            label: `${toCleanEnglishPlanet(lord)} AD`,
+            startDate: '',
+            endDate: ''
+          });
+        }
+      }
+    }
+
+    return list;
+  }, [activeProfile, selectedMd]);
+
+  // EXACTLY NINE Pratyantardashas (PDs) under the selected MD and AD
+  const ninePds = useMemo<DashaPdItem[]>(() => {
+    const timeline = calculateVimshottariTimelineForProfile(activeProfile);
+    const targetMonthStart = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+    const targetMonthEnd = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`;
+
+    const matchedIntervals = timeline.filter(([md, ad]) =>
+      normalizeLordKey(md) === normalizeLordKey(selectedMd) &&
+      normalizeLordKey(ad) === normalizeLordKey(selectedAd)
+    );
+
+    const ALL_NINE = [
+      'Ketu', 'Venus (Sukra)', 'Sun (Surya)', 'Moon (Chandra)',
+      'Mars (Sevvai)', 'Rahu', 'Jupiter (Guru)', 'Saturn (Sani)', 'Mercury (Budha)'
+    ];
+    const adIdx = Math.max(0, ALL_NINE.findIndex(l => l.startsWith(selectedAd.split(' ')[0])));
+
+    const list: DashaPdItem[] = [];
+
+    for (let i = 0; i < 9; i++) {
+      const expectedLord = ALL_NINE[(adIdx + i) % 9];
+      const timelineEntry = matchedIntervals.find(t => normalizeLordKey(t[2]) === expectedLord);
+
+      const start = timelineEntry ? timelineEntry[3] : '';
+      const end = timelineEntry ? timelineEntry[4] : '';
+
+      // Check if overlaps active month
+      const isMonthActive = (start && end)
+        ? (start <= targetMonthEnd && end >= targetMonthStart)
+        : (normalizeLordKey(activeDashaHierarchy.pratyantardasha) === expectedLord &&
+           normalizeLordKey(activeDashaHierarchy.antardasha) === normalizeLordKey(selectedAd) &&
+           normalizeLordKey(activeDashaHierarchy.mahadasha) === normalizeLordKey(selectedMd));
+
+      list.push({
+        index: i + 1,
+        pdLord: expectedLord,
+        cleanName: toCleanEnglishPlanet(expectedLord),
+        startDate: start,
+        endDate: end,
+        isMonthActive,
+        isSelected: normalizeLordKey(selectedHandKey) === expectedLord
+      });
+    }
+
+    return list;
+  }, [activeProfile, selectedMd, selectedAd, selectedHandKey, selectedMonth, selectedYear, activeDashaHierarchy]);
+
+  const handleSelectMd = (newMd: string) => {
+    setSelectedMd(newMd);
+    setSynthesisError(null);
+    const timeline = calculateVimshottariTimelineForProfile(activeProfile);
+    const matchingAds = timeline.filter(t => normalizeLordKey(t[0]) === newMd);
+    const firstAd = matchingAds[0]?.[1] || newMd;
+    setSelectedAd(firstAd);
+    const matchingPds = matchingAds.filter(t => normalizeLordKey(t[1]) === firstAd);
+    const firstPd = matchingPds[0]?.[2] || firstAd;
+    setSelectedHandKey(firstPd);
+  };
+
+  const handleSelectAd = (newAd: string) => {
+    setSelectedAd(newAd);
+    setSynthesisError(null);
+    const timeline = calculateVimshottariTimelineForProfile(activeProfile);
+    const matchingPds = timeline.filter(t =>
+      normalizeLordKey(t[0]) === selectedMd &&
+      normalizeLordKey(t[1]) === newAd
+    );
+    const firstPd = matchingPds[0]?.[2] || newAd;
+    setSelectedHandKey(firstPd);
+  };
+
+  const handleResetToActiveDasha = () => {
+    setSelectedMd(normalizeLordKey(activeDashaHierarchy.mahadasha));
+    setSelectedAd(normalizeLordKey(activeDashaHierarchy.antardasha));
+    setSelectedHandKey(normalizeLordKey(activeDashaHierarchy.pratyantardasha));
+    setSynthesisError(null);
+  };
 
   // Per-Gate Evaluation Perspective State: Gate 0, Gate 1, Gate 2
   // Options: 'lagna' | 'rashi' | 'combined'
@@ -338,14 +481,51 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   // Model & Provider Selection (Google Gemini / Anthropic Claude / Local Qwen)
   const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('gemini_pro');
   
-  // API Keys: Both Google Gemini & Anthropic Claude
+  // API Keys: Google Gemini & Anthropic Claude (synced with localStorage)
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
   });
   const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
   });
-  const [showKeyDrawer, setShowKeyDrawer] = useState<boolean>(false);
+
+  const [isTestingGemini, setIsTestingGemini] = useState<boolean>(false);
+  const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [isTestingClaude, setIsTestingClaude] = useState<boolean>(false);
+  const [claudeTestFeedback, setClaudeTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestGemini = async () => {
+    setIsTestingGemini(true);
+    setGeminiTestFeedback(null);
+    try {
+      const res = await testGeminiConnection(geminiApiKey);
+      setGeminiTestFeedback({
+        success: !!res.success,
+        message: res.success ? 'Active & Connected' : (res.error ? (res.error.includes('401') ? '401 Key Invalid' : res.error.slice(0, 32) + '...') : 'Failed')
+      });
+    } catch {
+      setGeminiTestFeedback({ success: false, message: 'Ping Failed' });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
+
+  const handleTestClaude = async () => {
+    setIsTestingClaude(true);
+    setClaudeTestFeedback(null);
+    try {
+      const res = await testClaudeConnection(anthropicApiKey);
+      setClaudeTestFeedback({
+        success: !!res.success,
+        message: res.success ? 'Active & Connected' : (res.error ? res.error.slice(0, 32) + '...' : 'Failed')
+      });
+    } catch {
+      setClaudeTestFeedback({ success: false, message: 'Ping Failed' });
+    } finally {
+      setIsTestingClaude(false);
+    }
+  };
 
   // Active Key for current selected provider
   const isCurrentProviderKeyConfigured = useMemo(() => {
@@ -443,9 +623,11 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
         }
       }
 
-      // D. Find Moon ingress dates for this sign
-      const moonSpan = (monthlyMoonSpans || []).find((m: any) => m.signIndex === rIdx || m.houseNumber === hLagna);
-      const moonIngressWindow = moonSpan ? `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${moonSpan.startDay}–${moonSpan.endDay}` : undefined;
+      // D. Find Moon ingress dates for this sign (~2.5 days per month)
+      const matchedMoonSpans = (monthlyMoonSpans || []).filter((m: any) => m.signIndex === rIdx || m.houseNumber === hLagna);
+      const moonIngressWindow = matchedMoonSpans.length > 0
+        ? matchedMoonSpans.map(m => `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${m.startDay}–${m.endDay}`).join(', ')
+        : undefined;
 
       return {
         nakshatraName: nakName,
@@ -465,9 +647,9 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
     const cleanHand = toCleanEnglishPlanet(selectedHandKey);
-    const cleanMd = toCleanEnglishPlanet(activeDashaHierarchy.mahadasha);
-    const cleanAd = toCleanEnglishPlanet(activeDashaHierarchy.antardasha);
-    const cleanPd = toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha);
+    const cleanMd = toCleanEnglishPlanet(selectedMd);
+    const cleanAd = toCleanEnglishPlanet(selectedAd);
+    const cleanPd = toCleanEnglishPlanet(selectedHandKey);
 
     return `You are an elite Classical Vedic Astrologer executing the "EVENT MANUFACTURING ENGINE" under Parashara & Nadi timing laws.
 
@@ -475,9 +657,10 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
 - Target Month: ${monthName} ${selectedYear}
 - Ascendant (Lagna): ${RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius'} (House 1)
 - Janma Rashi (Moon Sign): ${RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio'} (Janma Rashi)
-- Active Mahadasha (MD): ${cleanMd}
-- Active Antardasha (AD): ${cleanAd}
-- Active Pratyantardasha (PD) [Teeth of the Month]: ${cleanPd}
+- Selected Mahadasha (MD): ${cleanMd}
+- Selected Antardasha (AD): ${cleanAd}
+- Selected Delivering Hand (PD / Hand): ${cleanHand}
+- Active Month Reference PD: ${toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)}
 - SELECTED DELIVERING HAND TARGET: ${cleanHand}
 
 [THE THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND: ${cleanHand}]
@@ -499,24 +682,27 @@ ${gateDetails.map((g, idx) => {
 - House from Janma Rashi (Moon): House ${g.houseFromRashi}
 - Anatomical Seat & Karakatwa: ${g.anatomicalSeat} — ${g.significations}
 - Transiting Grahas & People Passing/Crashing in this Gate: ${grahasStr}
-- Moon (Chandra) Gate Passage Window: ${g.moonIngressWindow || 'Approx. 2.25-day lunar trigger'}
+- Moon (Chandra) Acute Ignition Window: ${g.moonIngressWindow || 'Approx. 2.5-day lunar trigger'}
 `;
 }).join('\n')}
 
-[CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING]
+[CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING & MOON TIMING]
 1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
-2. Whenever transiting planets (e.g. Mars, Sun, Venus, Mercury, Jupiter, Saturn, Rahu, Ketu, Moon) pass or crash through that gate, the event MANUFACTURES.
-3. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
-4. For example:
-   - When multiple grahas (Mars, Venus, Mercury, Jupiter) pass through Ashlesha in Cancer (8th from Lagna, 9th from Moon), acute digestive heat, acid flare-ups, communication bursts, or sleep disturbances manifest.
-   - When Saturn/Venus activate 1st-8th houses, scars or existing marks turn into chronic dermatological delays.
-5. Manufacture 4 to 6 authentic, specific events that will manifest during this period based on the planets crossing these gates and each gate's chosen perspective.
+2. Transiting Grahas in an entry gate establish the structural potential.
+3. [THE CRITICAL CHANDRA (MOON) 2.5-DAY IGNITION & LATENCY LAW]:
+   - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. Mars in Ashlesha produces simmering internal heat but no acute vertigo). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
+   - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g., Mars in Ashlesha produces acute BPP / vertigo, acid flare-up, or sharp inflammation; Venus awakens luxury impulse into actual expenditure). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
+4. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
+5. Manufacture 4 to 6 authentic, specific events that will manifest during this period based on the planets crossing these gates, their Moon support status, and each gate's chosen perspective. Include BOTH high-probability acute events (with Moon support) and dormant events (without Moon support).
 6. For each event, provide:
    - title: Direct headline of the event
    - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
-   - probabilityScore: Realistic integer probability (e.g. 75, 65, 55, 40, 25)
+   - probabilityScore: Realistic integer probability (e.g. 75, 80, 85 for acute Moon triggers; 30, 35, 40 for dormant potentials)
    - portfolio: Assign to one portfolio category from: Work, Life, Health, Money, Friends, Love, Trip
-   - gateTrigger: The specific Nakshatra gate, chosen perspective, and planetary transit passage that triggered this event
+   - gateTrigger: The specific Nakshatra gate, chosen perspective, and planetary transit passage
+   - hasMoonSupport: boolean (true if occurring during the Moon's 2.5-day transit through that gate)
+   - moonWindowDates: string (e.g. "${gateDetails[0]?.moonIngressWindow || 'Oct 6–8'}") if hasMoonSupport is true, or null
+   - latencyStatus: "acute_moon_triggered" | "dormant_latent"
 
 OUTPUT FORMAT REQUIREMENT:
 Return ONLY a valid JSON object matching this schema:
@@ -527,13 +713,16 @@ Return ONLY a valid JSON object matching this schema:
       "id": "evt-1",
       "title": "Specific event title",
       "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
-      "probabilityScore": 75,
+      "probabilityScore": 85,
       "portfolio": "Health | Work | Money | Life | Love | Friends | Trip",
-      "gateTrigger": "Nakshatra gate + transit planet passage + evaluation perspective"
+      "gateTrigger": "Nakshatra gate + transit planet passage + evaluation perspective",
+      "hasMoonSupport": true,
+      "moonWindowDates": "${gateDetails[0]?.moonIngressWindow || 'Oct 6–8'}",
+      "latencyStatus": "acute_moon_triggered"
     }
   ]
 }`;
-  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, activeDashaHierarchy, selectedHandKey, gateDetails, gatePerspectives]);
+  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, selectedMd, selectedAd, selectedHandKey, activeDashaHierarchy, gateDetails, gatePerspectives]);
 
   // Copy prompt helper
   const handleCopyPrompt = async () => {
@@ -738,9 +927,9 @@ Return ONLY a valid JSON object matching this schema:
       selectedMonth,
       selectedYear,
       monthName: MONTH_NAMES[selectedMonth] || 'Active Month',
-      mahadasha: toCleanEnglishPlanet(activeDashaHierarchy.mahadasha),
-      antardasha: toCleanEnglishPlanet(activeDashaHierarchy.antardasha),
-      pratyantardasha: toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha),
+      mahadasha: toCleanEnglishPlanet(selectedMd),
+      antardasha: toCleanEnglishPlanet(selectedAd),
+      pratyantardasha: toCleanEnglishPlanet(selectedHandKey),
       dashaStartDate: activeDashaHierarchy.startDate,
       dashaEndDate: activeDashaHierarchy.endDate,
       deliveringHand: toCleanEnglishPlanet(selectedHandKey),
@@ -800,32 +989,6 @@ Return ONLY a valid JSON object matching this schema:
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Dual API Keys toggle */}
-          <button
-            type="button"
-            onClick={() => setShowKeyDrawer(!showKeyDrawer)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
-              isCurrentProviderKeyConfigured
-                ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/40'
-                : 'bg-slate-950 border-amber-500/50 text-amber-300 hover:bg-slate-800'
-            }`}
-            title="Configure or verify Google Gemini & Anthropic Claude API keys"
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>{isCurrentProviderKeyConfigured ? `${activeProviderName} Key Ready` : `Setup ${activeProviderName} Key`}</span>
-          </button>
-
-          {/* Prompt Inspector */}
-          <button
-            type="button"
-            onClick={() => setShowPromptModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-purple-500/40 text-purple-300 font-bold text-xs transition cursor-pointer shadow-sm active:scale-95"
-            title="Inspect complete raw prompt payload generated by the engine that gets posted to LLM"
-          >
-            <Eye className="w-3.5 h-3.5 text-purple-400" />
-            <span>Inspect Prompt</span>
-          </button>
-
           {/* Download Report Dropdown (PDF / HTML) */}
           <div className="relative">
             <button
@@ -884,6 +1047,17 @@ Return ONLY a valid JSON object matching this schema:
             )}
           </div>
 
+          {/* Prompt Inspector */}
+          <button
+            type="button"
+            onClick={() => setShowPromptModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-purple-500/40 text-purple-300 font-bold text-xs transition cursor-pointer shadow-sm active:scale-95"
+            title="Inspect complete raw prompt payload generated by the engine that gets posted to LLM"
+          >
+            <Eye className="w-3.5 h-3.5 text-purple-400" />
+            <span>Inspect Prompt</span>
+          </button>
+
           {/* Model Selector */}
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-slate-400 font-semibold">Model:</span>
@@ -898,6 +1072,94 @@ Return ONLY a valid JSON object matching this schema:
             </select>
           </div>
 
+          {/* INLINE KEY CONTROLS (EXACTLY MATCHING MONTHLY VIEW & PREDICTION STUDIO) */}
+          {selectedProvider === 'gemini_pro' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-purple-500/40 text-[11px] shadow-inner">
+              <Key className="w-3 h-3 text-amber-400" />
+              <input
+                type="password"
+                value={geminiApiKey}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setGeminiApiKey(val);
+                  localStorage.setItem('astro_gemini_api_key', val);
+                }}
+                placeholder="Paste Gemini API Key..."
+                className="bg-transparent text-amber-200 w-32 focus:outline-none font-mono text-[10px] placeholder:text-slate-600"
+                title="Enter your Google Gemini API Key from aistudio.google.com/apikey"
+              />
+              <button
+                type="button"
+                onClick={handleTestGemini}
+                disabled={isTestingGemini}
+                className="px-2 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[10px] transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                title="Fire a test query ping to verify your Gemini API key"
+              >
+                {isTestingGemini ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <span>⚡</span>}
+                <span>{isTestingGemini ? 'Testing...' : 'Test Key'}</span>
+              </button>
+              {geminiTestFeedback && (
+                <span
+                  className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    geminiTestFeedback.success
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                  }`}
+                  title={geminiTestFeedback.message}
+                >
+                  {geminiTestFeedback.message}
+                </span>
+              )}
+            </div>
+          )}
+
+          {selectedProvider === 'claude_sonnet' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-amber-500/40 text-[11px] shadow-inner">
+              <Key className="w-3 h-3 text-amber-400" />
+              <input
+                type="password"
+                value={anthropicApiKey}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setAnthropicApiKey(val);
+                  localStorage.setItem('astro_anthropic_api_key', val);
+                }}
+                placeholder="Paste Claude API Key..."
+                className="bg-transparent text-amber-200 w-32 focus:outline-none font-mono text-[10px] placeholder:text-slate-600"
+                title="Enter your Anthropic Claude API Key (stored in localStorage)"
+              />
+              <button
+                type="button"
+                onClick={handleTestClaude}
+                disabled={isTestingClaude}
+                className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                title="Fire a test query ping to verify your Claude API key"
+              >
+                {isTestingClaude ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <span>⚡</span>}
+                <span>{isTestingClaude ? 'Testing...' : 'Test Key'}</span>
+              </button>
+              {claudeTestFeedback && (
+                <span
+                  className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    claudeTestFeedback.success
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-rose-950 text-rose-300 border border-rose-500/30'
+                  }`}
+                  title={claudeTestFeedback.message}
+                >
+                  {claudeTestFeedback.message}
+                </span>
+              )}
+            </div>
+          )}
+
+          {selectedProvider === 'local_qwen' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-[11px] text-cyan-300 font-mono">
+              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-[10px]">Ollama Local :11434 (No Key Needed)</span>
+            </div>
+          )}
+
           {/* Primary Action Button: MANUFACTURE EVENTS IN LLM */}
           <button
             type="button"
@@ -910,106 +1172,6 @@ Return ONLY a valid JSON object matching this schema:
           </button>
         </div>
       </div>
-
-      {/* DUAL API KEYS DRAWER (GEMINI & CLAUDE) */}
-      {showKeyDrawer && (
-        <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/30 space-y-3 animate-fadeIn">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-amber-400" />
-              <span className="text-xs font-extrabold text-white">LLM API Key Settings</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowKeyDrawer(false)}
-              className="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-900"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* 1. Google Gemini Key */}
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-cyan-300 flex items-center gap-1">
-                  <span>Google Gemini API Key:</span>
-                  {geminiApiKey ? <Check className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-amber-400" />}
-                </span>
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-amber-400 hover:underline"
-                >
-                  Get key &rarr;
-                </a>
-              </div>
-              <input
-                type="password"
-                value={geminiApiKey}
-                onChange={e => handleSaveGeminiKey(e.target.value)}
-                placeholder="AIzaSy... (Gemini key stored in browser)"
-                className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
-              />
-              <span className="text-[10px] text-slate-500 block">
-                {geminiApiKey ? '✓ Stored in browser localStorage' : 'No key set — uses default service environment'}
-              </span>
-            </div>
-
-            {/* 2. Anthropic Claude Key */}
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
-                  <span>Anthropic Claude API Key:</span>
-                  {anthropicApiKey ? <Check className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-amber-400" />}
-                </span>
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-amber-400 hover:underline"
-                >
-                  Get key &rarr;
-                </a>
-              </div>
-              <input
-                type="password"
-                value={anthropicApiKey}
-                onChange={e => handleSaveAnthropicKey(e.target.value)}
-                placeholder="sk-ant-... (Claude key stored in browser)"
-                className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
-              />
-              <span className="text-[10px] text-slate-500 block">
-                {anthropicApiKey ? '✓ Stored in browser localStorage' : 'No key set — uses default server key if configured'}
-              </span>
-            </div>
-
-            {/* 3. Local Qwen 2.5 (Ollama) */}
-            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 space-y-1.5 flex flex-col justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
-                    <Cpu className="w-3 h-3 text-emerald-400" />
-                    <span>Local Qwen (Ollama):</span>
-                  </span>
-                  <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
-                    Port 11434
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-300 leading-tight">
-                  100% on-device private execution. No API keys or cloud billing needed.
-                </p>
-              </div>
-              <div className="text-[9.5px] text-slate-400 font-mono bg-slate-950 p-1.5 rounded border border-slate-800">
-                <span>Endpoint: </span>
-                <strong className="text-slate-200">http://localhost:11434</strong>
-                <span className="block text-slate-400">Model: qwen2.5:7b-instruct</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ERROR BANNER IF LLM CALL RETURNED AN ERROR */}
       {synthesisError && (
@@ -1054,67 +1216,202 @@ Return ONLY a valid JSON object matching this schema:
 
             <button
               type="button"
-              onClick={() => setShowKeyDrawer(true)}
-              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-[11px] border border-slate-700 cursor-pointer"
+              onClick={handleTestGemini}
+              disabled={isTestingGemini}
+              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-[11px] border border-slate-700 cursor-pointer disabled:opacity-50"
             >
-              API Key Settings
+              {isTestingGemini ? 'Testing Key...' : 'Test Key Connection'}
             </button>
           </div>
         </div>
       )}
 
-      {/* SECTION 1: DELIVERING HANDS SELECTION BUTTONS */}
-      <div className="space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="text-xs font-extrabold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>1. Select Delivering Hand (Saral Delivery &amp; Month Teeth):</span>
-          </label>
-          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
-            <span>Teeth: <strong className="text-amber-300">{toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)} PD</strong></span>
-            <span className="text-slate-600">&bull;</span>
-            <span>Delivery: <strong className="text-cyan-300">{toCleanEnglishPlanet(activeDashaHierarchy.antardasha)} AD</strong></span>
+      {/* SECTION 1: DELIVERING HAND & DASHA SELECTION (MD, AD, ALL 9 PDS) */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3.5 shadow-xl">
+        {/* Header Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs md:text-sm font-extrabold text-white uppercase tracking-wider">
+              1. Delivering Hand &amp; Dasha Selection (MD &bull; AD &bull; All 9 PDs)
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetToActiveDasha}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-semibold border border-slate-700 transition cursor-pointer"
+              title={`Reset to active period of ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
+            >
+              <RefreshCw className="w-3 h-3 text-cyan-400" />
+              <span>Reset to Active Month</span>
+            </button>
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono">
+              <span className="text-slate-400">Current Target:</span>
+              <span className="text-amber-300 font-bold">{toCleanEnglishPlanet(selectedHandKey)} Hand</span>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-          {availableHands.map(hand => {
-            const isSelected = selectedHandKey === hand.rawName;
-            return (
-              <button
-                key={hand.id}
-                type="button"
-                onClick={() => {
-                  setSelectedHandKey(hand.rawName);
-                  setSynthesisError(null);
-                }}
-                className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-gradient-to-b from-purple-900/60 to-slate-950 border-purple-400 text-white ring-2 ring-purple-500/40 shadow-md shadow-purple-950/40'
-                    : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                    hand.role === 'PD'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : hand.role === 'AD'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                      : 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                  }`}>
-                    {hand.role}
-                  </span>
-                  {isSelected && <Zap className="w-3 h-3 text-amber-400 fill-current animate-pulse" />}
-                </div>
-                <span className="text-xs font-black truncate block">
-                  {hand.label}
+        {/* Dropdowns Row: Lifetime Mahadasha (MD) + Antardasha (AD) + Evaluate AD Hand Toggle */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* MD Dropdown */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 uppercase">
+              <span>Mahadasha (MD)</span>
+              <span className="text-[10px] text-purple-400 font-mono">Lifetime Timeline</span>
+            </div>
+            <select
+              value={selectedMd}
+              onChange={(e) => handleSelectMd(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 focus:border-purple-500 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none transition cursor-pointer"
+            >
+              {mdList.map(md => (
+                <option key={md.key} value={md.key} className="bg-slate-900 text-white">
+                  {md.label} {md.startYear && md.endYear ? `(${md.startYear} – ${md.endYear})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* AD Dropdown */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 uppercase">
+              <span>Antardasha (AD)</span>
+              <span className="text-[10px] text-cyan-400 font-mono">Saral Delivery Hand</span>
+            </div>
+            <select
+              value={selectedAd}
+              onChange={(e) => handleSelectAd(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none transition cursor-pointer"
+            >
+              {adList.map(ad => (
+                <option key={ad.key} value={ad.key} className="bg-slate-900 text-white">
+                  {ad.label} {ad.startDate && ad.endDate ? `(${ad.startDate} to ${ad.endDate})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* AD Carrier as Delivering Hand Option */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 uppercase">
+              <span>Macro Delivery Carrier</span>
+              <span className="text-[10px] text-amber-400 font-mono">AD Level Hand</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHandKey(selectedAd);
+                setSynthesisError(null);
+              }}
+              className={`w-full px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-between border cursor-pointer ${
+                normalizeLordKey(selectedHandKey) === normalizeLordKey(selectedAd)
+                  ? 'bg-gradient-to-r from-cyan-900/70 via-purple-900/60 to-slate-950 border-cyan-400 text-white ring-2 ring-cyan-500/40 shadow-md'
+                  : 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-850 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  AD Hand
                 </span>
-                <span className="text-[9px] text-slate-400 truncate block mt-0.5">
-                  {hand.subLabel}
+                <span className="truncate">{toCleanEnglishPlanet(selectedAd)}</span>
+              </div>
+              {normalizeLordKey(selectedHandKey) === normalizeLordKey(selectedAd) ? (
+                <span className="text-[10px] text-cyan-300 font-mono flex items-center gap-0.5">
+                  <Zap className="w-3 h-3 fill-current" /> Active Hand
                 </span>
-              </button>
-            );
-          })}
+              ) : (
+                <span className="text-[10px] text-slate-400 font-mono">Select</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ALL NINE PRATYANTARDASHAS (PDS) SLIDE */}
+        <div className="space-y-2 pt-2 border-t border-slate-800/70">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>All 9 Pratyantardashas (PDs) in {toCleanEnglishPlanet(selectedAd)} AD:</span>
+            </label>
+            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span>Active in {MONTH_NAMES[selectedMonth]} {selectedYear}</span>
+              </span>
+              <span className="text-slate-600">&bull;</span>
+              <span>Click any PD to set Delivering Hand</span>
+            </div>
+          </div>
+
+          {/* Slide container: scrolls horizontally on small screens, 9-column grid on large screens */}
+          <div className="overflow-x-auto pb-1 scrollbar-thin">
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 min-w-[650px] lg:min-w-0">
+              {ninePds.map(pd => {
+                const isSelected = normalizeLordKey(selectedHandKey) === normalizeLordKey(pd.pdLord);
+                return (
+                  <button
+                    key={pd.pdLord}
+                    type="button"
+                    onClick={() => {
+                      setSelectedHandKey(pd.pdLord);
+                      setSynthesisError(null);
+                    }}
+                    title={`${pd.pdLord} PD${pd.startDate && pd.endDate ? ` (${pd.startDate} to ${pd.endDate})` : ''} - Click to set as Delivering Hand`}
+                    className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between relative group ${
+                      isSelected
+                        ? 'bg-gradient-to-b from-purple-900/80 via-slate-900 to-slate-950 border-purple-400 text-white ring-2 ring-purple-500/50 shadow-lg shadow-purple-950/60'
+                        : pd.isMonthActive
+                        ? 'bg-slate-950 border-amber-500/50 text-slate-200 hover:border-amber-400 hover:bg-slate-900 shadow-sm shadow-amber-950/30'
+                        : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-900/60 hover:text-slate-200'
+                    }`}
+                  >
+                    {/* Top Row: Index and Active Indicator */}
+                    <div className="flex items-center justify-between mb-1.5 w-full">
+                      <span className={`text-[9px] font-mono font-bold px-1 py-0.2 rounded ${
+                        isSelected
+                          ? 'bg-purple-500/30 text-purple-200'
+                          : pd.isMonthActive
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        PD {pd.index}
+                      </span>
+                      {isSelected ? (
+                        <Zap className="w-3 h-3 text-amber-400 fill-current animate-pulse" />
+                      ) : pd.isMonthActive ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Active in target month" />
+                      ) : null}
+                    </div>
+
+                    {/* Planet Clean Name */}
+                    <span className="text-xs font-black truncate block text-slate-100">
+                      {pd.cleanName}
+                    </span>
+
+                    {/* Date Span or In-between status */}
+                    <div className="mt-1 pt-1 border-t border-slate-800/60 text-[9px] font-mono leading-tight">
+                      {pd.startDate && pd.endDate ? (
+                        <span className="text-slate-400 block truncate" title={`${pd.startDate} to ${pd.endDate}`}>
+                          {pd.startDate.slice(5)} &rarr; {pd.endDate.slice(5)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 block truncate">Vimshottari PD</span>
+                      )}
+
+                      {pd.isMonthActive && (
+                        <span className="text-amber-300 font-bold block truncate mt-0.5">
+                          &bull; In Month
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1218,13 +1515,24 @@ Return ONLY a valid JSON object matching this schema:
                       </p>
                     )}
 
-                    {/* Moon Ingress Window */}
-                    {gate.moonIngressWindow && (
-                      <div className="flex items-center justify-between text-[10px] text-amber-300 font-mono bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/30">
-                        <span>Moon Trigger:</span>
-                        <span>{gate.moonIngressWindow}</span>
+                    {/* Chandra (Moon) 2.5-Day Ignition Window */}
+                    <div className="flex items-center justify-between text-[10.5px] font-mono bg-indigo-950/60 p-2 rounded-lg border border-cyan-500/40 text-cyan-200">
+                      <div className="flex items-center gap-1.5">
+                        <Moon className="w-3.5 h-3.5 text-cyan-400 fill-current animate-pulse" />
+                        <div>
+                          <div className="font-bold text-white flex items-center gap-1">
+                            <span>Chandra Window:</span>
+                            <span className="text-amber-300 font-extrabold">{gate.moonIngressWindow || '~2.5-Day Ingress'}</span>
+                          </div>
+                          <div className="text-[9.5px] text-slate-400 font-sans">
+                            Ignites dormant grahas into felt manifestation
+                          </div>
+                        </div>
                       </div>
-                    )}
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        ⚡ Acute
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -1407,6 +1715,21 @@ Return ONLY a valid JSON object matching this schema:
                     </span>
                   </div>
                 </div>
+
+                {/* MOON TRIGGER & LATENCY STATUS BADGE */}
+                {(event.hasMoonSupport || event.latencyStatus === 'acute_moon_triggered' || event.isHighProbability) ? (
+                  <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/15 to-purple-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold">
+                    <Zap className="w-3.5 h-3.5 text-amber-400 fill-current animate-pulse" />
+                    <span><strong>⚡ Chandra (Moon) Ignition Active</strong> {event.moonWindowDates ? `(${event.moonWindowDates})` : ''} &bull; High Felt Manifestation</span>
+                    <span className="text-[10px] text-slate-300 font-normal hidden sm:inline">— Moon awakens dormant planetary energy into lived reality</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-slate-400 text-xs">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span><strong>💤 Dormant Background Potential</strong> ({event.probabilityScore}%) &bull; Less Felt</span>
+                    <span className="text-[10px] text-slate-500 hidden sm:inline">— Planetary combination remains latent until Moon traverses gate</span>
+                  </div>
+                )}
 
                 {/* 1-2 LINE MANIFESTATION NARRATIVE */}
                 <p className="text-xs sm:text-[13px] text-slate-200 leading-relaxed font-medium bg-slate-900/70 p-3 rounded-lg border border-slate-800">

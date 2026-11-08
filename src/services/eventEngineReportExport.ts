@@ -21,6 +21,9 @@ export interface EventEngineReportEvent {
   isHighProbability: boolean;
   portfolio?: string;
   gateTrigger?: string;
+  hasMoonSupport?: boolean;
+  moonWindowDates?: string;
+  latencyStatus?: 'acute_moon_triggered' | 'dormant_latent';
 }
 
 export interface EventEngineReportData {
@@ -225,37 +228,39 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
   } else {
     for (let j = 0; j < data.events.length; j++) {
       const evt = data.events[j];
-      checkPageBreak(28);
+      checkPageBreak(32);
+
+      const isAcute = evt.hasMoonSupport || evt.latencyStatus === 'acute_moon_triggered' || evt.isHighProbability;
 
       doc.setFillColor(255, 255, 255);
-      doc.rect(margin, y, contentWidth, 24, 'F');
-      doc.setDrawColor(evt.isHighProbability ? 168 : 226, evt.isHighProbability ? 85 : 232, evt.isHighProbability ? 247 : 240);
-      doc.setLineWidth(evt.isHighProbability ? 0.6 : 0.3);
-      doc.rect(margin, y, contentWidth, 24, 'S');
+      doc.rect(margin, y, contentWidth, 27, 'F');
+      doc.setDrawColor(isAcute ? 168 : 226, isAcute ? 85 : 232, isAcute ? 247 : 240);
+      doc.setLineWidth(isAcute ? 0.6 : 0.3);
+      doc.rect(margin, y, contentWidth, 27, 'S');
 
       // Event Title & Number
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(15, 23, 42);
-      doc.text(`Event ${j + 1}.  ${evt.title}`, margin + 4, y + 5.5);
+      doc.text(`Event ${j + 1}.  ${evt.title}`, margin + 4, y + 5);
 
-      // Probability Badge
+      // Moon Trigger Badge & Probability
       doc.setFontSize(7.5);
-      if (evt.probabilityScore >= 70) {
-        doc.setTextColor(16, 185, 129); // Emerald 500
-      } else if (evt.probabilityScore >= 50) {
-        doc.setTextColor(217, 119, 6); // Amber 600
+      if (isAcute) {
+        doc.setTextColor(16, 185, 129); // Emerald
+        const moonTag = evt.moonWindowDates ? ` [Chandra: ${evt.moonWindowDates}]` : ' [Moon Support]';
+        doc.text(`${evt.probabilityScore}% Probable [ACUTE]${moonTag}`, margin + contentWidth - 58, y + 5);
       } else {
         doc.setTextColor(100, 116, 139);
+        doc.text(`${evt.probabilityScore}% Probable [DORMANT/LESS FELT]`, margin + contentWidth - 58, y + 5);
       }
-      doc.text(`${evt.probabilityScore}% Probable${evt.isHighProbability ? ' [HIGH]' : ''}`, margin + contentWidth - 36, y + 5.5);
 
       // Portfolio Tag
       if (evt.portfolio) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.8);
         doc.setTextColor(124, 58, 237);
-        doc.text(`[${evt.portfolio}]`, margin + contentWidth - 52, y + 5.5);
+        doc.text(`[${evt.portfolio}]`, margin + contentWidth - 72, y + 5);
       }
 
       // 1-2 Line Manifestation Narrative
@@ -263,21 +268,28 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
       doc.setFontSize(7.5);
       doc.setTextColor(51, 65, 85);
       const splitNarrative = doc.splitTextToSize(evt.narrative, contentWidth - 8);
-      doc.text(splitNarrative.slice(0, 2), margin + 4, y + 11.5);
+      doc.text(splitNarrative.slice(0, 2), margin + 4, y + 11);
 
-      // Trigger Mechanism
+      // Trigger Mechanism & Moon Latency Note
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.setTextColor(isAcute ? 217 : 100, isAcute ? 119 : 116, isAcute ? 6 : 139);
+      const moonNote = isAcute
+        ? `⚡ Chandra Window Active: Awakens dormant planetary potential into felt reality.`
+        : `💤 Dormant Potential: Planetary combination remains latent and less felt without Moon support.`;
+      doc.text(moonNote, margin + 4, y + 19.5);
+
       if (evt.gateTrigger) {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(6.8);
         doc.setTextColor(109, 40, 217);
-        doc.text('Trigger Mechanism: ', margin + 4, y + 20.5);
+        doc.text('Gate Trigger: ', margin + 4, y + 24);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(71, 85, 105);
-        const splitTrigger = doc.splitTextToSize(evt.gateTrigger, contentWidth - 32);
-        doc.text(splitTrigger[0] || '', margin + 28, y + 20.5);
+        const splitTrigger = doc.splitTextToSize(evt.gateTrigger, contentWidth - 26);
+        doc.text(splitTrigger[0] || '', margin + 22, y + 24);
       }
 
-      y += 27;
+      y += 30;
     }
   }
 
@@ -582,19 +594,26 @@ export function exportEventEngineHtml(data: EventEngineReportData): void {
     <div class="section-sub">Synthesized from planetary gate passages, Lagna somatic seats, and Dasha fruition</div>
 
     <div class="events-list">
-      ${data.events.length > 0 ? data.events.map((evt, idx) => `
-        <div class="event-card ${evt.isHighProbability ? 'high-prob' : ''}">
+      ${data.events.length > 0 ? data.events.map((evt, idx) => {
+        const isAcute = evt.hasMoonSupport || evt.latencyStatus === 'acute_moon_triggered' || evt.isHighProbability;
+        return `
+        <div class="event-card ${isAcute ? 'high-prob' : ''}">
           <div class="event-header">
             <span class="event-title">Event ${idx + 1}. ${evt.title}</span>
             <div>
               ${evt.portfolio ? `<span style="font-size: 10px; font-weight: bold; background: #334155; padding: 2px 6px; border-radius: 4px; margin-right: 6px;">${evt.portfolio}</span>` : ''}
-              <span class="prob-badge">${evt.probabilityScore}% Probable${evt.isHighProbability ? ' &bull; High' : ''}</span>
+              <span class="prob-badge" style="${isAcute ? 'background: rgba(16, 185, 129, 0.2); color: #6ee7b7;' : 'background: rgba(100, 116, 139, 0.2); color: #cbd5e1;'}">${evt.probabilityScore}% Probable &bull; ${isAcute ? 'ACUTE' : 'DORMANT'}</span>
             </div>
+          </div>
+          <div style="margin-bottom: 8px; font-size: 11px; font-weight: bold; color: ${isAcute ? '#f59e0b' : '#94a3b8'};">
+            ${isAcute
+              ? `⚡ Chandra Ignition Active (${evt.moonWindowDates || '2.5-Day Ingress'}) &bull; Awakens dormant planetary potential into felt reality`
+              : `💤 Dormant Background Potential &bull; Less felt unless ignited by Moon passage`}
           </div>
           <div class="event-narrative">${evt.narrative}</div>
           ${evt.gateTrigger ? `<div class="event-trigger"><strong>Trigger Mechanism:</strong> ${evt.gateTrigger}</div>` : ''}
         </div>
-      `).join('') : '<p style="color: #94a3b8; font-style: italic;">No events manufactured yet for this period. Click "Manufacture Events in LLM" in the app.</p>'}
+      `;}).join('') : '<p style="color: #94a3b8; font-style: italic;">No events manufactured yet for this period. Click "Manufacture Events in LLM" in the app.</p>'}
     </div>
 
     <div class="footer">

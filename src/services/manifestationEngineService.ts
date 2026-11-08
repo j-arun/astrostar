@@ -240,6 +240,151 @@ JSON OUTPUT FORMAT:
 }
 
 /**
+ * Executes a REAL Meta-Prompt reasoning call to Private Local LLM (Ollama)
+ * Asking the Private LLM to REASON through the native inputs and COMPOSE the Public LLM prompt!
+ */
+export async function compileBaselinePromptWithPrivateLLM(params: {
+  nativeProfile: NativeManifestationProfile;
+  monthName: string;
+  year: number;
+  mdLord: string;
+  adLord: string;
+  pdLord: string;
+  birthLagna: string;
+  janmaRashi: string;
+  gates: {
+    nakshatraName: string;
+    rashiName: string;
+    houseFromLagna: number;
+    houseFromRashi: number;
+    activeGrahas: string[];
+    moonWindow: string;
+    chosenPerspective: 'lagna' | 'rashi' | 'combined';
+  }[];
+  localOllamaEndpoint?: string;
+  localModelName?: string;
+}): Promise<{
+  prompt: string;
+  modelUsed: string;
+  evolutionLog: string;
+  isRealLLMCall: boolean;
+  error?: string;
+}> {
+  const {
+    nativeProfile,
+    monthName,
+    year,
+    mdLord,
+    adLord,
+    pdLord,
+    birthLagna,
+    janmaRashi,
+    gates,
+    localOllamaEndpoint = 'http://localhost:11434',
+    localModelName = 'qwen2.5:14b'
+  } = params;
+
+  const focusList = nativeProfile.focusAreas
+    .map(fa => MANIFESTATION_FOCUS_DOMAINS.find(d => d.id === fa)?.label || fa)
+    .join(', ');
+
+  const metaPromptDirective = `You are an elite Classical Vedic Astrological Prompt Engineer & Reasoning Engine.
+Your objective is NOT to predict the life events yourself right now.
+Instead, your objective is to REASON, ANALYZE, and COMPOSE the complete, comprehensive prompt that will be passed to a downstream Public LLM (such as Gemini, Claude, or Qwen) to manufacture precise, authentic life events for this native.
+
+[INPUT 1: NATIVE GROUND REALITY & HORIZON]
+- Native Exact Specified Age: ${nativeProfile.age} Years (${nativeProfile.lifeStage})
+- Target Focus Domains: ${focusList}
+- Native Current Ground Reality / Active Narrative:
+  "${nativeProfile.currentSituationNarrative || 'Standard adult progression: career responsibilities, family commitments, and routine life logistics'}"
+
+[INPUT 2: DASHA HIERARCHY FOR ${monthName} ${year}]
+- Mahadasha (MD): ${mdLord}
+- Antardasha (AD - Saral Delivery Hand): ${adLord}
+- Pratyantardasha (PD - Month Teeth): ${pdLord}
+- Birth Ascendant (Lagna): ${birthLagna} (Physical Body, Somatics, Reality)
+- Janma Rashi (Moon): ${janmaRashi} (Psychological Experiential Fruition)
+
+[INPUT 3: THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND (${pdLord})]
+${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
+- Chosen Perspective: ${g.chosenPerspective.toUpperCase()}
+- House from Lagna: House ${g.houseFromLagna} | House from Moon: House ${g.houseFromRashi}
+- Transiting Grahas in Gate: ${g.activeGrahas.length > 0 ? g.activeGrahas.join(', ') : 'None (Clear Gate)'}
+- Moon (Chandra) 2.5-Day Ingress Window: ${g.moonWindow}
+`).join('\n')}
+
+[YOUR TASK AS PROMPT ENGINEER]:
+Compose the complete, ready-to-run prompt text that will be sent to the public LLM.
+In the prompt you write:
+1. Ground the public LLM in the native's exact age (${nativeProfile.age}) and current life stakes (${focusList}), explicitly warning it to avoid juvenile or geriatric clichés unless age warrants.
+2. Reason through how the delivering hand (${pdLord}) operating through these 3 gates will manifest in adult reality (e.g., career pivots, contractual aftermath, cervical/spine fatigue, lease negotiations).
+3. Explicitly define the Chandra (Moon) 2.5-Day Acute Ignition Law (70-95% probability during Moon window, latencyStatus: "acute_moon_triggered") versus dormant latent potentials (25-45% probability, latencyStatus: "dormant_latent").
+4. Demand a strict JSON response containing an array of 4 to 6 specific event cards matching this schema:
+{
+  "deliveringHand": "${pdLord}",
+  "events": [
+    {
+      "id": "evt-1",
+      "title": "Specific event title",
+      "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
+      "probabilityScore": 85,
+      "portfolio": "Work",
+      "gateTrigger": "${gates[0]?.nakshatraName || 'Ashlesha'} (Gate 1)",
+      "hasMoonSupport": true,
+      "moonWindowDates": "${gates[0]?.moonWindow || 'Oct 6–8'}",
+      "latencyStatus": "acute_moon_triggered"
+    }
+  ]
+}
+
+Write out ONLY the complete prompt text for the public LLM. Do NOT wrap it in conversational pleasantries.`;
+
+  try {
+    const res = await fetch(`${localOllamaEndpoint}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: localModelName,
+        prompt: metaPromptDirective,
+        stream: false,
+        options: {
+          temperature: 0.3,
+          num_predict: 3500
+        }
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.response && data.response.trim().length > 100) {
+        return {
+          prompt: data.response.trim(),
+          modelUsed: `${localModelName} (Local Ollama)`,
+          evolutionLog: `Composed by Private LLM (${localModelName}) after reasoning over Age ${nativeProfile.age}, personal narrative, and 3 Nakshatra gates.`,
+          isRealLLMCall: true
+        };
+      }
+    }
+
+    return {
+      prompt: constructBaselinePromptTemplate(params),
+      modelUsed: 'Vedic Prompt Compiler (Offline Fallback)',
+      evolutionLog: `Ollama returned HTTP ${res.status}. Falling back to deterministic template.`,
+      isRealLLMCall: false,
+      error: `Ollama returned HTTP ${res.status}: ${res.statusText}`
+    };
+  } catch (err: any) {
+    return {
+      prompt: constructBaselinePromptTemplate(params),
+      modelUsed: 'Vedic Prompt Compiler (Offline Fallback)',
+      evolutionLog: `Could not connect to ${localOllamaEndpoint}. Compiled via deterministic template.`,
+      isRealLLMCall: false,
+      error: err.message || `Connection refused at ${localOllamaEndpoint} (Is Ollama running?)`
+    };
+  }
+}
+
+/**
  * Mutates Previous Prompt V(N) into Matured Prompt V(N+1) using Ground-Truth Calibration Delta
  */
 export async function evolvePromptWithPrivateLLM(params: {

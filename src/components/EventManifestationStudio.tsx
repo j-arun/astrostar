@@ -38,6 +38,7 @@ import {
   loadCalibrationFeedbacks,
   saveCalibrationFeedbacks,
   constructBaselinePromptTemplate,
+  compileBaselinePromptWithPrivateLLM,
   evolvePromptWithPrivateLLM,
   getLifeStageForAge
 } from '../services/manifestationEngineService';
@@ -357,6 +358,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
   });
   const [activeVersionIndex, setActiveVersionIndex] = useState<number>(0);
   const [isCompilingPrompt, setIsCompilingPrompt] = useState<boolean>(false);
+  const [compilationSeconds, setCompilationSeconds] = useState<number>(0);
+  const [compilationError, setCompilationError] = useState<string | null>(null);
+  const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_manifest_ollama_endpoint') : '') || 'http://localhost:11434';
+  });
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
 
   // Reload history when PD changes
@@ -408,11 +414,18 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return null;
   }, [promptHistory, activeVersionIndex]);
 
-  // Generate Initial Baseline Prompt (Version 1.0)
-  const handleGenerateBaselinePrompt = () => {
+  // Generate Initial Baseline Prompt via REAL Private LLM Call
+  const handleGenerateBaselinePrompt = async () => {
     setIsCompilingPrompt(true);
-    setTimeout(() => {
-      const raw = constructBaselinePromptTemplate({
+    setCompilationError(null);
+    setCompilationSeconds(0);
+    const startMs = Date.now();
+    const intervalTimer = setInterval(() => {
+      setCompilationSeconds(Math.round((Date.now() - startMs) / 1000));
+    }, 1000);
+
+    try {
+      const result = await compileBaselinePromptWithPrivateLLM({
         nativeProfile,
         monthName: MONTH_NAMES[selectedMonth],
         year: selectedYear,
@@ -421,9 +434,16 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         pdLord: selectedPd,
         birthLagna: RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius',
         janmaRashi: RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio',
-        gates: gateDetails
+        gates: gateDetails,
+        localOllamaEndpoint: ollamaEndpoint,
+        localModelName: selectedLocalModel
       });
 
+      if (result.error && !result.isRealLLMCall) {
+        setCompilationError(result.error);
+      }
+
+      const elapsedSec = Math.round((Date.now() - startMs) / 1000);
       const newRecord: EvolvedPromptRecord = {
         version: 1,
         versionTag: `v1.0 Initial Baseline (${MONTH_NAMES[selectedMonth]})`,
@@ -432,11 +452,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         pdLord: selectedPd,
         adLord: selectedAd,
         mdLord: selectedMd,
-        rawPrompt: raw,
-        evolutionLog: `Constructed baseline from native age ${nativeProfile.age} and active focus areas. Initial Parashara trajectory.`,
+        rawPrompt: result.prompt,
+        evolutionLog: `${result.evolutionLog} (Took ${elapsedSec}s)`,
         dampedAlerts: [],
         amplifiedTrajectories: [],
-        generatedByModel: ollamaStatus.isOnline ? `${selectedLocalModel} (Local Qwen)` : 'Vedic Prompt Compiler',
+        generatedByModel: result.modelUsed,
         createdAt: new Date().toISOString()
       };
 
@@ -444,14 +464,24 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       setPromptHistory(updated);
       savePromptHistory(personId, selectedPd, updated);
       setActiveVersionIndex(0);
+    } catch (err: any) {
+      setCompilationError(err.message || 'Private LLM reasoning call failed.');
+    } finally {
+      clearInterval(intervalTimer);
       setIsCompilingPrompt(false);
-    }, 600);
+    }
   };
 
-  // Evolve Prompt to Next Version (Pass 2 Mutation)
+  // Evolve Prompt to Next Version (Pass 2 Mutation via REAL Private LLM Call)
   const handleEvolvePrompt = async () => {
     if (!currentPromptRecord) return;
     setIsCompilingPrompt(true);
+    setCompilationError(null);
+    setCompilationSeconds(0);
+    const startMs = Date.now();
+    const intervalTimer = setInterval(() => {
+      setCompilationSeconds(Math.round((Date.now() - startMs) / 1000));
+    }, 1000);
 
     const nextMonthIdx = (selectedMonth + 1) % 12;
     const nextYr = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
@@ -488,7 +518,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         nextMonthName,
         nextYear: nextYr,
         nextMonthGates: gateDetails,
-        localOllamaEndpoint: 'http://localhost:11434',
+        localOllamaEndpoint: ollamaEndpoint,
         localModelName: selectedLocalModel
       });
 
@@ -499,9 +529,10 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       setPdCycleMonth(prev => prev + 1);
       setSelectedMonth(nextMonthIdx);
       setSelectedYear(nextYr);
-    } catch {
-      // fallback handled in service
+    } catch (err: any) {
+      setCompilationError(err.message || 'Prompt evolution failed.');
     } finally {
+      clearInterval(intervalTimer);
       setIsCompilingPrompt(false);
     }
   };
@@ -918,18 +949,18 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           <div className="flex items-center gap-2">
             <Brain className="w-4 h-4 text-purple-400" />
             <h3 className="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
-              3. Adaptive Prompt Compiler &amp; Bayesian Evolution Passes
+              3. Private LLM Prompt Architect (Qwen 14B / Local Model)
             </h3>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {currentPromptRecord && (
               <button
                 type="button"
                 onClick={handleCopyPrompt}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
               >
-                {promptCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                {promptCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{promptCopied ? 'Copied Prompt!' : 'Copy Active Prompt'}</span>
               </button>
             )}
@@ -938,13 +969,82 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
               type="button"
               onClick={handleGenerateBaselinePrompt}
               disabled={isCompilingPrompt}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer shadow disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs transition cursor-pointer shadow-lg shadow-purple-600/30 active:scale-95 disabled:opacity-50"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isCompilingPrompt ? 'animate-spin' : ''}`} />
-              <span>Compile Baseline v1.0 via Private LLM</span>
+              <span>
+                {isCompilingPrompt
+                  ? `Private LLM (${selectedLocalModel.split(':')[0]}) is reasoning & composing... (${compilationSeconds}s)`
+                  : `Compile Baseline v1.0 via Private LLM (${selectedLocalModel.split(':')[0]})`}
+              </span>
             </button>
           </div>
         </div>
+
+        {/* Private LLM Endpoint & Model Target Bar */}
+        <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Private LLM Host:</span>
+              <input
+                type="text"
+                value={ollamaEndpoint}
+                onChange={(e) => {
+                  setOllamaEndpoint(e.target.value);
+                  if (typeof window !== 'undefined') localStorage.setItem('astro_manifest_ollama_endpoint', e.target.value);
+                }}
+                className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-amber-300 font-mono w-48 focus:outline-none focus:border-purple-500"
+                placeholder="http://localhost:11434"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Model Tag:</span>
+              <input
+                type="text"
+                value={selectedLocalModel}
+                onChange={(e) => setSelectedLocalModel(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-purple-300 font-mono w-36 focus:outline-none focus:border-purple-500"
+                placeholder="qwen2.5:14b"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={checkLocalOllama}
+              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-mono border border-slate-700 transition cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Test Ping</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-slate-400 font-mono">
+            {ollamaStatus.isOnline ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Ollama Active ({ollamaStatus.models.length} local models detected)
+              </span>
+            ) : (
+              <span className="text-amber-400 flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" /> Ollama Offline (Run &apos;ollama run {selectedLocalModel}&apos; in terminal)
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Notice Banner if Connection Failed */}
+        {compilationError && (
+          <div className="p-3 rounded-xl bg-amber-950/50 border border-amber-500/50 text-xs text-amber-200 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-extrabold text-amber-300">Private LLM Connection Notice:</span>
+              <p className="font-mono text-[11px] text-amber-200/90 leading-snug">{compilationError}</p>
+              <p className="text-[11px] text-slate-300 pt-0.5">
+                💡 To have Qwen 14B compose the prompt directly on your machine, open terminal and ensure Ollama is serving at <code className="text-amber-300">{ollamaEndpoint}</code> with <code className="text-amber-300">{selectedLocalModel}</code>. A structured fallback was generated in the meantime so your flow remains unblocked.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Prompt Version History Tabs */}
         {promptHistory.length > 0 ? (

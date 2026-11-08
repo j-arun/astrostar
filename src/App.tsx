@@ -38,6 +38,7 @@ import RestApiStudio, { getStarLordShort } from './components/RestApiStudio';
 import { MonthlyTransitView } from './components/MonthlyTransitView';
 import { PredictionStudio } from './components/PredictionStudio';
 import SettingsStudio from './components/SettingsStudio';
+import { EventManifestationStudio } from './components/EventManifestationStudio';
 import { VedicHouseContext } from './services/llm/types';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
@@ -73,7 +74,7 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'api' | 'settings'>('charts');
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'manifestation' | 'api' | 'settings'>('charts');
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
   const [incomingPredictionContext, setIncomingPredictionContext] = useState<VedicHouseContext | null>(null);
@@ -331,6 +332,7 @@ export default function App() {
               { id: 'charts', label: 'Chart', icon: Compass },
               { id: 'monthly', label: 'Monthly View & Timeline Controls', icon: CalendarDays },
               { id: 'report', label: 'Prediction Studio', icon: FileText },
+              { id: 'manifestation', label: 'Event Manifestation Studio', icon: Sparkles },
               { id: 'api', label: 'Query Studio', icon: Server },
               { id: 'settings', label: 'Settings', icon: Settings },
             ].map(tab => {
@@ -920,7 +922,15 @@ export default function App() {
           />
         )}
 
-        {/* TAB 4: SETTINGS & PROMPT ARCHITECTURE VERSIONING */}
+        {/* TAB 4: DEDICATED EVENT MANIFESTATION STUDIO & ADAPTIVE PROMPT COMPILER */}
+        {activeTab === 'manifestation' && (
+          <EventManifestationStudio
+            key={`${activePersonId}-manifestation-studio`}
+            personId={activePersonId}
+          />
+        )}
+
+        {/* TAB 5: SETTINGS & PROMPT ARCHITECTURE VERSIONING */}
         {activeTab === 'settings' && (
           <SettingsStudio
             key={`${activePersonId}-settings`}

@@ -160,27 +160,41 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return (activeRecord as any)?.profile;
   }, [activeRecord]);
 
-  // Target Date (Time-Traveler Date: YYYY-MM-DD)
-  // Allows testing historical events (e.g. 2003 under Mercury MD & Saturn AD) or future events
-  const [targetDate, setTargetDate] = useState<string>('2026-11-08');
+  // Target Analysis Date Range (From and To)
+  // Allows testing historical events (e.g. 2003 under Mercury MD & Saturn AD) or future event ranges
+  const [targetFromDate, setTargetFromDate] = useState<string>('2026-11-08');
+  const [targetToDate, setTargetToDate] = useState<string>('2027-01-14');
 
-  const targetDateObj = useMemo(() => {
-    const d = new Date(targetDate);
+  const fromDateObj = useMemo(() => {
+    const d = new Date(targetFromDate);
     return isNaN(d.getTime()) ? new Date('2026-11-08') : d;
-  }, [targetDate]);
+  }, [targetFromDate]);
 
-  const selectedYear = targetDateObj.getFullYear();
-  const selectedMonth = targetDateObj.getMonth();
+  const toDateObj = useMemo(() => {
+    const d = new Date(targetToDate);
+    return isNaN(d.getTime()) ? new Date('2027-01-14') : d;
+  }, [targetToDate]);
 
-  // Calculated Age on Target Date based on birth date (if available)
+  const selectedYear = fromDateObj.getFullYear();
+  const selectedMonth = fromDateObj.getMonth();
+
+  // Range Duration in Days and Months
+  const rangeDuration = useMemo(() => {
+    const diffMs = toDateObj.getTime() - fromDateObj.getTime();
+    const days = Math.max(1, Math.round(diffMs / (24 * 3600 * 1000)));
+    const months = (days / 30.4375).toFixed(1);
+    return { days, months };
+  }, [fromDateObj, toDateObj]);
+
+  // Calculated Age on Target Range Start based on birth date (if available)
   const nativeAgeOnTargetDate = useMemo(() => {
     if (!activeProfile?.date_of_birth) return null;
     const dob = new Date(activeProfile.date_of_birth);
     if (isNaN(dob.getTime())) return null;
-    const diffMs = targetDateObj.getTime() - dob.getTime();
+    const diffMs = fromDateObj.getTime() - dob.getTime();
     const age = Math.floor(diffMs / (365.25 * 24 * 3600 * 1000));
     return Math.max(1, age);
-  }, [activeProfile, targetDateObj]);
+  }, [activeProfile, fromDateObj]);
 
   // Month Cycle Counter inside the PD (Month 1, Month 2, Month 3...)
   const [pdCycleMonth, setPdCycleMonth] = useState<number>(1);
@@ -294,7 +308,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const entry = matched.find(t => normalizeLordKey(t[2]) === circularLord);
       const start = entry ? entry[3] : '';
       const end = entry ? entry[4] : '';
-      const isDateActive = (start && end) ? (targetDate >= start && targetDate <= end) : false;
+      const isDateActive = (start && end) ? (targetFromDate <= end && targetToDate >= start) : false;
 
       return {
         index: i + 1,
@@ -305,16 +319,37 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         isDateActive
       };
     });
-  }, [timeline, selectedMd, selectedAd, targetDate]);
+  }, [timeline, selectedMd, selectedAd, targetFromDate, targetToDate]);
 
   const [selectedPd, setSelectedPd] = useState<string>(() => {
     return ninePds[0]?.pdLord || 'Mercury (Budha)';
   });
 
   // Handle direct date changes with auto-detection of Dasha
-  const handleDateChange = (newDateStr: string) => {
-    setTargetDate(newDateStr);
-    const dasha = getVimshottariDashaForDate(newDateStr, timeline, activeProfile);
+  const handleFromDateChange = (newFrom: string) => {
+    setTargetFromDate(newFrom);
+    if (newFrom > targetToDate) {
+      setTargetToDate(newFrom);
+    }
+    const dasha = getVimshottariDashaForDate(newFrom, timeline, activeProfile);
+    if (dasha) {
+      setSelectedMd(normalizeLordKey(dasha.mahadasha));
+      setSelectedAd(normalizeLordKey(dasha.antardasha));
+      setSelectedPd(normalizeLordKey(dasha.pratyantardasha));
+    }
+  };
+
+  const handleToDateChange = (newTo: string) => {
+    setTargetToDate(newTo);
+    if (newTo < targetFromDate) {
+      setTargetFromDate(newTo);
+    }
+  };
+
+  const handleApplyPresetRange = (from: string, to: string) => {
+    setTargetFromDate(from);
+    setTargetToDate(to);
+    const dasha = getVimshottariDashaForDate(from, timeline, activeProfile);
     if (dasha) {
       setSelectedMd(normalizeLordKey(dasha.mahadasha));
       setSelectedAd(normalizeLordKey(dasha.antardasha));
@@ -342,13 +377,13 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     2: 'combined'
   });
 
-  // 4. Astronomical Gochara Ephemeris (Look at the Sky on Target Date!)
+  // 4. Astronomical Gochara Ephemeris (Look at the Sky on Target Horizon!)
   const skySnapshot = useMemo(() => {
     const keys = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"];
-    return keys.map(k => getGrahaTransitPosition(k, targetDateObj, natalLagnaIdx, natalRashiIdx));
-  }, [targetDateObj, natalLagnaIdx, natalRashiIdx]);
+    return keys.map(k => getGrahaTransitPosition(k, fromDateObj, natalLagnaIdx, natalRashiIdx));
+  }, [fromDateObj, natalLagnaIdx, natalRashiIdx]);
 
-  // Moon acute trigger detection on targetDate
+  // Moon acute trigger detection on target date range
   const moonPlanet = useMemo(() => skySnapshot.find(p => p.graha_key === 'Moon'), [skySnapshot]);
   const moonDeliveryStatus = useMemo<MoonDeliveryStatus | undefined>(() => {
     if (!moonPlanet) return undefined;
@@ -374,7 +409,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const hLagna = ((rIdx - natalLagnaIdx + 12) % 12) + 1;
       const hRashi = ((rIdx - natalRashiIdx + 12) % 12) + 1;
 
-      // Real planets transiting this gate or sign on targetDate!
+      // Real planets transiting this gate or sign in horizon!
       const planetsInGate = skySnapshot.filter(p => {
         return p.graha_pada_chara.nakshatra_name.toLowerCase() === nakName.toLowerCase() || p.transit_rashi_index === rIdx;
       }).map(p => {
@@ -388,11 +423,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         houseFromLagna: hLagna,
         houseFromRashi: hRashi,
         activeGrahas: planetsInGate,
-        moonWindow: `Target Date: ${targetDate}`,
+        moonWindow: `${targetFromDate} to ${targetToDate}`,
         chosenPerspective: gatePerspectives[idx] || 'combined'
       };
     });
-  }, [selectedPd, natalLagnaIdx, natalRashiIdx, skySnapshot, gatePerspectives, targetDate]);
+  }, [selectedPd, natalLagnaIdx, natalRashiIdx, skySnapshot, gatePerspectives, targetFromDate, targetToDate]);
 
   // Formatted sky positions for prompt architect
   const skyPositionsForPrompt = useMemo<SkyPositionItem[]>(() => {
@@ -563,7 +598,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         nativeProfile,
         monthName: MONTH_NAMES[selectedMonth],
         year: selectedYear,
-        targetDate,
+        targetDate: targetFromDate,
+        targetFromDate,
+        targetToDate,
         mdLord: selectedMd,
         adLord: selectedAd,
         pdLord: selectedPd,
@@ -583,8 +620,8 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const elapsedSec = Math.round((Date.now() - startMs) / 1000);
       const newRecord: EvolvedPromptRecord = {
         version: 1,
-        versionTag: `v1.0 Baseline (${targetDate})`,
-        targetMonthName: `${targetDate} (${MONTH_NAMES[selectedMonth]} ${selectedYear})`,
+        versionTag: `v1.0 Baseline (${targetFromDate} to ${targetToDate})`,
+        targetMonthName: `${targetFromDate} to ${targetToDate} (${MONTH_NAMES[selectedMonth]} ${selectedYear})`,
         cycleMonthNumber: 1,
         pdLord: selectedPd,
         adLord: selectedAd,
@@ -664,7 +701,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       savePromptHistory(personId, selectedPd, updated);
       setPdCycleMonth(prev => prev + 1);
       const nextDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-01`;
-      handleDateChange(nextDateStr);
+      const nextEndDay = new Date(nextYr, nextMonthIdx + 1, 0).getDate();
+      const nextEndDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-${nextEndDay}`;
+      handleApplyPresetRange(nextDateStr, nextEndDateStr);
     } catch (err: any) {
       setCompilationError(err.message || 'Prompt evolution failed.');
     } finally {
@@ -942,7 +981,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400" />
             <h3 className="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
-              2. Dasha Horizon, Time-Traveler Date &amp; Delivery Answers in the Sky
+              2. Dasha Horizon, Target Date Range &amp; Delivery Answers in the Sky
             </h3>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
@@ -954,18 +993,17 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             <span className="text-amber-300 font-bold">{toCleanEnglishPlanet(selectedPd)} PD</span>
             <span className="text-slate-600">&bull;</span>
             <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold border border-slate-700">
-              {targetDate}
+              {targetFromDate} to {targetToDate}
             </span>
           </div>
         </div>
 
-        {/* Dasha Dropdowns + Target Date Picker Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Row 1: Mahadasha & Antardasha */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* MD Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
-              <span>Mahadasha (MD):</span>
-              <span className="text-[10px] text-purple-400 font-mono">Full Lifetime Arc</span>
+            <label className="text-[11px] font-bold text-slate-300 uppercase block">
+              Mahadasha (MD):
             </label>
             <select
               value={selectedMd}
@@ -976,7 +1014,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                 if (matchingAds[0]) {
                   const newAd = normalizeLordKey(matchingAds[0][1]);
                   setSelectedAd(newAd);
-                  handleDateChange(matchingAds[0][3]);
+                  handleApplyPresetRange(matchingAds[0][3], matchingAds[0][4]);
                 }
               }}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
@@ -991,9 +1029,8 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
 
           {/* AD Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
-              <span>Antardasha (AD):</span>
-              <span className="text-[10px] text-cyan-400 font-mono">Delivery Hand</span>
+            <label className="text-[11px] font-bold text-slate-300 uppercase block">
+              Antardasha (AD):
             </label>
             <select
               value={selectedAd}
@@ -1002,7 +1039,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                 setSelectedAd(newAd);
                 const found = adList.find(a => normalizeLordKey(a.key) === normalizeLordKey(newAd));
                 if (found) {
-                  handleDateChange(found.startDate);
+                  handleApplyPresetRange(found.startDate, found.endDate);
                 }
               }}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
@@ -1014,80 +1051,104 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
               ))}
             </select>
           </div>
+        </div>
 
-          {/* Target Date Picker (Time Traveler) */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
-              <span>Target Analysis Date:</span>
-              <span className="text-[10px] text-amber-400 font-mono">Backdate Any Era</span>
+        {/* Next Line: Target Analysis Date Range (From Date & To Date) */}
+        <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3.5 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-[11px] font-bold text-slate-200 uppercase tracking-wide">
+              Target Analysis Date:
             </label>
-            <div className="flex items-center gap-1.5">
+            <div className="text-[11px] font-mono text-slate-400">
+              Duration: <span className="text-amber-400 font-bold">{rangeDuration.days} Days</span> (~{rangeDuration.months} months)
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* From Date Picker */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase block">
+                From Date:
+              </label>
               <input
                 type="date"
-                value={targetDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400 cursor-pointer shadow-inner"
+                value={targetFromDate}
+                onChange={(e) => handleFromDateChange(e.target.value)}
+                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400 cursor-pointer shadow-inner"
+              />
+            </div>
+
+            {/* To Date Picker */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase block">
+                To Date:
+              </label>
+              <input
+                type="date"
+                value={targetToDate}
+                onChange={(e) => handleToDateChange(e.target.value)}
+                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400 cursor-pointer shadow-inner"
               />
             </div>
           </div>
-        </div>
 
-        {/* Quick Time-Travel Presets & Age Synchronizer */}
-        <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-[10px] font-bold uppercase text-slate-400">Quick Time Travel:</span>
-            <button
-              type="button"
-              onClick={() => handleDateChange('2003-09-15')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                targetDate.startsWith('2003')
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-              }`}
-            >
-              2003 Backtest (Mercury-Saturn)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDateChange('1995-06-15')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                targetDate.startsWith('1995')
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-              }`}
-            >
-              1995 Backtest (Mercury-Venus)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDateChange('2026-11-08')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                targetDate.startsWith('2026')
-                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-              }`}
-            >
-              Current Transit (2026)
-            </button>
-          </div>
-
-          {nativeAgeOnTargetDate && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-300">
-                Age on {targetDate}: <strong className="text-amber-400 font-mono font-bold">{nativeAgeOnTargetDate} Years</strong>
-              </span>
-              {nativeProfile.age !== nativeAgeOnTargetDate && (
-                <button
-                  type="button"
-                  onClick={() => handleUpdateAge(nativeAgeOnTargetDate)}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Sync Age to {nativeAgeOnTargetDate}</span>
-                </button>
-              )}
+          {/* Presets & Historical Age Synchronizer */}
+          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400">Presets:</span>
+              <button
+                type="button"
+                onClick={() => handleApplyPresetRange('2003-05-05', '2003-10-16')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate.startsWith('2003')
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                2003 (Mercury-Saturn-Venus: May–Oct 2003)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPresetRange('1995-02-14', '1995-12-16')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate.startsWith('1995')
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                1995 (Mercury-Venus: Feb–Dec 1995)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPresetRange('2026-08-03', '2027-01-14')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate.startsWith('2026')
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                Current Transit (Venus-Saturn: 2026–2027)
+              </button>
             </div>
-          )}
+
+            {nativeAgeOnTargetDate && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-300">
+                  Age on date: <strong className="text-amber-400 font-mono font-bold">{nativeAgeOnTargetDate} Years</strong>
+                </span>
+                {nativeProfile.age !== nativeAgeOnTargetDate && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateAge(nativeAgeOnTargetDate)}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Sync Age to {nativeAgeOnTargetDate}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* All Nine PDs Slide */}
@@ -1096,7 +1157,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             <span className="font-bold text-slate-300 uppercase">
               All 9 Pratyantardashas (PDs) under {toCleanEnglishPlanet(selectedAd)} AD:
             </span>
-            <span className="text-[11px] text-slate-400">Click any PD to set target date and recalculate sky ephemeris</span>
+            <span className="text-[11px] text-slate-400">Click any PD to set From &amp; To dates</span>
           </div>
 
           <div className="overflow-x-auto pb-1 scrollbar-thin">
@@ -1110,8 +1171,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                     onClick={() => {
                       setSelectedPd(pd.pdLord);
                       setPdCycleMonth(1);
-                      if (pd.startDate) {
-                        setTargetDate(pd.startDate);
+                      if (pd.startDate && pd.endDate) {
+                        setTargetFromDate(pd.startDate);
+                        setTargetToDate(pd.endDate);
                       }
                     }}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
@@ -1129,7 +1191,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                       {isSelected ? (
                         <Zap className="w-3 h-3 text-amber-400 fill-current animate-pulse" />
                       ) : pd.isDateActive ? (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Active on Date" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Active in Date Range" />
                       ) : null}
                     </div>
                     <span className="text-xs font-extrabold truncate block">{pd.cleanName}</span>
@@ -1174,7 +1236,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-cyan-400" />
               <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                Delivery Answers in the Sky (Gochara Ephemeris on {targetDate})
+                Delivery Answers in the Sky (Gochara Ephemeris on {targetFromDate})
               </h4>
             </div>
 

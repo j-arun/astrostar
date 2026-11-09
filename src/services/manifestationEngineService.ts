@@ -193,6 +193,8 @@ export function constructBaselinePromptTemplate(params: {
   monthName: string;
   year: number;
   targetDate?: string;
+  targetFromDate?: string;
+  targetToDate?: string;
   mdLord: string;
   adLord: string;
   pdLord: string;
@@ -215,6 +217,8 @@ export function constructBaselinePromptTemplate(params: {
     monthName,
     year,
     targetDate,
+    targetFromDate,
+    targetToDate,
     mdLord,
     adLord,
     pdLord,
@@ -225,18 +229,22 @@ export function constructBaselinePromptTemplate(params: {
     moonDeliveryStatus
   } = params;
 
+  const dateSpanDisplay = targetFromDate && targetToDate
+    ? `From ${targetFromDate} To ${targetToDate}`
+    : (targetDate ? `Date: ${targetDate} (${monthName} ${year})` : `${monthName} ${year}`);
+
   const focusList = nativeProfile.focusAreas
     .map(fa => MANIFESTATION_FOCUS_DOMAINS.find(d => d.id === fa)?.label || fa)
     .join(', ');
 
   const skySection = skyPositions.length > 0 ? `
-[REAL SKY DELIVERY SNAPSHOT (GOCHARA TRANSIT ON ${targetDate || `${monthName} ${year}`})]
-The actual astronomical positions of the Grahas in the sky on this date:
+[REAL SKY DELIVERY SNAPSHOT (GOCHARA TRANSIT FOR HORIZON: ${dateSpanDisplay})]
+The actual astronomical positions of the Grahas in the sky across this analysis horizon:
 ${skyPositions.map(p => `- ${p.planet}: in ${p.rashi} (${p.degreeSputa}), Nakshatra ${p.nakshatra} (Pada ${p.pada}) | House ${p.houseFromLagna} from Lagna, House ${p.houseFromRashi} from Moon ${p.isRetrograde ? '[RETROGRADE / VAKRA]' : '[DIRECT]'}${p.isInGate ? ` [ACTIVE TRANSIT IN ENTRY GATE ${p.gateIndex! + 1}: ${p.nakshatra}]` : ''}`).join('\n')}
 
-[MOON (CHANDRA) 2.5-DAY DELIVERY IGNITION ON TARGET DATE]
-- Moon on Target Date: ${moonDeliveryStatus?.nakshatra || 'Calculated'} in ${moonDeliveryStatus?.sign || 'Calculated'}
-- Acute Trigger Status: ${moonDeliveryStatus?.isIgnitingGate ? `ACUTE ACTIVATION ACTIVE - Moon is currently in Gate ${moonDeliveryStatus.gateIndex! + 1} (${moonDeliveryStatus.gateNakshatra}) on this date!` : 'Dormant Period - Moon is outside the 3 gates on this specific day.'}
+[MOON (CHANDRA) 2.5-DAY DELIVERY IGNITIONS IN HORIZON]
+- Moon Transit Status: ${moonDeliveryStatus?.nakshatra || 'Calculated'} in ${moonDeliveryStatus?.sign || 'Calculated'}
+- Acute Trigger Status: ${moonDeliveryStatus?.isIgnitingGate ? `ACUTE ACTIVATION ACTIVE - Moon transits Gate ${moonDeliveryStatus.gateIndex! + 1} (${moonDeliveryStatus.gateNakshatra}) during this horizon!` : 'Dormant Baseline - Moon is outside the 3 gates on current focal date.'}
 ` : '';
 
   return `You are an elite Classical Parashari & Nadi Astrological Synthesis Engine.
@@ -247,10 +255,10 @@ ${skyPositions.map(p => `- ${p.planet}: in ${p.rashi} (${p.degreeSputa}), Naksha
 - Native Current Ground Reality / Active Narrative:
   "${nativeProfile.currentSituationNarrative || 'Standard adult life progression, active responsibilities and ongoing ventures'}"
 
-[DASHA HIERARCHY FOR TARGET HORIZON: ${targetDate ? `Date: ${targetDate} (${monthName} ${year})` : `${monthName} ${year}`}]
+[DASHA HIERARCHY FOR TARGET HORIZON: ${dateSpanDisplay}]
 - Mahadasha (MD): ${mdLord}
-- Antardasha (AD - Saral Delivery Hand): ${adLord}
-- Pratyantardasha (PD - Month Teeth): ${pdLord}
+- Antardasha (AD): ${adLord}
+- Pratyantardasha (PD): ${pdLord}
 - Birth Ascendant (Lagna): ${birthLagna} (Physical Body, Somatics, Reality)
 - Janma Rashi (Moon): ${janmaRashi} (Psychological Experiential Fruition)
 
@@ -263,9 +271,9 @@ ${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 `).join('\n')}
 ${skySection}
 [SYNTHESIS MANDATE (VERSION 1.0 BASELINE)]:
-1. Synthesize the native's actual age (${nativeProfile.age}) and focus domains (${focusList}) against the real sky transit delivery and Dasha rulers.
+1. Synthesize the native's actual age (${nativeProfile.age}) and focus domains (${focusList}) against the real sky transit delivery and Dasha rulers for the date range ${dateSpanDisplay}.
 2. Ground predictions in historical and real-world realities: avoid juvenile or elderly clichés unless age warrants.
-3. Apply the Moon 2.5-day Ignition Law: If Moon triggers a gate on this target date (${moonDeliveryStatus?.isIgnitingGate ? 'ACTIVE' : 'DORMANT'}), events are ACUTE (70-95% probability, latencyStatus: "acute_moon_triggered"). If Moon is outside the gates, events are DORMANT/LATENT (25-45% probability, latencyStatus: "dormant_latent").
+3. Apply the Moon 2.5-day Ignition Law: If Moon triggers a gate in this horizon (${moonDeliveryStatus?.isIgnitingGate ? 'ACTIVE' : 'DORMANT'}), events are ACUTE (70-95% probability, latencyStatus: "acute_moon_triggered"). If Moon is outside the gates, events are DORMANT/LATENT (25-45% probability, latencyStatus: "dormant_latent").
 4. Output 4 to 6 specific, tangible event predictions in JSON format.
 
 JSON OUTPUT FORMAT:
@@ -296,6 +304,8 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
   monthName: string;
   year: number;
   targetDate?: string;
+  targetFromDate?: string;
+  targetToDate?: string;
   mdLord: string;
   adLord: string;
   pdLord: string;
@@ -326,6 +336,8 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
     monthName,
     year,
     targetDate,
+    targetFromDate,
+    targetToDate,
     mdLord,
     adLord,
     pdLord,
@@ -338,18 +350,22 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
     localModelName = 'qwen2.5:14b'
   } = params;
 
+  const dateSpanDisplay = targetFromDate && targetToDate
+    ? `From ${targetFromDate} To ${targetToDate}`
+    : (targetDate ? `Date: ${targetDate} (${monthName} ${year})` : `${monthName} ${year}`);
+
   const focusList = nativeProfile.focusAreas
     .map(fa => MANIFESTATION_FOCUS_DOMAINS.find(d => d.id === fa)?.label || fa)
     .join(', ');
 
   const skyContext = skyPositions.length > 0 ? `
-[INPUT 4: REAL-TIME SKY POSITIONS (GOCHARA TRANSIT ON ${targetDate || `${monthName} ${year}`})]
-The astronomical positions in the sky on this target date:
+[INPUT 4: REAL-TIME SKY POSITIONS (GOCHARA TRANSIT FOR HORIZON: ${dateSpanDisplay})]
+The astronomical positions in the sky across this analysis horizon:
 ${skyPositions.map(p => `  • ${p.planet}: ${p.rashi} (${p.degreeSputa}) in ${p.nakshatra} (Pada ${p.pada}) | House ${p.houseFromLagna} from Lagna, House ${p.houseFromRashi} from Moon ${p.isRetrograde ? '[RETROGRADE / VAKRA]' : '[DIRECT]'}${p.isInGate ? ` [ACTIVE TRANSIT IN ENTRY GATE ${p.gateIndex! + 1}: ${p.nakshatra}!]` : ''}`).join('\n')}
 
 [INPUT 5: MOON 2.5-DAY ACUTE DELIVERY TRIGGER STATUS]
-- Moon Transit on Target Date: ${moonDeliveryStatus?.nakshatra || 'Calculated'} in ${moonDeliveryStatus?.sign || 'Calculated'}
-- Acute Gate Ignition Status: ${moonDeliveryStatus?.isIgnitingGate ? `YES - Igniting Gate ${moonDeliveryStatus.gateIndex! + 1} (${moonDeliveryStatus.gateNakshatra}) on this exact date!` : 'Dormant (Moon is outside current 3 entry gates on this date)'}
+- Moon Transit Status: ${moonDeliveryStatus?.nakshatra || 'Calculated'} in ${moonDeliveryStatus?.sign || 'Calculated'}
+- Acute Gate Ignition Status: ${moonDeliveryStatus?.isIgnitingGate ? `YES - Igniting Gate ${moonDeliveryStatus.gateIndex! + 1} (${moonDeliveryStatus.gateNakshatra}) during this horizon!` : 'Dormant (Moon is outside current 3 entry gates on current focal date)'}
 ` : '';
 
   const metaPromptDirective = `You are an elite Classical Vedic Astrological Prompt Engineer & Reasoning Engine.
@@ -362,10 +378,10 @@ Instead, your objective is to REASON, ANALYZE, and COMPOSE the complete, compreh
 - Native Current Ground Reality / Active Narrative:
   "${nativeProfile.currentSituationNarrative || 'Standard adult progression: career responsibilities, family commitments, and routine life logistics'}"
 
-[INPUT 2: DASHA HIERARCHY FOR TARGET: ${targetDate ? `Date: ${targetDate} (${monthName} ${year})` : `${monthName} ${year}`}]
+[INPUT 2: DASHA HIERARCHY FOR TARGET HORIZON: ${dateSpanDisplay}]
 - Mahadasha (MD): ${mdLord}
-- Antardasha (AD - Saral Delivery Hand): ${adLord}
-- Pratyantardasha (PD - Month Teeth): ${pdLord}
+- Antardasha (AD): ${adLord}
+- Pratyantardasha (PD): ${pdLord}
 - Birth Ascendant (Lagna): ${birthLagna} (Physical Body, Somatics, Reality)
 - Janma Rashi (Moon): ${janmaRashi} (Psychological Experiential Fruition)
 
@@ -380,8 +396,8 @@ ${skyContext}
 [YOUR TASK AS PROMPT ENGINEER]:
 Compose the complete, ready-to-run prompt text that will be sent to the public LLM.
 In the prompt you write:
-1. Ground the public LLM in the native's exact age (${nativeProfile.age}), historical target date (${targetDate || `${monthName} ${year}`}), and current life stakes (${focusList}), explicitly warning it to avoid juvenile or geriatric clichés unless age warrants.
-2. Embed the actual sky positions and the delivering hand (${pdLord}) operating through these 3 gates to explain how these transits manifest in reality.
+1. Ground the public LLM in the native's exact age (${nativeProfile.age}), historical target horizon (${dateSpanDisplay}), and current life stakes (${focusList}), explicitly warning it to avoid juvenile or geriatric clichés unless age warrants.
+2. Embed the actual sky positions and the delivering hand (${pdLord}) operating through these 3 gates to explain how these transits manifest in reality across this date range.
 3. Explicitly define the Chandra (Moon) 2.5-Day Acute Ignition Law (70-95% probability during Moon window, latencyStatus: "acute_moon_triggered") versus dormant latent potentials (25-45% probability, latencyStatus: "dormant_latent").
 4. Demand a strict JSON response containing an array of 4 to 6 specific event cards matching this schema:
 {

@@ -23,7 +23,14 @@ import {
   Cpu,
   Brain,
   History,
-  CheckCircle2
+  CheckCircle2,
+  Maximize2,
+  Minimize2,
+  Edit3,
+  Save,
+  FileDown,
+  Eye,
+  RotateCcw
 } from 'lucide-react';
 import {
   NativeManifestationProfile,
@@ -31,6 +38,8 @@ import {
   EvolvedPromptRecord,
   ManifestedEventOutput,
   MANIFESTATION_FOCUS_DOMAINS,
+  SkyPositionItem,
+  MoonDeliveryStatus,
   loadNativeProfile,
   saveNativeProfile,
   loadPromptHistory,
@@ -43,11 +52,13 @@ import {
   getLifeStageForAge
 } from '../services/manifestationEngineService';
 import {
-  calculateVimshottariTimelineForProfile
+  calculateVimshottariTimelineForProfile,
+  getVimshottariDashaForDate
 } from '../data/dashaCalculator';
 import storedPersonsData from '../data/stored_persons.json';
 import {
-  RASHI_LIST_META
+  RASHI_LIST_META,
+  getGrahaTransitPosition
 } from '../data/transitEphemeris';
 import { toCleanEnglishPlanet, toCleanEnglishSign, checkOllamaHealth } from '../services/llm/adapters';
 import { LLMProviderId } from '../services/llm/types';
@@ -149,9 +160,27 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return (activeRecord as any)?.profile;
   }, [activeRecord]);
 
-  // Target Month and Year
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+  // Target Date (Time-Traveler Date: YYYY-MM-DD)
+  // Allows testing historical events (e.g. 2003 under Mercury MD & Saturn AD) or future events
+  const [targetDate, setTargetDate] = useState<string>('2026-11-08');
+
+  const targetDateObj = useMemo(() => {
+    const d = new Date(targetDate);
+    return isNaN(d.getTime()) ? new Date('2026-11-08') : d;
+  }, [targetDate]);
+
+  const selectedYear = targetDateObj.getFullYear();
+  const selectedMonth = targetDateObj.getMonth();
+
+  // Calculated Age on Target Date based on birth date (if available)
+  const nativeAgeOnTargetDate = useMemo(() => {
+    if (!activeProfile?.date_of_birth) return null;
+    const dob = new Date(activeProfile.date_of_birth);
+    if (isNaN(dob.getTime())) return null;
+    const diffMs = targetDateObj.getTime() - dob.getTime();
+    const age = Math.floor(diffMs / (365.25 * 24 * 3600 * 1000));
+    return Math.max(1, age);
+  }, [activeProfile, targetDateObj]);
 
   // Month Cycle Counter inside the PD (Month 1, Month 2, Month 3...)
   const [pdCycleMonth, setPdCycleMonth] = useState<number>(1);
@@ -237,7 +266,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           const end = allForAd[allForAd.length - 1]?.[4] || e;
           list.push({
             key: adKey,
-            label: `${toCleanEnglishPlanet(adKey)} AD (${start.slice(0, 7)} to ${end.slice(0, 7)})`,
+            label: `${toCleanEnglishPlanet(adKey)} AD (${start} to ${end})`,
             startDate: start,
             endDate: end
           });
@@ -252,9 +281,6 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
   });
 
   const ninePds = useMemo(() => {
-    const targetMonthStart = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
-    const targetMonthEnd = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`;
-
     const matched = timeline.filter(([md, ad]) => normalizeLordKey(md) === normalizeLordKey(selectedMd) && normalizeLordKey(ad) === normalizeLordKey(selectedAd));
 
     const ALL_NINE = [
@@ -268,7 +294,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const entry = matched.find(t => normalizeLordKey(t[2]) === circularLord);
       const start = entry ? entry[3] : '';
       const end = entry ? entry[4] : '';
-      const isMonthActive = (start && end) ? (start <= targetMonthEnd && end >= targetMonthStart) : false;
+      const isDateActive = (start && end) ? (targetDate >= start && targetDate <= end) : false;
 
       return {
         index: i + 1,
@@ -276,14 +302,25 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         cleanName: toCleanEnglishPlanet(circularLord),
         startDate: start,
         endDate: end,
-        isMonthActive
+        isDateActive
       };
     });
-  }, [timeline, selectedMd, selectedAd, selectedMonth, selectedYear]);
+  }, [timeline, selectedMd, selectedAd, targetDate]);
 
   const [selectedPd, setSelectedPd] = useState<string>(() => {
     return ninePds[0]?.pdLord || 'Mercury (Budha)';
   });
+
+  // Handle direct date changes with auto-detection of Dasha
+  const handleDateChange = (newDateStr: string) => {
+    setTargetDate(newDateStr);
+    const dasha = getVimshottariDashaForDate(newDateStr, timeline, activeProfile);
+    if (dasha) {
+      setSelectedMd(normalizeLordKey(dasha.mahadasha));
+      setSelectedAd(normalizeLordKey(dasha.antardasha));
+      setSelectedPd(normalizeLordKey(dasha.pratyantardasha));
+    }
+  };
 
   // 3. Natal Coordinates
   const natalLagnaIdx = useMemo(() => {
@@ -305,6 +342,29 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     2: 'combined'
   });
 
+  // 4. Astronomical Gochara Ephemeris (Look at the Sky on Target Date!)
+  const skySnapshot = useMemo(() => {
+    const keys = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"];
+    return keys.map(k => getGrahaTransitPosition(k, targetDateObj, natalLagnaIdx, natalRashiIdx));
+  }, [targetDateObj, natalLagnaIdx, natalRashiIdx]);
+
+  // Moon acute trigger detection on targetDate
+  const moonPlanet = useMemo(() => skySnapshot.find(p => p.graha_key === 'Moon'), [skySnapshot]);
+  const moonDeliveryStatus = useMemo<MoonDeliveryStatus | undefined>(() => {
+    if (!moonPlanet) return undefined;
+    const moonNak = moonPlanet.graha_pada_chara.nakshatra_name;
+    const lordMeta = LORD_NAKSHATRA_GATES[normalizeLordKey(selectedPd)] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
+    const gateIdx = lordMeta.nakshatras.findIndex(n => n.toLowerCase() === moonNak.toLowerCase());
+    return {
+      nakshatra: moonNak,
+      sign: `${moonPlanet.transit_rashi_name} (${moonPlanet.transit_rashi_tamil})`,
+      isIgnitingGate: gateIdx >= 0,
+      gateIndex: gateIdx >= 0 ? gateIdx : undefined,
+      gateNakshatra: gateIdx >= 0 ? lordMeta.nakshatras[gateIdx] : undefined
+    };
+  }, [moonPlanet, selectedPd]);
+
+  // Delivering Hand 3 Gates with real transiting planets
   const gateDetails = useMemo(() => {
     const lordMeta = LORD_NAKSHATRA_GATES[normalizeLordKey(selectedPd)] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
 
@@ -314,24 +374,48 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const hLagna = ((rIdx - natalLagnaIdx + 12) % 12) + 1;
       const hRashi = ((rIdx - natalRashiIdx + 12) % 12) + 1;
 
-      // Approximate moon dates in sign (~2.5 days window)
-      const startDay = Math.min(26, Math.max(1, ((rIdx * 2.3) % 25) + 2));
-      const endDay = Math.min(29, Math.round(startDay + 2.5));
-      const moonWindow = `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${Math.round(startDay)}–${endDay}`;
+      // Real planets transiting this gate or sign on targetDate!
+      const planetsInGate = skySnapshot.filter(p => {
+        return p.graha_pada_chara.nakshatra_name.toLowerCase() === nakName.toLowerCase() || p.transit_rashi_index === rIdx;
+      }).map(p => {
+        const isExactNak = p.graha_pada_chara.nakshatra_name.toLowerCase() === nakName.toLowerCase();
+        return `${p.graha_name} (${isExactNak ? `Direct in ${nakName}` : `in ${rMeta.eng}`}${p.is_retrograde ? ' [Vakra]' : ''})`;
+      });
 
       return {
         nakshatraName: nakName,
         rashiName: `${rMeta.eng} (${rMeta.tamil})`,
         houseFromLagna: hLagna,
         houseFromRashi: hRashi,
-        activeGrahas: ['Mars (Transit in Gate)'],
-        moonWindow,
+        activeGrahas: planetsInGate,
+        moonWindow: `Target Date: ${targetDate}`,
         chosenPerspective: gatePerspectives[idx] || 'combined'
       };
     });
-  }, [selectedPd, natalLagnaIdx, natalRashiIdx, selectedMonth, gatePerspectives]);
+  }, [selectedPd, natalLagnaIdx, natalRashiIdx, skySnapshot, gatePerspectives, targetDate]);
 
-  // 4. Local Ollama Health & Connection
+  // Formatted sky positions for prompt architect
+  const skyPositionsForPrompt = useMemo<SkyPositionItem[]>(() => {
+    const lordMeta = LORD_NAKSHATRA_GATES[normalizeLordKey(selectedPd)] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
+    return skySnapshot.map(p => {
+      const gateIdx = lordMeta.nakshatras.findIndex(n => n.toLowerCase() === p.graha_pada_chara.nakshatra_name.toLowerCase());
+      return {
+        planet: p.graha_name,
+        rashi: p.transit_rashi_name,
+        rashiTamil: p.transit_rashi_tamil,
+        degreeSputa: p.degree_sputa,
+        nakshatra: p.graha_pada_chara.nakshatra_name,
+        pada: p.graha_pada_chara.pada,
+        houseFromLagna: p.relative_to_natal_lagna.house_number,
+        houseFromRashi: p.relative_to_natal_rashi.house_number,
+        isRetrograde: p.is_retrograde,
+        isInGate: gateIdx >= 0,
+        gateIndex: gateIdx >= 0 ? gateIdx : undefined
+      };
+    });
+  }, [skySnapshot, selectedPd]);
+
+  // 5. Local Ollama Health & Connection
   const [ollamaStatus, setOllamaStatus] = useState<{ isOnline: boolean; models: string[]; error?: string }>({
     isOnline: false,
     models: []
@@ -364,6 +448,10 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_manifest_ollama_endpoint') : '') || 'http://localhost:11434';
   });
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
+  const [isPromptExpanded, setIsPromptExpanded] = useState<boolean>(true);
+  const [isEditingPrompt, setIsEditingPrompt] = useState<boolean>(false);
+  const [editedPromptText, setEditedPromptText] = useState<string>('');
+  const [showSection4Synthesis, setShowSection4Synthesis] = useState<boolean>(false);
 
   // Reload history when PD changes
   useEffect(() => {
@@ -414,6 +502,52 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return null;
   }, [promptHistory, activeVersionIndex]);
 
+  // Sync editedPromptText when active record changes
+  useEffect(() => {
+    if (currentPromptRecord) {
+      setEditedPromptText(currentPromptRecord.rawPrompt);
+      setIsEditingPrompt(false);
+    }
+  }, [currentPromptRecord]);
+
+  // Prompt metrics: words, characters, estimated tokens
+  const promptStats = useMemo(() => {
+    if (!currentPromptRecord) return { words: 0, chars: 0, estimatedTokens: 0, lines: 0 };
+    const text = isEditingPrompt ? editedPromptText : currentPromptRecord.rawPrompt;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const chars = text.length;
+    const estimatedTokens = Math.round(chars / 3.8);
+    const lines = text.split('\n').length;
+    return { words, chars, estimatedTokens, lines };
+  }, [currentPromptRecord, isEditingPrompt, editedPromptText]);
+
+  // Download raw prompt as text file
+  const handleDownloadPrompt = () => {
+    if (!currentPromptRecord) return;
+    const textToSave = isEditingPrompt ? editedPromptText : currentPromptRecord.rawPrompt;
+    const blob = new Blob([textToSave], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Prompt_${currentPromptRecord.versionTag.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSaveEditedPrompt = () => {
+    if (!currentPromptRecord) return;
+    const updated = [...promptHistory];
+    updated[activeVersionIndex] = {
+      ...updated[activeVersionIndex],
+      rawPrompt: editedPromptText
+    };
+    setPromptHistory(updated);
+    savePromptHistory(personId, selectedPd, updated);
+    setIsEditingPrompt(false);
+  };
+
   // Generate Initial Baseline Prompt via REAL Private LLM Call
   const handleGenerateBaselinePrompt = async () => {
     setIsCompilingPrompt(true);
@@ -429,12 +563,15 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         nativeProfile,
         monthName: MONTH_NAMES[selectedMonth],
         year: selectedYear,
+        targetDate,
         mdLord: selectedMd,
         adLord: selectedAd,
         pdLord: selectedPd,
         birthLagna: RASHI_LIST_META[natalLagnaIdx - 1]?.eng || 'Sagittarius',
         janmaRashi: RASHI_LIST_META[natalRashiIdx - 1]?.eng || 'Scorpio',
         gates: gateDetails,
+        skyPositions: skyPositionsForPrompt,
+        moonDeliveryStatus,
         localOllamaEndpoint: ollamaEndpoint,
         localModelName: selectedLocalModel
       });
@@ -446,14 +583,14 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const elapsedSec = Math.round((Date.now() - startMs) / 1000);
       const newRecord: EvolvedPromptRecord = {
         version: 1,
-        versionTag: `v1.0 Initial Baseline (${MONTH_NAMES[selectedMonth]})`,
-        targetMonthName: `${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
+        versionTag: `v1.0 Baseline (${targetDate})`,
+        targetMonthName: `${targetDate} (${MONTH_NAMES[selectedMonth]} ${selectedYear})`,
         cycleMonthNumber: 1,
         pdLord: selectedPd,
         adLord: selectedAd,
         mdLord: selectedMd,
         rawPrompt: result.prompt,
-        evolutionLog: `${result.evolutionLog} (Took ${elapsedSec}s)`,
+        evolutionLog: `${result.evolutionLog} (Took ${elapsedSec}s) • Sky Transit Ephemeris Synced (${skyPositionsForPrompt.length} Grahas, Moon ${moonDeliveryStatus?.isIgnitingGate ? 'Acute Ignition' : 'Dormant'})`,
         dampedAlerts: [],
         amplifiedTrajectories: [],
         generatedByModel: result.modelUsed,
@@ -525,10 +662,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       const updated = [evolvedRecord, ...promptHistory];
       setPromptHistory(updated);
       savePromptHistory(personId, selectedPd, updated);
-      setActiveVersionIndex(0);
       setPdCycleMonth(prev => prev + 1);
-      setSelectedMonth(nextMonthIdx);
-      setSelectedYear(nextYr);
+      const nextDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-01`;
+      handleDateChange(nextDateStr);
     } catch (err: any) {
       setCompilationError(err.message || 'Prompt evolution failed.');
     } finally {
@@ -800,32 +936,49 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         </div>
       </div>
 
-      {/* SECTION 2: DASHA HIERARCHY & NINE PDS SELECTION */}
+      {/* SECTION 2: DASHA HIERARCHY, TIME-TRAVELER DATE & SKY DELIVERIES */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400" />
             <h3 className="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
-              2. Dasha Horizon &amp; Multi-Month PD Tracking
+              2. Dasha Horizon, Time-Traveler Date &amp; Delivery Answers in the Sky
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-300">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
             <span>Tracking:</span>
+            <span className="text-purple-300 font-bold">{toCleanEnglishPlanet(selectedMd)} MD</span>
+            <span className="text-slate-600">&bull;</span>
             <span className="text-cyan-300 font-bold">{toCleanEnglishPlanet(selectedAd)} AD</span>
             <span className="text-slate-600">&bull;</span>
             <span className="text-amber-300 font-bold">{toCleanEnglishPlanet(selectedPd)} PD</span>
             <span className="text-slate-600">&bull;</span>
-            <span className="text-purple-300 font-bold">Month {pdCycleMonth} of Cycle</span>
+            <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold border border-slate-700">
+              {targetDate}
+            </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Dasha Dropdowns + Target Date Picker Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* MD Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase">Mahadasha (MD):</label>
+            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
+              <span>Mahadasha (MD):</span>
+              <span className="text-[10px] text-purple-400 font-mono">Full Lifetime Arc</span>
+            </label>
             <select
               value={selectedMd}
-              onChange={(e) => setSelectedMd(e.target.value)}
+              onChange={(e) => {
+                const newMd = e.target.value;
+                setSelectedMd(newMd);
+                const matchingAds = timeline.filter(t => normalizeLordKey(t[0]) === normalizeLordKey(newMd));
+                if (matchingAds[0]) {
+                  const newAd = normalizeLordKey(matchingAds[0][1]);
+                  setSelectedAd(newAd);
+                  handleDateChange(matchingAds[0][3]);
+                }
+              }}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
             >
               {mdList.map(md => (
@@ -838,10 +991,20 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
 
           {/* AD Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase">Antardasha (AD):</label>
+            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
+              <span>Antardasha (AD):</span>
+              <span className="text-[10px] text-cyan-400 font-mono">Delivery Hand</span>
+            </label>
             <select
               value={selectedAd}
-              onChange={(e) => setSelectedAd(e.target.value)}
+              onChange={(e) => {
+                const newAd = e.target.value;
+                setSelectedAd(newAd);
+                const found = adList.find(a => normalizeLordKey(a.key) === normalizeLordKey(newAd));
+                if (found) {
+                  handleDateChange(found.startDate);
+                }
+              }}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
             >
               {adList.map(ad => (
@@ -852,32 +1015,88 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             </select>
           </div>
 
-          {/* Target Month Navigation */}
+          {/* Target Date Picker (Time Traveler) */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-300 uppercase">Calendar Horizon:</label>
+            <label className="text-[11px] font-bold text-slate-300 uppercase flex items-center justify-between">
+              <span>Target Analysis Date:</span>
+              <span className="text-[10px] text-amber-400 font-mono">Backdate Any Era</span>
+            </label>
             <div className="flex items-center gap-1.5">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-xs text-amber-300 font-bold focus:outline-none cursor-pointer"
-              >
-                {MONTH_NAMES.map((m, idx) => (
-                  <option key={m} value={idx} className="bg-slate-900 text-white">
-                    {m} {selectedYear}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="w-full bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400 cursor-pointer shadow-inner"
+              />
             </div>
           </div>
+        </div>
+
+        {/* Quick Time-Travel Presets & Age Synchronizer */}
+        <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Quick Time Travel:</span>
+            <button
+              type="button"
+              onClick={() => handleDateChange('2003-09-15')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                targetDate.startsWith('2003')
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              2003 Backtest (Mercury-Saturn)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDateChange('1995-06-15')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                targetDate.startsWith('1995')
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              1995 Backtest (Mercury-Venus)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDateChange('2026-11-08')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                targetDate.startsWith('2026')
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+              }`}
+            >
+              Current Transit (2026)
+            </button>
+          </div>
+
+          {nativeAgeOnTargetDate && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-300">
+                Age on {targetDate}: <strong className="text-amber-400 font-mono font-bold">{nativeAgeOnTargetDate} Years</strong>
+              </span>
+              {nativeProfile.age !== nativeAgeOnTargetDate && (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateAge(nativeAgeOnTargetDate)}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Sync Age to {nativeAgeOnTargetDate}</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* All Nine PDs Slide */}
         <div className="space-y-2 pt-2 border-t border-slate-800/80">
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-300 uppercase">
-              All 9 Pratyantardashas (PDs) under {toCleanEnglishPlanet(selectedAd)}:
+              All 9 Pratyantardashas (PDs) under {toCleanEnglishPlanet(selectedAd)} AD:
             </span>
-            <span className="text-[11px] text-slate-400">Select any PD to track multi-month trajectory</span>
+            <span className="text-[11px] text-slate-400">Click any PD to set target date and recalculate sky ephemeris</span>
           </div>
 
           <div className="overflow-x-auto pb-1 scrollbar-thin">
@@ -891,11 +1110,14 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                     onClick={() => {
                       setSelectedPd(pd.pdLord);
                       setPdCycleMonth(1);
+                      if (pd.startDate) {
+                        setTargetDate(pd.startDate);
+                      }
                     }}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
                       isSelected
                         ? 'bg-gradient-to-b from-purple-950 via-slate-900 to-slate-950 border-purple-400 text-white ring-2 ring-purple-500/50 shadow-lg'
-                        : pd.isMonthActive
+                        : pd.isDateActive
                         ? 'bg-slate-950 border-amber-500/50 text-slate-200 hover:border-amber-400'
                         : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                     }`}
@@ -906,8 +1128,8 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                       </span>
                       {isSelected ? (
                         <Zap className="w-3 h-3 text-amber-400 fill-current animate-pulse" />
-                      ) : pd.isMonthActive ? (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Active in Month" />
+                      ) : pd.isDateActive ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Active on Date" />
                       ) : null}
                     </div>
                     <span className="text-xs font-extrabold truncate block">{pd.cleanName}</span>
@@ -933,13 +1155,97 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
               </div>
               <div className="text-[11px] text-slate-400 flex items-center justify-between">
                 <span>H{gate.houseFromLagna} (Lagna) &bull; H{gate.houseFromRashi} (Moon)</span>
-                <span className="text-cyan-300 text-[10px]">Moon: {gate.moonWindow}</span>
+                <span className="text-cyan-300 text-[10px]">{gate.moonWindow}</span>
               </div>
-              <div className="text-[10px] text-slate-500 truncate">
-                Grahas: {gate.activeGrahas.length > 0 ? gate.activeGrahas.join(', ') : 'Clear gate'}
+              <div className="text-[10px] text-slate-400 truncate">
+                Transits: {gate.activeGrahas.length > 0 ? (
+                  <span className="text-purple-300 font-semibold">{gate.activeGrahas.join(', ')}</span>
+                ) : (
+                  <span className="text-slate-600">Clear gate</span>
+                )}
               </div>
             </div>
           ))}
+        </div>
+
+        {/* LOOK AT THE SKY: GOCHARA DELIVERY ANSWERS ON TARGET DATE */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-purple-950/40 border border-cyan-500/40 shadow-xl space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                Delivery Answers in the Sky (Gochara Ephemeris on {targetDate})
+              </h4>
+            </div>
+
+            {/* Moon Acute Gate Status */}
+            {moonDeliveryStatus?.isIgnitingGate ? (
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[11px] font-bold animate-pulse">
+                <Moon className="w-3 h-3 fill-current" />
+                <span>⚡ ACUTE IGNITION: Chandra in {moonDeliveryStatus.nakshatra} (Gate {moonDeliveryStatus.gateIndex! + 1})</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-mono">
+                <Moon className="w-3 h-3 text-slate-400" />
+                <span>Chandra in {moonPlanet?.graha_pada_chara.nakshatra_name || 'Sky'} ({moonPlanet?.transit_rashi_name}) &bull; Dormant Gate</span>
+              </span>
+            )}
+          </div>
+
+          {/* 9 Graha Sky Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2">
+            {skySnapshot.map(g => {
+              const lordMeta = LORD_NAKSHATRA_GATES[normalizeLordKey(selectedPd)] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
+              const gateIdx = lordMeta.nakshatras.findIndex(n => n.toLowerCase() === g.graha_pada_chara.nakshatra_name.toLowerCase());
+              const isInGate = gateIdx >= 0;
+
+              return (
+                <div
+                  key={g.graha_key}
+                  className={`p-2 rounded-xl border text-xs transition flex flex-col justify-between ${
+                    isInGate
+                      ? 'bg-gradient-to-b from-purple-950/70 to-slate-950 border-purple-400 shadow-md shadow-purple-950/50 ring-1 ring-purple-500/40'
+                      : g.is_retrograde
+                        ? 'bg-slate-950 border-amber-500/40'
+                        : 'bg-slate-950 border-slate-800/90'
+                  }`}
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-white text-[11px] truncate">
+                        {toCleanEnglishPlanet(g.graha_name)}
+                      </span>
+                      {g.is_retrograde && (
+                        <span className="px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] font-mono" title="Retrograde (Vakra)">
+                          R
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-300 truncate font-sans">
+                      {g.transit_rashi_name.split(' ')[0]}
+                    </div>
+                    <div className="text-[10px] text-amber-400 font-mono font-bold">
+                      {g.degree_sputa}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      {g.graha_pada_chara.nakshatra_name} P{g.graha_pada_chara.pada}
+                    </div>
+                  </div>
+
+                  <div className="pt-1.5 mt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>H{g.relative_to_natal_lagna.house_number} Lag</span>
+                    <span>H{g.relative_to_natal_rashi.house_number} Moo</span>
+                  </div>
+
+                  {isInGate && (
+                    <div className="mt-1 px-1 py-0.5 rounded bg-purple-500/30 text-purple-200 text-[9px] font-bold text-center border border-purple-500/40">
+                      In Gate {gateIdx + 1}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -1112,11 +1418,123 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                   </div>
                 )}
 
-                {/* Raw Prompt Preview Box */}
-                <div className="relative">
-                  <pre className="w-full max-h-48 overflow-y-auto bg-slate-900/90 border border-slate-800 p-3 rounded-lg text-[11px] text-slate-300 font-mono whitespace-pre-wrap leading-relaxed select-all">
-                    {currentPromptRecord.rawPrompt}
-                  </pre>
+                {/* Full-Screen Prompt Canvas for Consumer Apps */}
+                <div className="space-y-3 bg-slate-950 rounded-2xl border border-purple-500/30 p-4 shadow-2xl">
+                  {/* Top Bar inside Prompt Card */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-200 border border-purple-500/40 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Consumer App Boilerplate Prompt</span>
+                      </span>
+                      <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
+                        <span>{promptStats.words} words</span>
+                        <span className="text-slate-600">&bull;</span>
+                        <span className="text-amber-300 font-bold">~{promptStats.estimatedTokens} tokens</span>
+                        <span className="text-slate-600">&bull;</span>
+                        <span>{promptStats.lines} lines</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Edit in place toggle */}
+                      {isEditingPrompt ? (
+                        <button
+                          type="button"
+                          onClick={handleSaveEditedPrompt}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs transition cursor-pointer shadow"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Save Edits</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditedPromptText(currentPromptRecord.rawPrompt);
+                            setIsEditingPrompt(true);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
+                          title="Tweak or edit prompt text in place"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit Prompt</span>
+                        </button>
+                      )}
+
+                      {/* Download as .txt file */}
+                      <button
+                        type="button"
+                        onClick={handleDownloadPrompt}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
+                        title="Download raw prompt as .txt file"
+                      >
+                        <FileDown className="w-3 h-3 text-cyan-400" />
+                        <span>Download .txt</span>
+                      </button>
+
+                      {/* Expand / Minimize height toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
+                        title={isPromptExpanded ? 'Compact scroll view' : 'Expand full height'}
+                      >
+                        {isPromptExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                        <span>{isPromptExpanded ? 'Fit Height' : 'Expand Full'}</span>
+                      </button>
+
+                      {/* Primary Copy Button at Top */}
+                      <button
+                        type="button"
+                        onClick={handleCopyPrompt}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-95"
+                      >
+                        {promptCopied ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{promptCopied ? 'Copied to Clipboard!' : 'Copy Entire Prompt for Consumer App'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Prompt Text / Editor Body */}
+                  <div className="relative rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+                    {isEditingPrompt ? (
+                      <textarea
+                        rows={isPromptExpanded ? 30 : 16}
+                        value={editedPromptText}
+                        onChange={(e) => setEditedPromptText(e.target.value)}
+                        className="w-full p-4 bg-slate-950 text-slate-100 font-mono text-xs leading-relaxed focus:outline-none focus:ring-1 focus:ring-purple-500 resize-y"
+                        placeholder="Edit prompt text..."
+                      />
+                    ) : (
+                      <pre
+                        className={`w-full p-4 bg-slate-950 text-slate-200 font-mono text-xs whitespace-pre-wrap leading-relaxed select-all overflow-y-auto ${
+                          isPromptExpanded ? 'min-h-[500px] max-h-none' : 'max-h-96'
+                        }`}
+                      >
+                        {currentPromptRecord.rawPrompt}
+                      </pre>
+                    )}
+                  </div>
+
+                  {/* Bottom Action & Consumer App Guidance Bar */}
+                  <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-slate-300">
+                      <span className="text-amber-400 font-bold">💡 How to test:</span>
+                      <p className="text-[11px] text-slate-300 leading-snug">
+                        Click the button to copy this entire boilerplate prompt, open <strong>Claude 3.5 Sonnet</strong>, <strong>ChatGPT Plus</strong>, or <strong>Gemini Advanced</strong>, and paste it to inspect the manufactured event cards.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyPrompt}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-95"
+                    >
+                      {promptCopied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
+                      <span>{promptCopied ? 'Copied to Clipboard!' : 'Copy Entire Prompt to Clipboard'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1235,32 +1653,53 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         )}
       </div>
 
-      {/* SECTION 4: MANUFACTURE EVENTS FROM MATURED PROMPT */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      {/* SECTION 4: DOWNSTREAM DISPATCHING & TEST RUNNER (OPTIONAL) */}
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
-              4. Event Manifestation Synthesis (Downstream Execution)
-            </h3>
+            <Zap className="w-4 h-4 text-purple-400" />
+            <div>
+              <h3 className="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
+                4. Downstream Dispatching (Claude Fable / Downstream Testing)
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Test the generated prompt directly in consumer apps (Claude, ChatGPT, Gemini) using the Copy button above. Direct auto-dispatching to Claude Fable will be enabled next week as scheduled.
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleSynthesizeEventsFromPrompt}
-              disabled={isSynthesizingEvents || !currentPromptRecord}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
+              onClick={() => setShowSection4Synthesis(!showSection4Synthesis)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700 transition cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSynthesizingEvents ? 'animate-spin' : ''}`} />
-              <span>
-                {isSynthesizingEvents
-                  ? 'Synthesizing...'
-                  : `Manufacture Events via ${currentPromptRecord ? currentPromptRecord.versionTag.split(' ')[0] : 'Prompt'}`}
-              </span>
+              {showSection4Synthesis ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span>{showSection4Synthesis ? 'Collapse Downstream Runner' : 'Open Downstream Runner'}</span>
             </button>
           </div>
         </div>
+
+        {showSection4Synthesis && (
+          <div className="pt-3 border-t border-slate-800 space-y-4 animate-fadeIn">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-slate-300 font-medium">
+                Execute prompt downstream through local Qwen or connected LLM:
+              </span>
+              <button
+                type="button"
+                onClick={handleSynthesizeEventsFromPrompt}
+                disabled={isSynthesizingEvents || !currentPromptRecord}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSynthesizingEvents ? 'animate-spin' : ''}`} />
+                <span>
+                  {isSynthesizingEvents
+                    ? 'Synthesizing...'
+                    : `Run Downstream Test via ${currentPromptRecord ? currentPromptRecord.versionTag.split(' ')[0] : 'Prompt'}`}
+                </span>
+              </button>
+            </div>
 
         {/* Manifested Events Cards */}
         {manifestedEvents.length > 0 ? (
@@ -1329,8 +1768,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             No events synthesized yet. Click &quot;Manufacture Events&quot; above to run the matured prompt through the downstream LLM.
           </div>
         )}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 export default EventManifestationStudio;
+

@@ -240,71 +240,37 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     return calculateVimshottariTimelineForProfile(activeProfile);
   }, [activeProfile]);
 
-  const mdList = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { key: string; label: string; startYear: string; endYear: string }[] = [];
+  // All 9 Vimshottari Lords in canonical sequence
+  const VIMSHOTTARI_LORDS = [
+    'Ketu',
+    'Venus (Sukra)',
+    'Sun (Surya)',
+    'Moon (Chandra)',
+    'Mars (Sevvai)',
+    'Rahu',
+    'Jupiter (Guru)',
+    'Saturn (Sani)',
+    'Mercury (Budha)'
+  ];
 
-    for (const [md] of timeline) {
-      const lordKey = normalizeLordKey(md);
-      if (!seen.has(lordKey)) {
-        seen.add(lordKey);
-        const allForMd = timeline.filter(t => normalizeLordKey(t[0]) === lordKey);
-        const startY = allForMd[0]?.[3]?.slice(0, 4) || '';
-        const endY = allForMd[allForMd.length - 1]?.[4]?.slice(0, 4) || '';
-        list.push({
-          key: lordKey,
-          label: `${toCleanEnglishPlanet(lordKey)} MD (${startY}–${endY})`,
-          startYear: startY,
-          endYear: endY
-        });
-      }
-    }
-    return list;
-  }, [timeline]);
+  // User-selected Mahadasha and Antardasha (never overwritten or auto-reset)
+  const [selectedMd, setSelectedMd] = useState<string>('Mercury (Budha)');
+  const [selectedAd, setSelectedAd] = useState<string>('Saturn (Sani)');
 
-  const [selectedMd, setSelectedMd] = useState<string>(() => {
-    return mdList[0]?.key || 'Venus (Sukra)';
-  });
+  // All 9 Antardashas available under the selected Mahadasha in cyclic order
+  const adOptions = useMemo(() => {
+    const mdIdx = Math.max(0, VIMSHOTTARI_LORDS.findIndex(l => l.startsWith(selectedMd.split(' ')[0])));
+    return Array.from({ length: 9 }, (_, i) => VIMSHOTTARI_LORDS[(mdIdx + i) % 9]);
+  }, [selectedMd]);
 
-  const adList = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { key: string; label: string; startDate: string; endDate: string }[] = [];
-
-    for (const [md, ad, pd, s, e] of timeline) {
-      if (normalizeLordKey(md) === normalizeLordKey(selectedMd)) {
-        const adKey = normalizeLordKey(ad);
-        if (!seen.has(adKey)) {
-          seen.add(adKey);
-          const allForAd = timeline.filter(t => normalizeLordKey(t[0]) === normalizeLordKey(selectedMd) && normalizeLordKey(t[1]) === adKey);
-          const start = allForAd[0]?.[3] || s;
-          const end = allForAd[allForAd.length - 1]?.[4] || e;
-          list.push({
-            key: adKey,
-            label: `${toCleanEnglishPlanet(adKey)} AD (${start} to ${end})`,
-            startDate: start,
-            endDate: end
-          });
-        }
-      }
-    }
-    return list;
-  }, [timeline, selectedMd]);
-
-  const [selectedAd, setSelectedAd] = useState<string>(() => {
-    return adList[0]?.key || 'Saturn (Sani)';
-  });
-
+  // 9 Pratyantardashas (PDs) under selected AD
   const ninePds = useMemo(() => {
     const matched = timeline.filter(([md, ad]) => normalizeLordKey(md) === normalizeLordKey(selectedMd) && normalizeLordKey(ad) === normalizeLordKey(selectedAd));
 
-    const ALL_NINE = [
-      'Ketu', 'Venus (Sukra)', 'Sun (Surya)', 'Moon (Chandra)',
-      'Mars (Sevvai)', 'Rahu', 'Jupiter (Guru)', 'Saturn (Sani)', 'Mercury (Budha)'
-    ];
-    const adIdx = Math.max(0, ALL_NINE.findIndex(l => l.startsWith(selectedAd.split(' ')[0])));
+    const adIdx = Math.max(0, VIMSHOTTARI_LORDS.findIndex(l => l.startsWith(selectedAd.split(' ')[0])));
 
-    return ALL_NINE.map((expectedLord, i) => {
-      const circularLord = ALL_NINE[(adIdx + i) % 9];
+    return VIMSHOTTARI_LORDS.map((_, i) => {
+      const circularLord = VIMSHOTTARI_LORDS[(adIdx + i) % 9];
       const entry = matched.find(t => normalizeLordKey(t[2]) === circularLord);
       const start = entry ? entry[3] : '';
       const end = entry ? entry[4] : '';
@@ -321,21 +287,13 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     });
   }, [timeline, selectedMd, selectedAd, targetFromDate, targetToDate]);
 
-  const [selectedPd, setSelectedPd] = useState<string>(() => {
-    return ninePds[0]?.pdLord || 'Mercury (Budha)';
-  });
+  const [selectedPd, setSelectedPd] = useState<string>('Saturn (Sani)');
 
-  // Handle direct date changes with auto-detection of Dasha
+  // Direct date change handlers: NEVER auto-clobber MD or AD selections
   const handleFromDateChange = (newFrom: string) => {
     setTargetFromDate(newFrom);
     if (newFrom > targetToDate) {
       setTargetToDate(newFrom);
-    }
-    const dasha = getVimshottariDashaForDate(newFrom, timeline, activeProfile);
-    if (dasha) {
-      setSelectedMd(normalizeLordKey(dasha.mahadasha));
-      setSelectedAd(normalizeLordKey(dasha.antardasha));
-      setSelectedPd(normalizeLordKey(dasha.pratyantardasha));
     }
   };
 
@@ -343,17 +301,6 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     setTargetToDate(newTo);
     if (newTo < targetFromDate) {
       setTargetFromDate(newTo);
-    }
-  };
-
-  const handleApplyPresetRange = (from: string, to: string) => {
-    setTargetFromDate(from);
-    setTargetToDate(to);
-    const dasha = getVimshottariDashaForDate(from, timeline, activeProfile);
-    if (dasha) {
-      setSelectedMd(normalizeLordKey(dasha.mahadasha));
-      setSelectedAd(normalizeLordKey(dasha.antardasha));
-      setSelectedPd(normalizeLordKey(dasha.pratyantardasha));
     }
   };
 
@@ -702,8 +649,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       setPdCycleMonth(prev => prev + 1);
       const nextDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-01`;
       const nextEndDay = new Date(nextYr, nextMonthIdx + 1, 0).getDate();
-      const nextEndDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-${nextEndDay}`;
-      handleApplyPresetRange(nextDateStr, nextEndDateStr);
+      const nextEndDateStr = `${nextYr}-${String(nextMonthIdx + 1).padStart(2, '0')}-${String(nextEndDay).padStart(2, '0')}`;
+      setTargetFromDate(nextDateStr);
+      setTargetToDate(nextEndDateStr);
     } catch (err: any) {
       setCompilationError(err.message || 'Prompt evolution failed.');
     } finally {
@@ -998,7 +946,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           </div>
         </div>
 
-        {/* Row 1: Mahadasha & Antardasha */}
+        {/* Row 1: Mahadasha & Antardasha Dropdowns */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* MD Dropdown */}
           <div className="space-y-1">
@@ -1007,21 +955,12 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             </label>
             <select
               value={selectedMd}
-              onChange={(e) => {
-                const newMd = e.target.value;
-                setSelectedMd(newMd);
-                const matchingAds = timeline.filter(t => normalizeLordKey(t[0]) === normalizeLordKey(newMd));
-                if (matchingAds[0]) {
-                  const newAd = normalizeLordKey(matchingAds[0][1]);
-                  setSelectedAd(newAd);
-                  handleApplyPresetRange(matchingAds[0][3], matchingAds[0][4]);
-                }
-              }}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+              onChange={(e) => setSelectedMd(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 cursor-pointer font-medium"
             >
-              {mdList.map(md => (
-                <option key={md.key} value={md.key} className="bg-slate-900 text-white">
-                  {md.label}
+              {VIMSHOTTARI_LORDS.map(lord => (
+                <option key={lord} value={lord} className="bg-slate-900 text-white">
+                  {toCleanEnglishPlanet(lord)}
                 </option>
               ))}
             </select>
@@ -1034,19 +973,12 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             </label>
             <select
               value={selectedAd}
-              onChange={(e) => {
-                const newAd = e.target.value;
-                setSelectedAd(newAd);
-                const found = adList.find(a => normalizeLordKey(a.key) === normalizeLordKey(newAd));
-                if (found) {
-                  handleApplyPresetRange(found.startDate, found.endDate);
-                }
-              }}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+              onChange={(e) => setSelectedAd(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer font-medium"
             >
-              {adList.map(ad => (
-                <option key={ad.key} value={ad.key} className="bg-slate-900 text-white">
-                  {ad.label}
+              {adOptions.map(lord => (
+                <option key={lord} value={lord} className="bg-slate-900 text-white">
+                  {toCleanEnglishPlanet(lord)}
                 </option>
               ))}
             </select>
@@ -1098,36 +1030,54 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
               <span className="text-[10px] font-bold uppercase text-slate-400">Presets:</span>
               <button
                 type="button"
-                onClick={() => handleApplyPresetRange('2003-05-05', '2003-10-16')}
+                onClick={() => {
+                  setSelectedMd('Mercury (Budha)');
+                  setSelectedAd('Saturn (Sani)');
+                  setSelectedPd('Saturn (Sani)');
+                  setTargetFromDate('2003-05-05');
+                  setTargetToDate('2003-10-16');
+                }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                  targetFromDate.startsWith('2003')
+                  targetFromDate.startsWith('2003') && selectedMd.includes('Mercury')
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
               >
-                2003 (Mercury-Saturn-Venus: May–Oct 2003)
+                2003 (Mercury MD &bull; Saturn AD)
               </button>
               <button
                 type="button"
-                onClick={() => handleApplyPresetRange('1995-02-14', '1995-12-16')}
+                onClick={() => {
+                  setSelectedMd('Mercury (Budha)');
+                  setSelectedAd('Venus (Sukra)');
+                  setSelectedPd('Venus (Sukra)');
+                  setTargetFromDate('1995-02-14');
+                  setTargetToDate('1995-12-16');
+                }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                  targetFromDate.startsWith('1995')
+                  targetFromDate.startsWith('1995') && selectedMd.includes('Mercury')
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
               >
-                1995 (Mercury-Venus: Feb–Dec 1995)
+                1995 (Mercury MD &bull; Venus AD)
               </button>
               <button
                 type="button"
-                onClick={() => handleApplyPresetRange('2026-08-03', '2027-01-14')}
+                onClick={() => {
+                  setSelectedMd('Venus (Sukra)');
+                  setSelectedAd('Saturn (Sani)');
+                  setSelectedPd('Saturn (Sani)');
+                  setTargetFromDate('2026-08-03');
+                  setTargetToDate('2027-01-14');
+                }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
                   targetFromDate.startsWith('2026')
                     ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
                     : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                 }`}
               >
-                Current Transit (Venus-Saturn: 2026–2027)
+                Current (Venus MD &bull; Saturn AD)
               </button>
             </div>
 

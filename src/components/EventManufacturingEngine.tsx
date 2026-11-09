@@ -51,6 +51,7 @@ import {
   toCleanEnglishSign
 } from '../services/llm/adapters';
 import { PersonMaster } from '../data/horoscopeData';
+import { PrivatePredictionChatbot } from './PrivatePredictionChatbot';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -515,10 +516,11 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     setIsTestingClaude(true);
     setClaudeTestFeedback(null);
     try {
-      const res = await testClaudeConnection(anthropicApiKey);
+      const testModel = selectedProvider === 'claude_fable' ? 'claude-fable-5-1' : 'claude-sonnet-5-5';
+      const res = await testClaudeConnection(anthropicApiKey, testModel);
       setClaudeTestFeedback({
         success: !!res.success,
-        message: res.success ? 'Active & Connected' : (res.error ? res.error.slice(0, 32) + '...' : 'Failed')
+        message: res.success ? `Active (${res.model || 'Connected'})` : (res.error ? res.error.slice(0, 32) + '...' : 'Failed')
       });
     } catch {
       setClaudeTestFeedback({ success: false, message: 'Ping Failed' });
@@ -530,7 +532,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   // Active Key for current selected provider
   const isCurrentProviderKeyConfigured = useMemo(() => {
     if (selectedProvider === 'gemini_pro') return !!geminiApiKey.trim();
-    if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') return !!anthropicApiKey.trim();
+    if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_fable' || selectedProvider === 'claude_haiku') return !!anthropicApiKey.trim();
     return true; // local qwen does not need cloud key
   }, [selectedProvider, geminiApiKey, anthropicApiKey]);
 
@@ -811,8 +813,8 @@ Return ONLY a valid JSON object matching this schema:
         setLastSynthesizedModel(`Local ${localModel} (Ollama)`);
         setLastExecutionTimeMs(Date.now() - startMs);
 
-      } else if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_haiku') {
-        // 2. ANTHROPIC CLAUDE
+      } else if (selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_fable' || selectedProvider === 'claude_haiku') {
+        // 2. ANTHROPIC CLAUDE (Sonnet, Fable 5.1, or Haiku)
         endpoint = '/api/llm/claude';
         const activeClaudeKey = (
           anthropicApiKey ||
@@ -820,15 +822,17 @@ Return ONLY a valid JSON object matching this schema:
           ''
         ).trim();
 
-        const activeClaudeModel = (
-          (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') ||
-          'claude-sonnet-5-5'
-        );
+        const activeClaudeModel = selectedProvider === 'claude_fable'
+          ? 'claude-fable-5-1'
+          : selectedProvider === 'claude_haiku'
+          ? 'claude-haiku-5-5'
+          : ((typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5');
 
         payloadBody = {
           prompt: promptPayload,
           model: activeClaudeModel,
-          apiKey: activeClaudeKey || undefined
+          apiKey: activeClaudeKey || undefined,
+          thinkingMode: selectedProvider === 'claude_fable' ? 'auto' : undefined
         };
 
         const res = await fetch(endpoint, {
@@ -912,7 +916,9 @@ Return ONLY a valid JSON object matching this schema:
 
   const activeProviderName = useMemo(() => {
     if (selectedProvider === 'gemini_pro') return 'Gemini';
+    if (selectedProvider === 'claude_fable') return 'Claude Fable 5.1';
     if (selectedProvider === 'claude_sonnet') return 'Claude Sonnet';
+    if (selectedProvider === 'claude_haiku') return 'Claude Haiku';
     if (selectedProvider === 'local_qwen') return 'Qwen';
     return 'LLM';
   }, [selectedProvider]);
@@ -1067,6 +1073,7 @@ Return ONLY a valid JSON object matching this schema:
               className="bg-slate-950 border border-slate-700 text-purple-300 font-bold text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-400 cursor-pointer"
             >
               <option value="gemini_pro" className="bg-slate-900 text-white">Google Gemini 2.5 Flash / Pro</option>
+              <option value="claude_fable" className="bg-slate-900 text-white">Anthropic Claude Fable 5.1</option>
               <option value="claude_sonnet" className="bg-slate-900 text-white">Anthropic Claude 3.5 Sonnet</option>
               <option value="local_qwen" className="bg-slate-900 text-white">Local Qwen (Ollama)</option>
             </select>
@@ -1113,7 +1120,7 @@ Return ONLY a valid JSON object matching this schema:
             </div>
           )}
 
-          {selectedProvider === 'claude_sonnet' && (
+          {(selectedProvider === 'claude_sonnet' || selectedProvider === 'claude_fable' || selectedProvider === 'claude_haiku') && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-amber-500/40 text-[11px] shadow-inner">
               <Key className="w-3 h-3 text-amber-400" />
               <input
@@ -1748,6 +1755,20 @@ Return ONLY a valid JSON object matching this schema:
           </div>
         )}
       </div>
+
+      {/* 100% PRIVATE SCREEN PREDICTION COPILOT (OLLAMA / LOCAL LLM ONLY - ZERO PII TO PUBLIC CLOUDS) */}
+      <PrivatePredictionChatbot
+        personName={activeProfile?.person_name || 'Native'}
+        natalLagnaIdx={natalLagnaIdx}
+        natalRashiIdx={natalRashiIdx}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        monthName={MONTH_NAMES[selectedMonth]}
+        activeDashaHierarchy={activeDashaHierarchy}
+        transitPlacements={transitPlacements}
+        gateDetails={gateDetails}
+        manifestedEvents={manufacturedEvents}
+      />
 
       {/* MODAL: RAW PROMPT INSPECTOR (EYE ICON) */}
       {showPromptModal && (

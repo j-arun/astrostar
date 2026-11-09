@@ -181,7 +181,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
   // Range Duration in Days and Months
   const rangeDuration = useMemo(() => {
     const diffMs = toDateObj.getTime() - fromDateObj.getTime();
-    const days = Math.max(1, Math.round(diffMs / (24 * 3600 * 1000)));
+    const days = Math.max(1, Math.round(Math.abs(diffMs) / (24 * 3600 * 1000)));
     const months = (days / 30.4375).toFixed(1);
     return { days, months };
   }, [fromDateObj, toDateObj]);
@@ -289,19 +289,13 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
 
   const [selectedPd, setSelectedPd] = useState<string>('Saturn (Sani)');
 
-  // Direct date change handlers: NEVER auto-clobber MD or AD selections
+  // Pure, direct date setters with ZERO cross-field validation or alterations
   const handleFromDateChange = (newFrom: string) => {
     setTargetFromDate(newFrom);
-    if (newFrom > targetToDate) {
-      setTargetToDate(newFrom);
-    }
   };
 
   const handleToDateChange = (newTo: string) => {
     setTargetToDate(newTo);
-    if (newTo < targetFromDate) {
-      setTargetFromDate(newTo);
-    }
   };
 
   // 3. Natal Coordinates
@@ -1107,7 +1101,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             <span className="font-bold text-slate-300 uppercase">
               All 9 Pratyantardashas (PDs) under {toCleanEnglishPlanet(selectedAd)} AD:
             </span>
-            <span className="text-[11px] text-slate-400">Click any PD to set From &amp; To dates</span>
+            <span className="text-[11px] text-slate-400">Click to select active PD</span>
           </div>
 
           <div className="overflow-x-auto pb-1 scrollbar-thin">
@@ -1121,10 +1115,6 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                     onClick={() => {
                       setSelectedPd(pd.pdLord);
                       setPdCycleMonth(1);
-                      if (pd.startDate && pd.endDate) {
-                        setTargetFromDate(pd.startDate);
-                        setTargetToDate(pd.endDate);
-                      }
                     }}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
                       isSelected

@@ -19,7 +19,12 @@ import {
   ChevronUp,
   MessageSquare,
   Flame,
-  ArrowRight
+  ArrowRight,
+  Download,
+  FileDown,
+  FileText,
+  Printer,
+  Trash2
 } from 'lucide-react';
 import { NakshatraGateInfo, ManufacturedEventItem } from './EventManufacturingEngine';
 import { RASHI_LIST_META } from '../data/transitEphemeris';
@@ -58,6 +63,190 @@ export interface PrivatePredictionChatbotProps {
   nativeAge?: number;
 }
 
+/**
+ * Parses inline formatting: **bold**, `code`, etc.
+ */
+const renderFormattedInline = (text: string): React.ReactNode => {
+  if (!text) return null;
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  const parts = text.split(regex);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={idx} className="font-extrabold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={idx} className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-[11px] border border-slate-700/60">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
+};
+
+/**
+ * Rich Formatted Message Renderer (Renders Markdown tables, section headings, bullet lists, bold text)
+ */
+export const RichFormattedText: React.FC<{ text: string }> = ({ text }) => {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    // 1. Markdown Table Detection
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+
+      if (tableLines.length >= 2) {
+        const headerRow = tableLines[0]
+          .split('|')
+          .map(c => c.trim())
+          .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+        const dataRows = tableLines.slice(1)
+          .filter(l => l.replace(/[|\s-:]/g, '').length > 0)
+          .map(l => {
+            return l
+              .split('|')
+              .map(c => c.trim())
+              .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+          });
+
+        elements.push(
+          <div key={`table-${i}`} className="my-3 overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-950/90 shadow-md">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-800/90 border-b border-slate-700">
+                  {headerRow.map((h, hIdx) => (
+                    <th key={hIdx} className="px-3 py-2 font-bold text-purple-300 uppercase tracking-wider text-[10.5px]">
+                      {renderFormattedInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {dataRows.map((row, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-slate-900/60 transition-colors">
+                    {row.map((cell, cIdx) => {
+                      const pctMatch = cell.match(/(\d{1,3})%/);
+                      const isFirstCol = cIdx === 0;
+                      return (
+                        <td key={cIdx} className={`px-3 py-2 text-slate-200 text-xs ${isFirstCol ? 'font-semibold text-white' : ''}`}>
+                          {pctMatch ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-mono font-bold text-[11px] ${
+                              parseInt(pctMatch[1], 10) >= 70
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : parseInt(pctMatch[1], 10) >= 50
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                            }`}>
+                              {cell}
+                            </span>
+                          ) : (
+                            renderFormattedInline(cell)
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+    }
+
+    // 2. Heading Level 3 (###)
+    if (line.startsWith('### ')) {
+      elements.push(
+        <div key={`h3-${i}`} className="mt-3.5 mb-1.5 pb-1 border-b border-purple-500/30 flex items-center gap-2">
+          <span className="w-1.5 h-3.5 rounded-full bg-purple-400" />
+          <h3 className="text-xs sm:text-sm font-black text-white tracking-wide">
+            {renderFormattedInline(line.slice(4))}
+          </h3>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 3. Heading Level 4 (####)
+    if (line.startsWith('#### ')) {
+      elements.push(
+        <h4 key={`h4-${i}`} className="text-xs font-bold text-amber-300 uppercase tracking-wider mt-2.5 mb-1 flex items-center gap-1.5">
+          <span className="w-1 h-2 rounded bg-amber-400" />
+          <span>{renderFormattedInline(line.slice(5))}</span>
+        </h4>
+      );
+      i++;
+      continue;
+    }
+
+    // 4. Horizontal Rule (---)
+    if (line === '---' || line === '***') {
+      elements.push(<hr key={`hr-${i}`} className="border-slate-800 my-2.5" />);
+      i++;
+      continue;
+    }
+
+    // 5. Bullet item (•, -, *)
+    if (line.startsWith('• ') || line.startsWith('- ') || line.startsWith('* ')) {
+      elements.push(
+        <div key={`bullet-${i}`} className="flex items-start gap-2 my-1 pl-1 text-slate-200 leading-relaxed text-xs sm:text-[13px]">
+          <span className="text-purple-400 mt-1 text-[8px] shrink-0">&bull;</span>
+          <div className="flex-1">{renderFormattedInline(line.slice(2))}</div>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 6. Numbered list item (1. , 2. )
+    const numMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    if (numMatch) {
+      elements.push(
+        <div key={`num-${i}`} className="flex items-start gap-2 my-1 pl-1 text-slate-200 leading-relaxed text-xs sm:text-[13px]">
+          <span className="font-mono font-bold text-amber-400 text-[11px] shrink-0">{numMatch[1]}.</span>
+          <div className="flex-1">{renderFormattedInline(numMatch[2])}</div>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 7. Empty line
+    if (!line) {
+      elements.push(<div key={`sp-${i}`} className="h-1.5" />);
+      i++;
+      continue;
+    }
+
+    // 8. Regular paragraph
+    elements.push(
+      <p key={`p-${i}`} className="my-1 text-slate-200 leading-relaxed text-xs sm:text-[13px]">
+        {renderFormattedInline(line)}
+      </p>
+    );
+    i++;
+  }
+
+  return <div className="space-y-0.5 select-text">{elements}</div>;
+};
+
 export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> = ({
   personName,
   natalLagnaIdx,
@@ -75,6 +264,7 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   const [userInput, setUserInput] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
 
   // Local Ollama configuration state
   const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => {
@@ -92,11 +282,10 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Default welcome message with screen memory absorption note
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: 'msg-welcome',
-      sender: 'assistant',
-      text: `Hello! I am your 100% Air-Gapped Private Astrological Prediction Assistant.
+  const initialWelcomeMessage: ChatMessage = {
+    id: 'msg-welcome',
+    sender: 'assistant',
+    text: `Hello! I am your 100% Air-Gapped Private Astrological Prediction Assistant (Local Q&A).
 I have absorbed all screen data for **${monthName} ${selectedYear}** under **${toCleanEnglishPlanet(activeDashaHierarchy.mahadasha)} MD → ${toCleanEnglishPlanet(activeDashaHierarchy.antardasha)} AD → ${toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)} PD**.
 
 🔒 **Privacy Guarantee**: All queries run strictly through your local Private LLM (Ollama). Zero PII or career queries ever leave your machine.
@@ -105,10 +294,11 @@ Ask me specific questions comparing personal situations, like:
 • *"Is this month indicating high income? I have on-site travel vs a new role assignment—which one matches?"*
 • *"Where were Ketu and Venus in transit when this event triggered?"*
 • *"Which gate is receiving the strongest transiting Graha support this month?"*`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      modelUsed: 'Screen-Aware Memory Grounding'
-    }
-  ]);
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    modelUsed: 'Screen-Aware Memory Grounding'
+  };
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [initialWelcomeMessage]);
 
   // Check Ollama Local Connection
   const checkOllamaHealth = async () => {
@@ -128,7 +318,6 @@ Ask me specific questions comparing personal situations, like:
           checking: false
         });
         if (models.length > 0 && !models.includes(localModelName)) {
-          // If preferred model is in list, keep it; else set to first available
           const foundQwen = models.find((m: string) => m.toLowerCase().includes('qwen'));
           if (foundQwen) {
             setLocalModelName(foundQwen);
@@ -235,10 +424,8 @@ Ask me specific questions comparing personal situations, like:
     const isRoleQuery = qLower.includes('role') || qLower.includes('promotion') || qLower.includes('assignment') || qLower.includes('leadership') || qLower.includes('title');
 
     if (isIncomeQuery || (isOnsiteQuery && isRoleQuery) || isRoleQuery || isOnsiteQuery) {
-      // Analyze 10H/11H (Role/Income) vs 9H/12H (On-site/Travel)
       const h10_11_transits = screenContextSnapshot.transits.filter(t => t.includes('H10') || t.includes('H11'));
       const h9_12_transits = screenContextSnapshot.transits.filter(t => t.includes('H9') || t.includes('H12'));
-      const hasAcuteIncomeEvent = screenContextSnapshot.events.some(e => e.toLowerCase().includes('income') || e.toLowerCase().includes('contract') || e.toLowerCase().includes('wealth'));
 
       let scenarioA_score = 65;
       let scenarioB_score = 78;
@@ -302,7 +489,7 @@ Ask me specific questions comparing personal situations, like:
     // 1. Check if Local Ollama is available
     if (ollamaStatus.isOnline) {
       try {
-        const systemPrompt = `You are an expert Vedic Astrological Prediction Analyst and Grounding Copilot running in a 100% PRIVATE, AIR-GAPPED environment.
+        const systemPrompt = `You are an expert Vedic Astrological Prediction Analyst and Local Q&A Engine running in a 100% PRIVATE, AIR-GAPPED environment.
 The user is viewing their active astrological prediction screen in the application.
 
 === COMPLETE SCREEN DATA SNAPSHOT (GROUND TRUTH) ===
@@ -334,11 +521,12 @@ INSTRUCTIONS:
 1. Answer strictly using the provided screen ground truth.
 2. If the user asks about specific scenarios (e.g. On-site foreign travel vs. New role assignment, or high income), compare both scenarios objectively:
    - Provide an alignment probability percentage for each scenario.
+   - Format comparison tables with Markdown pipes (| Scenario | Alignment Probability | Key Transit Mechanisms |).
    - Explain the exact planetary transit houses (e.g., 10th house career vs 11th house gains vs 9th/12th house foreign travel).
    - Show which transiting Grahas and delivering Nakshatra gates support which outcome.
    - Give a decisive, clear verdict on which scenario matches the screen data better and why.
 3. If the user asks where planets like Ketu or Venus were in transit, pull the EXACT degrees, sign, Nakshatra, pada, and house positions from the transits section.
-4. Keep the tone sharp, senior, confidential, analytical, and structured with clear markdown headings and bullet points.`;
+4. Keep the output clean, highly structured, with section headers (###, ####), bullet points, and clean bold tags.`;
 
         const cleanEndpoint = ollamaEndpoint.replace(/\/+$/, '');
         const res = await fetch(`${cleanEndpoint}/api/generate`, {
@@ -368,7 +556,7 @@ INSTRUCTIONS:
                 sender: 'assistant',
                 text: responseText,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                modelUsed: `Local Private Ollama (${localModelName.split(':')[0]}) • ${elapsed}s`
+                modelUsed: `Local Qwen (${localModelName.split(':')[0]}) • ${elapsed}s`
               }
             ]);
             setIsGenerating(false);
@@ -407,6 +595,290 @@ INSTRUCTIONS:
     } catch {}
   };
 
+  const handleClearHistory = () => {
+    setMessages([initialWelcomeMessage]);
+  };
+
+  // Download Single Message as Markdown file
+  const handleDownloadSingleMessage = (msg: ChatMessage) => {
+    const filename = `Local_QA_${msg.sender === 'user' ? 'Question' : 'Answer'}_${monthName}_${selectedYear}_${msg.id}.md`;
+    const content = `# Local Q&A (${msg.sender === 'user' ? 'User Question' : 'Assistant Analysis'})\n` +
+      `**Horizon:** ${monthName} ${selectedYear}\n` +
+      `**Dasha:** ${activeDashaHierarchy.mahadasha} MD → ${activeDashaHierarchy.antardasha} AD → ${activeDashaHierarchy.pratyantardasha} PD\n` +
+      `**Timestamp:** ${msg.timestamp} ${msg.modelUsed ? `| Model: ${msg.modelUsed}` : ''}\n\n` +
+      `---\n\n` +
+      `${msg.text}\n`;
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setDownloadFeedback(msg.id);
+    setTimeout(() => setDownloadFeedback(null), 2000);
+  };
+
+  // Download Entire Q&A Session as Standalone Styled HTML
+  const handleDownloadHtmlTranscript = () => {
+    const cleanPerson = personName.replace(/\s+/g, '_');
+    const filename = `Local_QA_Prediction_${cleanPerson}_${monthName}_${selectedYear}_${Date.now()}.html`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Local Q&A Prediction Report - ${personName} (${monthName} ${selectedYear})</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #090d16;
+      color: #e2e8f0;
+      margin: 0;
+      padding: 30px 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .header {
+      background: linear-gradient(135deg, #3b0764 0%, #0f172a 100%);
+      border: 1px solid #9333ea;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      color: #ffffff;
+      font-weight: 800;
+    }
+    .header .subtitle {
+      color: #d8b4fe;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12px;
+      color: #cbd5e1;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      padding-top: 10px;
+    }
+    .screen-context {
+      background: #1e1b4b;
+      border: 1px solid #4338ca;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 12px;
+      color: #c7d2fe;
+      margin-bottom: 24px;
+    }
+    .chat-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .msg-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .msg-user {
+      align-self: flex-end;
+      max-width: 85%;
+    }
+    .msg-user .bubble {
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+      color: #0f172a;
+      font-weight: 600;
+      padding: 14px 18px;
+      border-radius: 16px 16px 4px 16px;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.2);
+    }
+    .msg-assistant {
+      align-self: flex-start;
+      max-width: 95%;
+    }
+    .msg-assistant .bubble {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      padding: 18px 22px;
+      border-radius: 16px 16px 16px 4px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+    .msg-meta {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 12px;
+      background: #0f172a;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+    th {
+      background: #334155;
+      color: #d8b4fe;
+      padding: 8px 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    td {
+      padding: 8px 12px;
+      border-top: 1px solid #1e293b;
+    }
+    .badge-prob {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: bold;
+      font-family: monospace;
+      font-size: 11px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid #10b981;
+    }
+    .footer {
+      border-top: 1px solid #334155;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .print-btn {
+      background: #a855f7;
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    @media print {
+      body { background: #ffffff; color: #0f172a; padding: 0; }
+      .container { border: none; box-shadow: none; padding: 0; }
+      .print-btn { display: none; }
+      .header { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; }
+      .header h1 { color: #0f172a; }
+      .msg-assistant .bubble { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; }
+      .msg-user .bubble { background: #fef3c7; color: #78350f; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+
+    <div class="header">
+      <h1>Private Local Q&A Prediction Analysis</h1>
+      <div class="subtitle">Air-Gapped Local Model Reasoning | Horizon: <strong>${monthName} ${selectedYear}</strong></div>
+      <div class="meta-bar">
+        <span><strong>Native:</strong> ${personName} (Age: ${nativeAge})</span>
+        <span><strong>Lagna:</strong> ${screenContextSnapshot.natalLagna}</span>
+        <span><strong>Moon:</strong> ${screenContextSnapshot.natalMoon}</span>
+        <span><strong>Dasha:</strong> ${activeDashaHierarchy.mahadasha} MD → ${activeDashaHierarchy.antardasha} AD → ${activeDashaHierarchy.pratyantardasha} PD</span>
+      </div>
+    </div>
+
+    <div class="screen-context">
+      <strong>🔒 Privacy Verification:</strong> Generated locally via Ollama without cloud telemetry. Screen memory absorbed all 9 transits, 3 Nakshatra gates, and ${manifestedEvents.length} manifested predictions.
+    </div>
+
+    <div class="chat-flow">
+      ${messages.map(m => `
+        <div class="msg-wrap ${m.sender === 'user' ? 'msg-user' : 'msg-assistant'}">
+          <div class="msg-meta">
+            ${m.sender === 'user' ? 'You (Private Query)' : `Local Q&A ${m.modelUsed ? `(${m.modelUsed})` : ''}`} • ${m.timestamp}
+          </div>
+          <div class="bubble">
+            ${m.text.replace(/\n/g, '<br/>')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="footer">
+      <span>Tamil Om Vedic Astrology — Private Local Q&A</span>
+      <span>Exported: ${new Date().toLocaleString()}</span>
+      <span>${monthName} ${selectedYear}</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download Entire Q&A Session as Markdown
+  const handleDownloadMarkdownTranscript = () => {
+    const cleanPerson = personName.replace(/\s+/g, '_');
+    const filename = `Local_QA_Prediction_${cleanPerson}_${monthName}_${selectedYear}_${Date.now()}.md`;
+
+    let md = `# Private Local Q&A Prediction Transcript\n\n` +
+      `**Native:** ${personName} (Age: ${nativeAge})\n` +
+      `**Horizon:** ${monthName} ${selectedYear}\n` +
+      `**Lagna:** ${screenContextSnapshot.natalLagna}\n` +
+      `**Moon:** ${screenContextSnapshot.natalMoon}\n` +
+      `**Active Dasha:** ${activeDashaHierarchy.mahadasha} MD → ${activeDashaHierarchy.antardasha} AD → ${activeDashaHierarchy.pratyantardasha} PD (${activeDashaHierarchy.startDate} to ${activeDashaHierarchy.endDate})\n` +
+      `**Exported:** ${new Date().toLocaleString()}\n\n` +
+      `---\n\n` +
+      `## Active Screen Context Grounding\n\n` +
+      `### Transiting Grahas in the Sky:\n` +
+      screenContextSnapshot.transits.map(t => `- ${t}`).join('\n') + `\n\n` +
+      `### Delivering Nakshatra Gates:\n` +
+      screenContextSnapshot.gates.map(g => `- ${g}`).join('\n') + `\n\n` +
+      `---\n\n` +
+      `## Conversation History\n\n`;
+
+    messages.forEach((m, idx) => {
+      md += `### ${idx + 1}. ${m.sender === 'user' ? 'User Question' : `Local Q&A Analysis ${m.modelUsed ? `(${m.modelUsed})` : ''}`}\n` +
+        `*Timestamp: ${m.timestamp}*\n\n` +
+        `${m.text}\n\n` +
+        `---\n\n`;
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const quickQuestions = [
     {
       label: 'On-site vs New Role',
@@ -437,7 +909,7 @@ INSTRUCTIONS:
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm sm:text-base font-black text-white tracking-wide flex items-center gap-1.5">
-                <span>Private Screen Prediction Copilot</span>
+                <span>Private Local Q&A</span>
               </h3>
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                 <Lock className="w-3 h-3 text-emerald-400" />
@@ -450,8 +922,8 @@ INSTRUCTIONS:
           </div>
         </div>
 
-        {/* Right Status Badges & Controls */}
-        <div className="flex items-center gap-2">
+        {/* Right Status Badges & Download Actions */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Ollama Status Pill */}
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono transition ${
@@ -476,12 +948,44 @@ INSTRUCTIONS:
             </button>
           </div>
 
+          {/* Download HTML Transcript */}
+          <button
+            type="button"
+            onClick={handleDownloadHtmlTranscript}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-200 text-xs font-bold transition cursor-pointer shadow active:scale-95"
+            title="Download complete styled Q&A session as standalone HTML report"
+          >
+            <FileText className="w-3.5 h-3.5 text-purple-300" />
+            <span className="hidden sm:inline">Download HTML</span>
+          </button>
+
+          {/* Download Markdown Transcript */}
+          <button
+            type="button"
+            onClick={handleDownloadMarkdownTranscript}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer shadow active:scale-95"
+            title="Download full Q&A transcript as Markdown (.md)"
+          >
+            <Download className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Export .MD</span>
+          </button>
+
+          {/* Clear Chat */}
+          <button
+            type="button"
+            onClick={handleClearHistory}
+            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-300 transition cursor-pointer"
+            title="Clear Q&A chat history"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
           {/* Toggle Expand */}
           <button
             type="button"
             onClick={() => setIsExpanded(prev => !prev)}
             className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-            title={isExpanded ? 'Collapse Copilot' : 'Expand Copilot'}
+            title={isExpanded ? 'Collapse Local Q&A' : 'Expand Local Q&A'}
           >
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
@@ -509,7 +1013,7 @@ INSTRUCTIONS:
           {/* CHAT MESSAGES WINDOW */}
           <div
             ref={chatScrollRef}
-            className="h-80 sm:h-96 overflow-y-auto space-y-3.5 p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800/90 scrollbar-thin"
+            className="h-96 sm:h-[430px] overflow-y-auto space-y-4 p-3.5 sm:p-5 rounded-xl bg-slate-950 border border-slate-800/90 scrollbar-thin"
           >
             {messages.map(msg => (
               <div
@@ -521,8 +1025,8 @@ INSTRUCTIONS:
                     <span className="text-amber-300 font-bold">You (Private Query)</span>
                   ) : (
                     <span className="text-purple-300 font-bold flex items-center gap-1">
-                      <Bot className="w-3 h-3 text-purple-400" />
-                      <span>Prediction Copilot</span>
+                      <Bot className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Local Q&A</span>
                       {msg.modelUsed && <span className="text-slate-500 font-normal">({msg.modelUsed})</span>}
                     </span>
                   )}
@@ -530,29 +1034,50 @@ INSTRUCTIONS:
                 </div>
 
                 <div
-                  className={`max-w-[92%] sm:max-w-[85%] rounded-2xl p-3.5 text-xs sm:text-[13px] leading-relaxed shadow relative group ${
+                  className={`max-w-[94%] sm:max-w-[88%] rounded-2xl p-4 text-xs sm:text-[13px] leading-relaxed shadow-lg relative group ${
                     msg.sender === 'user'
                       ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-slate-950 font-semibold'
-                      : 'bg-slate-900 border border-slate-700 text-slate-200 font-normal'
+                      : 'bg-slate-900/95 border border-purple-500/25 text-slate-100 font-normal'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap select-text">
-                    {msg.text}
-                  </div>
+                  {/* Rich Rendered Content */}
+                  {msg.sender === 'user' ? (
+                    <div className="whitespace-pre-wrap select-text">{msg.text}</div>
+                  ) : (
+                    <RichFormattedText text={msg.text} />
+                  )}
 
+                  {/* Actions for Assistant Message: Copy and Download */}
                   {msg.sender === 'assistant' && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopyMessage(msg.text, msg.id)}
-                      className="absolute top-2 right-2 p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                      title="Copy response"
-                    >
-                      {copyFeedback === msg.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1 bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 opacity-0 group-hover:opacity-100 transition shadow">
+                      {/* Copy Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyMessage(msg.text, msg.id)}
+                        className="p-1 rounded text-slate-400 hover:text-white transition cursor-pointer"
+                        title="Copy formatted answer to clipboard"
+                      >
+                        {copyFeedback === msg.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
+                      {/* Download Single Answer */}
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSingleMessage(msg)}
+                        className="p-1 rounded text-slate-400 hover:text-amber-300 transition cursor-pointer"
+                        title="Download this answer as Markdown file"
+                      >
+                        {downloadFeedback === msg.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <FileDown className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -561,16 +1086,16 @@ INSTRUCTIONS:
             {isGenerating && (
               <div className="flex flex-col items-start animate-fadeIn">
                 <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px] text-purple-300 font-mono">
-                  <Bot className="w-3 h-3 text-purple-400 animate-spin" />
+                  <Bot className="w-3.5 h-3.5 text-purple-400 animate-spin" />
                   <span>Evaluating screen astrological geometry...</span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-900 border border-purple-500/40 text-xs text-purple-200 flex items-center gap-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" />
+                <div className="p-4 rounded-2xl bg-slate-900 border border-purple-500/40 text-xs text-purple-200 flex items-center gap-3 shadow-lg">
+                  <div className="flex space-x-1.5">
+                    <div className="w-2.5 h-2.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <div className="w-2.5 h-2.5 bg-amber-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" />
                   </div>
-                  <span>Reasoning over transits, active gates, and user scenarios...</span>
+                  <span className="font-medium">Synthesizing transits, active gates, and matching your scenarios...</span>
                 </div>
               </div>
             )}
@@ -619,7 +1144,7 @@ INSTRUCTIONS:
               className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm transition cursor-pointer shadow-lg shadow-purple-500/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
               <Send className="w-4 h-4" />
-              <span className="hidden sm:inline">Ask Copilot</span>
+              <span className="hidden sm:inline">Ask Local Q&A</span>
             </button>
           </form>
 
@@ -629,10 +1154,10 @@ INSTRUCTIONS:
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <span className="font-bold text-amber-300 block">
-                  To power this Copilot directly with local Qwen 14B / 8B (zero external network):
+                  To power Local Q&A directly with local Qwen 14B / 8B (zero external network):
                 </span>
                 <p className="text-[11px] text-amber-100 leading-relaxed">
-                  Open terminal and start Ollama with CORS origins enabled: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">OLLAMA_ORIGINS=&quot;*&quot; ollama run qwen2.5:14b</code>. The Copilot will automatically connect to <code className="text-amber-300">{ollamaEndpoint}</code>. In the meantime, the built-in Astrological Ground Truth Analyzer is answering your questions instantly!
+                  Open terminal and start Ollama with CORS origins enabled: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">OLLAMA_ORIGINS=&quot;*&quot; ollama run qwen2.5:14b</code>. Local Q&A will automatically connect to <code className="text-amber-300">{ollamaEndpoint}</code>. In the meantime, the built-in Astrological Ground Truth Analyzer is answering your questions instantly!
                 </p>
               </div>
             </div>

@@ -51,10 +51,23 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+export function formatEngineDisplayName(modelUsed?: string): string {
+  if (!modelUsed) return 'Gemini';
+  const m = modelUsed.toLowerCase();
+  if (m.includes('fable')) return 'Claude Fable 5.1';
+  if (m.includes('sonnet')) return 'Claude 3.5 Sonnet';
+  if (m.includes('haiku')) return 'Claude Haiku';
+  if (m.includes('gemini')) return 'Google Gemini';
+  if (m.includes('qwen') || m.includes('ollama') || m.includes('qn')) return 'Local Qwen';
+  if (m.includes('claude')) return 'Anthropic Claude';
+  return modelUsed;
+}
+
 /**
  * Builds and downloads the Event Manufacturing Engine PDF Report
  */
 export function exportEventEnginePdf(data: EventEngineReportData): void {
+  const engineLabel = formatEngineDisplayName(data.modelUsed);
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -82,9 +95,9 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
   doc.rect(margin, y, contentWidth, 26, 'S');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setTextColor(255, 255, 255);
-  doc.text('EVENT MANUFACTURING ENGINE REPORT', margin + 6, y + 8);
+  doc.text(`EVENT MANUFACTURING ENGINE REPORT (${engineLabel.toUpperCase()})`, margin + 6, y + 8);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
@@ -93,7 +106,7 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
 
   doc.setFontSize(7.5);
   doc.setTextColor(199, 210, 254);
-  doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} | Model: ${data.modelUsed || 'Vedic LLM Engine'}`, margin + 6, y + 21);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} | Engine: ${engineLabel}`, margin + 6, y + 21);
 
   y += 30;
 
@@ -304,13 +317,14 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.8);
     doc.setTextColor(148, 163, 184);
-    doc.text('Tamil Om Vedic Astrology — Event Manufacturing Engine', margin, pageHeight - 6);
+    doc.text(`Tamil Om Vedic Astrology — Event Manufacturing Engine (${engineLabel})`, margin, pageHeight - 6);
     doc.text(`Page ${p} of ${totalPages}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
     doc.text(`${data.monthName} ${data.selectedYear}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
   }
 
   // Download PDF
-  const filename = `Event_Manufacturing_${data.deliveringHand.replace(/\s+/g, '_')}_${data.monthName}_${data.selectedYear}_${createReportFilenameTimestamp()}.pdf`;
+  const safeEngine = engineLabel.replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Event_Manufacturing_${safeEngine}_${data.deliveringHand.replace(/\s+/g, '_')}_${data.monthName}_${data.selectedYear}_${createReportFilenameTimestamp()}.pdf`;
   doc.save(filename);
 }
 
@@ -318,13 +332,14 @@ export function exportEventEnginePdf(data: EventEngineReportData): void {
  * Builds and downloads the Event Manufacturing Engine Standalone HTML Report
  */
 export function exportEventEngineHtml(data: EventEngineReportData): void {
+  const engineLabel = formatEngineDisplayName(data.modelUsed);
   const pTag = (p: 'lagna' | 'rashi' | 'combined') => p === 'lagna' ? 'From Lagna (Asc)' : p === 'rashi' ? 'From Janma (Moon)' : 'Combined (Dual)';
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Event Manufacturing Engine Report - ${data.monthName} ${data.selectedYear}</title>
+  <title>Event Manufacturing Engine Report (${engineLabel}) - ${data.monthName} ${data.selectedYear}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -543,9 +558,10 @@ export function exportEventEngineHtml(data: EventEngineReportData): void {
 <body>
   <div class="container">
     <div class="header">
-      <h1>Event Manufacturing Engine Report</h1>
+      <h1>Event Manufacturing Engine Report (${engineLabel})</h1>
       <div class="subtitle">Parashara &amp; Nadi Astrological Timing Horizon: <strong>${data.monthName} ${data.selectedYear}</strong></div>
       <div class="meta-bar">
+        <span><strong>Engine:</strong> ${engineLabel}</span>
         <span><strong>Profile:</strong> ${data.personName} (${data.personId})</span>
         <span><strong>Lagna:</strong> ${data.birthLagna} (1st House)</span>
         <span><strong>Janma Rashi:</strong> ${data.janmaRashi} (Moon)</span>
@@ -617,7 +633,7 @@ export function exportEventEngineHtml(data: EventEngineReportData): void {
     </div>
 
     <div class="footer">
-      <span>Tamil Om Vedic Astrology — Event Manufacturing Engine</span>
+      <span>Tamil Om Vedic Astrology — Event Manufacturing Engine (${engineLabel})</span>
       <span>Generated: ${new Date().toLocaleDateString()}</span>
       <span>${data.monthName} ${data.selectedYear}</span>
     </div>
@@ -629,7 +645,8 @@ export function exportEventEngineHtml(data: EventEngineReportData): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const filename = `Event_Manufacturing_${data.deliveringHand.replace(/\s+/g, '_')}_${data.monthName}_${data.selectedYear}_${createReportFilenameTimestamp()}.html`;
+  const safeEngine = engineLabel.replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Event_Manufacturing_${safeEngine}_${data.deliveringHand.replace(/\s+/g, '_')}_${data.monthName}_${data.selectedYear}_${createReportFilenameTimestamp()}.html`;
   a.download = filename;
   document.body.appendChild(a);
   a.click();

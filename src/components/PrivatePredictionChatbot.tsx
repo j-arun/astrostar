@@ -29,6 +29,7 @@ import {
 import { NakshatraGateInfo, ManufacturedEventItem } from './EventManufacturingEngine';
 import { RASHI_LIST_META } from '../data/transitEphemeris';
 import { toCleanEnglishPlanet, toCleanEnglishSign } from '../services/llm/adapters';
+import { ADChamberDynamics } from '../services/dashaChamberEngine';
 
 export interface ChatMessage {
   id: string;
@@ -60,6 +61,7 @@ export interface PrivatePredictionChatbotProps {
   transitPlacements: any[];
   gateDetails: NakshatraGateInfo[];
   manifestedEvents: ManufacturedEventItem[];
+  adChamberDynamics?: ADChamberDynamics;
   nativeAge?: number;
 }
 
@@ -258,6 +260,7 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   transitPlacements,
   gateDetails,
   manifestedEvents,
+  adChamberDynamics,
   nativeAge = 40
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
@@ -368,6 +371,16 @@ Ask me specific questions comparing personal situations, like:
       return `Event ${i + 1} [${ev.portfolio || 'General'}] (${ev.probabilityScore}% Probable, ${ev.latencyStatus === 'acute_moon_triggered' ? '⚡ ACUTE MOON IGNITED' : '💤 Dormant'}): "${ev.title}" - ${ev.narrative}. Trigger: ${ev.gateTrigger || 'N/A'}`;
     });
 
+    const adChamberText = adChamberDynamics ? {
+      adLord: adChamberDynamics.adCleanName,
+      seat: `${adChamberDynamics.adNatalRashiName} (House ${adChamberDynamics.adNatalHouseFromLagna})`,
+      conjunctions: adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts)`),
+      aspects: adChamberDynamics.incomingAspects.map(a => `${a.cleanName} (${a.aspectLabel} from H${a.sourceHouseFromLagna}) [${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts]`),
+      polarity: adChamberDynamics.polarityLabel,
+      netScore: adChamberDynamics.netScore,
+      summary: adChamberDynamics.chamberAtmosphereNarrative
+    } : null;
+
     return {
       personName,
       nativeAge,
@@ -381,6 +394,7 @@ Ask me specific questions comparing personal situations, like:
         pd: activeDashaHierarchy.pratyantardasha,
         window: `${activeDashaHierarchy.startDate} to ${activeDashaHierarchy.endDate}`
       },
+      adChamber: adChamberText,
       transits: transitGrahasList,
       gates: gatesList,
       events: eventsList
@@ -395,12 +409,26 @@ Ask me specific questions comparing personal situations, like:
     activeDashaHierarchy,
     transitPlacements,
     gateDetails,
-    manifestedEvents
+    manifestedEvents,
+    adChamberDynamics
   ]);
 
   // Deterministic Parashara Scenario Matcher (Guaranteed offline response if Ollama is not active)
   const generateDeterministicAnswer = (query: string): string => {
     const qLower = query.toLowerCase();
+
+    // Check for AD chamber / aspect / conjunction query
+    if (qLower.includes('chamber') || qLower.includes('aspect') || qLower.includes('conjunct') || qLower.includes('rahu') && qLower.includes('saturn') || qLower.includes('pressure')) {
+      if (adChamberDynamics) {
+        return `### ⚡ AD Pressure Chamber Dynamics & Aspect Evaluation (${monthName} ${selectedYear})\n\n` +
+          `**Host Seat**: **${adChamberDynamics.adCleanName}** natally in **${adChamberDynamics.adNatalRashiName} (House ${adChamberDynamics.adNatalHouseFromLagna})**.\n\n` +
+          `• **Direct Transit Conjunctions**: ${adChamberDynamics.directOccupants.length > 0 ? adChamberDynamics.directOccupants.map(o => `**${o.cleanName}**${o.dignity === 'exalted' ? ' [EXALTED / UCCHAM]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts)`).join(', ') : 'None (Clear chamber)'}\n` +
+          `• **Incoming Parashari Drishti (Aspects)**: ${adChamberDynamics.incomingAspects.length > 0 ? adChamberDynamics.incomingAspects.map(a => `**${a.cleanName}** (${a.aspectLabel} from House ${a.sourceHouseFromLagna}) [${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts]`).join('; ') : 'No direct aspects'}\n` +
+          `• **Chamber Polarity**: **${adChamberDynamics.polarityLabel}** (Net Impact: **${adChamberDynamics.netScore > 0 ? `+${adChamberDynamics.netScore}` : adChamberDynamics.netScore} pts**)\n\n` +
+          `**Karmic Mechanism**: ${adChamberDynamics.chamberAtmosphereNarrative}\n\n` +
+          `**PD Release Valve**: Accumulated tension vents through **${adChamberDynamics.pdCleanName}'s Gate: ${adChamberDynamics.peakVentingGate}** during the active lunar trigger.`;
+      }
+    }
 
     // Check for transit position query (e.g., "where was Ketu / Venus")
     if (qLower.includes('where') || qLower.includes('transit') || qLower.includes('position')) {

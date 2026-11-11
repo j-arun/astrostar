@@ -52,6 +52,8 @@ import {
 } from '../services/llm/adapters';
 import { PersonMaster } from '../data/horoscopeData';
 import { PrivatePredictionChatbot } from './PrivatePredictionChatbot';
+import { computeADChamberDynamics, ADChamberDynamics } from '../services/dashaChamberEngine';
+import { ADChamberMatrixCard } from './ADChamberMatrixCard';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -645,6 +647,19 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     });
   }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyGrahaSpans, flattenedD1, monthlyMoonSpans, selectedMonth]);
 
+  // 2B. Antardasha (AD) Pressure Chamber Dynamics coupled with PD Delivery Hand
+  const adChamberDynamics = useMemo(() => {
+    return computeADChamberDynamics({
+      adLord: selectedAd,
+      pdLord: selectedHandKey,
+      natalLagnaIdx,
+      natalRashiIdx,
+      natalPlacements: flattenedD1 || [],
+      transitPlacements: transitPlacements || [],
+      monthlyMoonSpans: monthlyMoonSpans || []
+    });
+  }, [selectedAd, selectedHandKey, natalLagnaIdx, natalRashiIdx, flattenedD1, transitPlacements, monthlyMoonSpans]);
+
   // 3. Complete Raw Prompt Payload for LLM Execution with Per-Gate Perspectives
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
@@ -664,6 +679,15 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
 - Selected Delivering Hand (PD / Hand): ${cleanHand}
 - Active Month Reference PD: ${toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)}
 - SELECTED DELIVERING HAND TARGET: ${cleanHand}
+
+[ANTARDASHA (AD) PRESSURE CHAMBER & GOCHARA DYNAMICS: ${adChamberDynamics.adCleanName} IN ${adChamberDynamics.adNatalRashiName} (HOUSE ${adChamberDynamics.adNatalHouseFromLagna})]
+- AD Natal Seat: House ${adChamberDynamics.adNatalHouseFromLagna} from Lagna, House ${adChamberDynamics.adNatalHouseFromRashi} from Moon (${adChamberDynamics.adNatalRashiName})
+- Direct Gochara Conjunctions in Chamber: ${adChamberDynamics.directOccupants.length > 0 ? adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED / UCCHAM (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts) - ${o.somaticInfluence}`).join(' | ') : 'Clear Chamber (No transits physically standing inside)'}
+- Incoming Parashari Drishti (Aspects) on Chamber: ${adChamberDynamics.incomingAspects.length > 0 ? adChamberDynamics.incomingAspects.map(a => `${a.cleanName} [${a.aspectLabel} from H${a.sourceHouseFromLagna}] (${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts) - ${a.karmicMechanism}`).join(' | ') : 'No direct Parashari aspects'}
+- Net Chamber Energy State: ${adChamberDynamics.polarityLabel} (Net Score: ${adChamberDynamics.netScore > 0 ? `+${adChamberDynamics.netScore}` : adChamberDynamics.netScore} pts)
+- Atmosphere & Manifestation Mode: ${adChamberDynamics.chamberAtmosphereNarrative}
+- Lordship Houses Ruled by ${adChamberDynamics.adCleanName}: ${adChamberDynamics.ruledHouses.map(rh => `House ${rh.houseFromLagna} (${rh.rashiName}: Transits = ${rh.occupants.join(', ') || 'None'})`).join('; ')}
+- Physical Delivery Coupling: Pent-up pressure accumulated in the ${adChamberDynamics.adCleanName} AD chamber discharges through ${adChamberDynamics.pdCleanName}'s 3 Nakshatra Gates, with primary venting via Gate: ${adChamberDynamics.peakVentingGate}.
 
 [THE THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND: ${cleanHand}]
 ${gateDetails.map((g, idx) => {
@@ -955,6 +979,15 @@ Return ONLY a valid JSON object matching this schema:
         moonIngressWindow: g.moonIngressWindow
       })),
       events: manufacturedEvents,
+      adChamber: {
+        adLord: adChamberDynamics.adCleanName,
+        seat: `${adChamberDynamics.adNatalRashiName} (House ${adChamberDynamics.adNatalHouseFromLagna})`,
+        conjunctions: adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts)`),
+        aspects: adChamberDynamics.incomingAspects.map(a => `${a.cleanName} (${a.aspectLabel} from H${a.sourceHouseFromLagna}) [${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts]`),
+        polarityLabel: adChamberDynamics.polarityLabel,
+        netScore: adChamberDynamics.netScore,
+        narrative: adChamberDynamics.chamberAtmosphereNarrative
+      },
       modelUsed: lastSynthesizedModel || activeProviderName,
       executionTimeMs: lastExecutionTimeMs || undefined
     };
@@ -1422,6 +1455,9 @@ Return ONLY a valid JSON object matching this schema:
         </div>
       </div>
 
+      {/* AD PRESSURE CHAMBER & PD DELIVERY MATRIX */}
+      <ADChamberMatrixCard dynamics={adChamberDynamics} />
+
       {/* SECTION 2: THREE NAKSHATRA ENTRY GATES WITH ICON-BASED PERSPECTIVE SWITCHES */}
       <div className="space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1768,6 +1804,7 @@ Return ONLY a valid JSON object matching this schema:
         transitPlacements={transitPlacements}
         gateDetails={gateDetails}
         manifestedEvents={manufacturedEvents}
+        adChamberDynamics={adChamberDynamics}
       />
 
       {/* MODAL: RAW PROMPT INSPECTOR (EYE ICON) */}

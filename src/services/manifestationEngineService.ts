@@ -188,6 +188,8 @@ export interface MoonDeliveryStatus {
 /**
  * Generate Baseline Prompt V1.0 using Private LLM reasoning or Vedic compilation
  */
+import { ADChamberDynamics } from './dashaChamberEngine';
+
 export function constructBaselinePromptTemplate(params: {
   nativeProfile: NativeManifestationProfile;
   monthName: string;
@@ -211,6 +213,7 @@ export function constructBaselinePromptTemplate(params: {
   }[];
   skyPositions?: SkyPositionItem[];
   moonDeliveryStatus?: MoonDeliveryStatus;
+  adChamberDynamics?: ADChamberDynamics;
 }): string {
   const {
     nativeProfile,
@@ -226,7 +229,8 @@ export function constructBaselinePromptTemplate(params: {
     janmaRashi,
     gates,
     skyPositions = [],
-    moonDeliveryStatus
+    moonDeliveryStatus,
+    adChamberDynamics
   } = params;
 
   const dateSpanDisplay = targetFromDate && targetToDate
@@ -236,6 +240,17 @@ export function constructBaselinePromptTemplate(params: {
   const focusList = nativeProfile.focusAreas
     .map(fa => MANIFESTATION_FOCUS_DOMAINS.find(d => d.id === fa)?.label || fa)
     .join(', ');
+
+  const adChamberSection = adChamberDynamics ? `
+[ANTARDASHA (AD) PRESSURE CHAMBER & GOCHARA DYNAMICS: ${adChamberDynamics.adCleanName} IN ${adChamberDynamics.adNatalRashiName} (HOUSE ${adChamberDynamics.adNatalHouseFromLagna})]
+- AD Natal Seat: House ${adChamberDynamics.adNatalHouseFromLagna} from Lagna, House ${adChamberDynamics.adNatalHouseFromRashi} from Moon (${adChamberDynamics.adNatalRashiName})
+- Direct Gochara Conjunctions in Chamber: ${adChamberDynamics.directOccupants.length > 0 ? adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED / UCCHAM (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts) - ${o.somaticInfluence}`).join(' | ') : 'Clear Chamber (No transits physically standing inside)'}
+- Incoming Parashari Drishti (Aspects) on Chamber: ${adChamberDynamics.incomingAspects.length > 0 ? adChamberDynamics.incomingAspects.map(a => `${a.cleanName} [${a.aspectLabel} from H${a.sourceHouseFromLagna}] (${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts) - ${a.karmicMechanism}`).join(' | ') : 'No direct Parashari aspects'}
+- Net Chamber Energy State: ${adChamberDynamics.polarityLabel} (Net Score: ${adChamberDynamics.netScore > 0 ? `+${adChamberDynamics.netScore}` : adChamberDynamics.netScore} pts)
+- Atmosphere & Manifestation Mode: ${adChamberDynamics.chamberAtmosphereNarrative}
+- Lordship Houses Ruled by ${adChamberDynamics.adCleanName}: ${adChamberDynamics.ruledHouses.map(rh => `House ${rh.houseFromLagna} (${rh.rashiName}: Transits = ${rh.occupants.join(', ') || 'None'})`).join('; ')}
+- Physical Delivery Coupling: Pent-up pressure accumulated in the ${adChamberDynamics.adCleanName} AD chamber discharges through ${adChamberDynamics.pdCleanName}'s 3 Nakshatra Gates, with primary venting via Gate: ${adChamberDynamics.peakVentingGate}.
+` : '';
 
   const skySection = skyPositions.length > 0 ? `
 [REAL SKY DELIVERY SNAPSHOT (GOCHARA TRANSIT FOR HORIZON: ${dateSpanDisplay})]
@@ -261,7 +276,7 @@ ${skyPositions.map(p => `- ${p.planet}: in ${p.rashi} (${p.degreeSputa}), Naksha
 - Pratyantardasha (PD): ${pdLord}
 - Birth Ascendant (Lagna): ${birthLagna} (Physical Body, Somatics, Reality)
 - Janma Rashi (Moon): ${janmaRashi} (Psychological Experiential Fruition)
-
+${adChamberSection}
 [THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND: ${pdLord}]
 ${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 - Perspective: ${g.chosenPerspective.toUpperCase()}
@@ -322,6 +337,7 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
   }[];
   skyPositions?: SkyPositionItem[];
   moonDeliveryStatus?: MoonDeliveryStatus;
+  adChamberDynamics?: ADChamberDynamics;
   localOllamaEndpoint?: string;
   localModelName?: string;
 }): Promise<{
@@ -346,6 +362,7 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
     gates,
     skyPositions = [],
     moonDeliveryStatus,
+    adChamberDynamics,
     localOllamaEndpoint = 'http://localhost:11434',
     localModelName = 'qwen2.5:14b'
   } = params;
@@ -357,6 +374,17 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
   const focusList = nativeProfile.focusAreas
     .map(fa => MANIFESTATION_FOCUS_DOMAINS.find(d => d.id === fa)?.label || fa)
     .join(', ');
+
+  const adChamberContext = adChamberDynamics ? `
+[INPUT 3A: ANTARDASHA (AD) PRESSURE CHAMBER & GOCHARA DYNAMICS: ${adChamberDynamics.adCleanName} IN ${adChamberDynamics.adNatalRashiName} (HOUSE ${adChamberDynamics.adNatalHouseFromLagna})]
+- AD Natal Seat: House ${adChamberDynamics.adNatalHouseFromLagna} from Lagna, House ${adChamberDynamics.adNatalHouseFromRashi} from Moon (${adChamberDynamics.adNatalRashiName})
+- Direct Gochara Conjunctions in Chamber: ${adChamberDynamics.directOccupants.length > 0 ? adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED / UCCHAM (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts) - ${o.somaticInfluence}`).join(' | ') : 'Clear Chamber'}
+- Incoming Parashari Drishti (Aspects) on Chamber: ${adChamberDynamics.incomingAspects.length > 0 ? adChamberDynamics.incomingAspects.map(a => `${a.cleanName} [${a.aspectLabel} from H${a.sourceHouseFromLagna}] (${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts) - ${a.karmicMechanism}`).join(' | ') : 'No direct Parashari aspects'}
+- Net Chamber Energy State: ${adChamberDynamics.polarityLabel} (Net Score: ${adChamberDynamics.netScore > 0 ? `+${adChamberDynamics.netScore}` : adChamberDynamics.netScore} pts)
+- Atmosphere & Manifestation Mode: ${adChamberDynamics.chamberAtmosphereNarrative}
+- Lordship Houses Ruled by ${adChamberDynamics.adCleanName}: ${adChamberDynamics.ruledHouses.map(rh => `House ${rh.houseFromLagna} (${rh.rashiName}: Transits = ${rh.occupants.join(', ') || 'None'})`).join('; ')}
+- Physical Delivery Coupling: Pent-up pressure accumulated in the ${adChamberDynamics.adCleanName} AD chamber discharges through ${adChamberDynamics.pdCleanName}'s 3 Nakshatra Gates, with primary venting via Gate: ${adChamberDynamics.peakVentingGate}.
+` : '';
 
   const skyContext = skyPositions.length > 0 ? `
 [INPUT 4: REAL-TIME SKY POSITIONS (GOCHARA TRANSIT FOR HORIZON: ${dateSpanDisplay})]
@@ -384,7 +412,7 @@ Instead, your objective is to REASON, ANALYZE, and COMPOSE the complete, compreh
 - Pratyantardasha (PD): ${pdLord}
 - Birth Ascendant (Lagna): ${birthLagna} (Physical Body, Somatics, Reality)
 - Janma Rashi (Moon): ${janmaRashi} (Psychological Experiential Fruition)
-
+${adChamberContext}
 [INPUT 3: THREE NAKSHATRA ENTRY GATES FOR DELIVERING HAND (${pdLord})]
 ${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 - Chosen Perspective: ${g.chosenPerspective.toUpperCase()}

@@ -62,6 +62,8 @@ import {
 } from '../data/transitEphemeris';
 import { toCleanEnglishPlanet, toCleanEnglishSign, checkOllamaHealth } from '../services/llm/adapters';
 import { LLMProviderId } from '../services/llm/types';
+import { computeADChamberDynamics } from '../services/dashaChamberEngine';
+import { ADChamberMatrixCard } from './ADChamberMatrixCard';
 
 interface EventManifestationStudioProps {
   personId: string;
@@ -391,6 +393,27 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     });
   }, [skySnapshot, selectedPd]);
 
+  // 4B. Antardasha (AD) Pressure Chamber Dynamics coupled with PD Delivery Hand
+  const adChamberDynamics = useMemo(() => {
+    return computeADChamberDynamics({
+      adLord: selectedAd,
+      pdLord: selectedPd,
+      natalLagnaIdx,
+      natalRashiIdx,
+      natalPlacements: (activeRecord as any)?.placements || [],
+      transitPlacements: skySnapshot.map(s => ({
+        graha_key: s.graha_key,
+        graha_name: s.graha_name,
+        transit_rashi_index: s.transit_rashi_index,
+        signIndex: s.transit_rashi_index,
+        degree_sputa: s.degree_sputa,
+        is_retrograde: s.is_retrograde,
+        nakshatra_name: s.graha_pada_chara?.nakshatra_name,
+        pada: s.graha_pada_chara?.pada
+      }))
+    });
+  }, [selectedAd, selectedPd, natalLagnaIdx, natalRashiIdx, activeRecord, skySnapshot]);
+
   // 5. Local Ollama Health & Connection
   const [ollamaStatus, setOllamaStatus] = useState<{ isOnline: boolean; models: string[]; error?: string }>({
     isOnline: false,
@@ -550,6 +573,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         gates: gateDetails,
         skyPositions: skyPositionsForPrompt,
         moonDeliveryStatus,
+        adChamberDynamics,
         localOllamaEndpoint: ollamaEndpoint,
         localModelName: selectedLocalModel
       });
@@ -1144,6 +1168,9 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             </div>
           </div>
         </div>
+
+        {/* AD PRESSURE CHAMBER & PD DELIVERY MATRIX */}
+        <ADChamberMatrixCard dynamics={adChamberDynamics} />
 
         {/* 3 Entry Gates Summary */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-3 gap-3">

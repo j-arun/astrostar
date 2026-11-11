@@ -42,6 +42,15 @@ export interface EventEngineReportData {
   deliveringHand: string;
   gates: EventEngineReportGate[];
   events: EventEngineReportEvent[];
+  adChamber?: {
+    adLord: string;
+    seat: string;
+    conjunctions: string[];
+    aspects: string[];
+    polarityLabel: string;
+    netScore: number;
+    narrative: string;
+  };
   modelUsed?: string;
   executionTimeMs?: number;
 }
@@ -569,6 +578,32 @@ export function exportEventEngineHtml(data: EventEngineReportData): void {
         <span><strong>Dasha:</strong> ${data.mahadasha} MD &bull; ${data.antardasha} AD &bull; ${data.pratyantardasha} PD</span>
       </div>
     </div>
+
+    ${data.adChamber ? `
+    <div style="background: #1e1b4b; border: 1px solid #6366f1; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <h3 style="margin: 0; font-size: 14px; font-weight: 800; color: #ffffff; text-transform: uppercase;">
+          AD Pressure Chamber: ${data.adChamber.adLord} in ${data.adChamber.seat}
+        </h3>
+        <span style="font-size: 11px; font-weight: bold; padding: 3px 10px; border-radius: 9999px; background: rgba(168, 85, 247, 0.25); color: #d8b4fe; border: 1px solid #c084fc;">
+          ${data.adChamber.polarityLabel} (Net Impact: ${data.adChamber.netScore > 0 ? `+${data.adChamber.netScore}` : data.adChamber.netScore} pts)
+        </span>
+      </div>
+      <p style="font-size: 12px; color: #cbd5e1; margin: 0 0 10px 0; line-height: 1.5;">
+        ${data.adChamber.narrative}
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11px;">
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+          <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Direct Conjunctions in Chamber:</strong>
+          <span>${data.adChamber.conjunctions.join(', ') || 'None (Clear chamber)'}</span>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+          <strong style="color: #c084fc; display: block; margin-bottom: 4px;">Incoming Drishti (Aspects) on Chamber:</strong>
+          <span>${data.adChamber.aspects.join('; ') || 'No direct Parashari aspects'}</span>
+        </div>
+      </div>
+    </div>
+    ` : ''}
 
     <div class="section-title">1. Three Nakshatra Entry Gates (${data.deliveringHand})</div>
     <div class="section-sub">Planetary passages across these gates manufacture tangible somatic and experiential events</div>

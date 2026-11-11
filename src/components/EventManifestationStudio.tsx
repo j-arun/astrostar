@@ -163,22 +163,31 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
   }, [activeRecord]);
 
   // Target Analysis Date Range (From and To)
-  // Allows testing historical events (e.g. 2003 under Mercury MD & Saturn AD) or future event ranges
-  const [targetFromDate, setTargetFromDate] = useState<string>('2026-11-08');
-  const [targetToDate, setTargetToDate] = useState<string>('2027-01-14');
+  // Evaluates exact planetary transits without stale cached positions
+  const [targetFromDate, setTargetFromDate] = useState<string>('2027-01-13');
+  const [targetToDate, setTargetToDate] = useState<string>('2027-03-21');
+  const [focalDateStr, setFocalDateStr] = useState<string>('2027-02-15');
 
   const fromDateObj = useMemo(() => {
     const d = new Date(targetFromDate);
-    return isNaN(d.getTime()) ? new Date('2026-11-08') : d;
+    return isNaN(d.getTime()) ? new Date('2027-01-13') : d;
   }, [targetFromDate]);
 
   const toDateObj = useMemo(() => {
     const d = new Date(targetToDate);
-    return isNaN(d.getTime()) ? new Date('2027-01-14') : d;
+    return isNaN(d.getTime()) ? new Date('2027-03-21') : d;
   }, [targetToDate]);
 
-  const selectedYear = fromDateObj.getFullYear();
-  const selectedMonth = fromDateObj.getMonth();
+  // Effective Date for Astronomical Sky Snapshot (Gochara Ephemeris)
+  const effectiveFocalDate = useMemo(() => {
+    if (focalDateStr && !isNaN(new Date(focalDateStr).getTime())) {
+      return new Date(focalDateStr);
+    }
+    return fromDateObj;
+  }, [focalDateStr, fromDateObj]);
+
+  const selectedYear = effectiveFocalDate.getFullYear();
+  const selectedMonth = effectiveFocalDate.getMonth();
 
   // Range Duration in Days and Months
   const rangeDuration = useMemo(() => {
@@ -186,6 +195,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     const days = Math.max(1, Math.round(Math.abs(diffMs) / (24 * 3600 * 1000)));
     const months = (days / 30.4375).toFixed(1);
     return { days, months };
+  }, [fromDateObj, toDateObj]);
+
+  const rangeMidpointStr = useMemo(() => {
+    const midMs = (fromDateObj.getTime() + toDateObj.getTime()) / 2;
+    return new Date(midMs).toISOString().slice(0, 10);
   }, [fromDateObj, toDateObj]);
 
   // Calculated Age on Target Range Start based on birth date (if available)
@@ -289,15 +303,21 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     });
   }, [timeline, selectedMd, selectedAd, targetFromDate, targetToDate]);
 
-  const [selectedPd, setSelectedPd] = useState<string>('Saturn (Sani)');
+  const [selectedPd, setSelectedPd] = useState<string>('Ketu');
 
   // Pure, direct date setters with ZERO cross-field validation or alterations
   const handleFromDateChange = (newFrom: string) => {
     setTargetFromDate(newFrom);
+    if (!focalDateStr || focalDateStr < newFrom) {
+      setFocalDateStr(newFrom);
+    }
   };
 
   const handleToDateChange = (newTo: string) => {
     setTargetToDate(newTo);
+    if (focalDateStr > newTo) {
+      setFocalDateStr(newTo);
+    }
   };
 
   // 3. Natal Coordinates
@@ -323,11 +343,12 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
   // 4. Astronomical Gochara Ephemeris (Look at the Sky on Target Horizon!)
   const skySnapshot = useMemo(() => {
     const keys = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"];
-    return keys.map(k => getGrahaTransitPosition(k, fromDateObj, natalLagnaIdx, natalRashiIdx));
-  }, [fromDateObj, natalLagnaIdx, natalRashiIdx]);
+    return keys.map(k => getGrahaTransitPosition(k, effectiveFocalDate, natalLagnaIdx, natalRashiIdx));
+  }, [effectiveFocalDate, natalLagnaIdx, natalRashiIdx]);
 
   // Moon acute trigger detection on target date range
   const moonPlanet = useMemo(() => skySnapshot.find(p => p.graha_key === 'Moon'), [skySnapshot]);
+  const marsPlanet = useMemo(() => skySnapshot.find(p => p.graha_key === 'Mars'), [skySnapshot]);
   const moonDeliveryStatus = useMemo<MoonDeliveryStatus | undefined>(() => {
     if (!moonPlanet) return undefined;
     const moonNak = moonPlanet.graha_pada_chara.nakshatra_name;
@@ -1049,11 +1070,66 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedMd('Venus (Sukra)');
+                  setSelectedAd('Saturn (Sani)');
+                  setSelectedPd('Ketu');
+                  setTargetFromDate('2027-01-13');
+                  setTargetToDate('2027-03-21');
+                  setFocalDateStr('2027-02-15');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate === '2027-01-13'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                Feb 2027 (Ketu PD &bull; Mars in Leo)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMd('Venus (Sukra)');
+                  setSelectedAd('Saturn (Sani)');
+                  setSelectedPd('Venus (Sukra)');
+                  setTargetFromDate('2027-03-21');
+                  setTargetToDate('2027-09-30');
+                  setFocalDateStr('2027-04-15');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate === '2027-03-21'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                Apr 2027 (Venus PD &bull; Mars Vakra)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMd('Venus (Sukra)');
+                  setSelectedAd('Saturn (Sani)');
+                  setSelectedPd('Mercury (Budha)');
+                  setTargetFromDate('2026-08-03');
+                  setTargetToDate('2027-01-13');
+                  setFocalDateStr('2026-11-08');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
+                  targetFromDate === '2026-08-03'
+                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                }`}
+              >
+                Late 2026 (Mercury PD)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setSelectedMd('Mercury (Budha)');
                   setSelectedAd('Saturn (Sani)');
                   setSelectedPd('Saturn (Sani)');
                   setTargetFromDate('2003-05-05');
                   setTargetToDate('2003-10-16');
+                  setFocalDateStr('2003-05-05');
                 }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
                   targetFromDate.startsWith('2003') && selectedMd.includes('Mercury')
@@ -1071,6 +1147,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                   setSelectedPd('Venus (Sukra)');
                   setTargetFromDate('1995-02-14');
                   setTargetToDate('1995-12-16');
+                  setFocalDateStr('1995-02-14');
                 }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
                   targetFromDate.startsWith('1995') && selectedMd.includes('Mercury')
@@ -1079,23 +1156,6 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                 }`}
               >
                 1995 (Mercury MD &bull; Venus AD)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMd('Venus (Sukra)');
-                  setSelectedAd('Saturn (Sani)');
-                  setSelectedPd('Saturn (Sani)');
-                  setTargetFromDate('2026-08-03');
-                  setTargetToDate('2027-01-14');
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition border cursor-pointer ${
-                  targetFromDate.startsWith('2026')
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 font-bold'
-                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                }`}
-              >
-                Current (Venus MD &bull; Saturn AD)
               </button>
             </div>
 
@@ -1139,6 +1199,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                     onClick={() => {
                       setSelectedPd(pd.pdLord);
                       setPdCycleMonth(1);
+                      if (pd.startDate && pd.endDate) {
+                        setTargetFromDate(pd.startDate);
+                        setTargetToDate(pd.endDate);
+                        setFocalDateStr(pd.startDate);
+                      }
                     }}
                     className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
                       isSelected
@@ -1200,26 +1265,88 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         {/* LOOK AT THE SKY: GOCHARA DELIVERY ANSWERS ON TARGET DATE */}
         <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-purple-950/40 border border-cyan-500/40 shadow-xl space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Eye className="w-4 h-4 text-cyan-400" />
               <h4 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                Delivery Answers in the Sky (Gochara Ephemeris on {targetFromDate})
+                Delivery Answers in the Sky (Gochara Ephemeris on {effectiveFocalDate.toISOString().slice(0, 10)})
               </h4>
             </div>
 
-            {/* Moon Acute Gate Status */}
-            {moonDeliveryStatus?.isIgnitingGate ? (
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[11px] font-bold animate-pulse">
-                <Moon className="w-3 h-3 fill-current" />
-                <span>⚡ ACUTE IGNITION: Chandra in {moonDeliveryStatus.nakshatra} (Gate {moonDeliveryStatus.gateIndex! + 1})</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-mono">
-                <Moon className="w-3 h-3 text-slate-400" />
-                <span>Chandra in {moonPlanet?.graha_pada_chara.nakshatra_name || 'Sky'} ({moonPlanet?.transit_rashi_name}) &bull; Dormant Gate</span>
-              </span>
-            )}
+            {/* Quick Focal Date Controls for Ephemeris Inspection */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span className="text-slate-400 font-bold uppercase">Inspect Day:</span>
+              <button
+                type="button"
+                onClick={() => setFocalDateStr(targetFromDate)}
+                className={`px-2 py-0.5 rounded border font-mono transition cursor-pointer ${
+                  focalDateStr === targetFromDate
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60 font-bold'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                Start ({targetFromDate.slice(5)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocalDateStr(rangeMidpointStr)}
+                className={`px-2 py-0.5 rounded border font-mono transition cursor-pointer ${
+                  focalDateStr === rangeMidpointStr
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60 font-bold'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                Midpoint ({rangeMidpointStr.slice(5)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocalDateStr(targetToDate)}
+                className={`px-2 py-0.5 rounded border font-mono transition cursor-pointer ${
+                  focalDateStr === targetToDate
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60 font-bold'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                End ({targetToDate.slice(5)})
+              </button>
+              <input
+                type="date"
+                value={effectiveFocalDate.toISOString().slice(0, 10)}
+                onChange={(e) => setFocalDateStr(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-cyan-300 font-mono focus:outline-none focus:border-cyan-400 cursor-pointer"
+                title="Pick exact focal day to evaluate Gochara"
+              />
+            </div>
           </div>
+
+          {/* Active Mars Gochara Status Banner */}
+          {marsPlanet && (
+            <div className={`p-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${
+              marsPlanet.transit_rashi_index === 5
+                ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+                : marsPlanet.transit_rashi_index === 4
+                ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                : 'bg-slate-900 border-slate-800 text-slate-300'
+            }`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-300">
+                  Mars (Sevvai) Real Gochara:
+                </span>
+                <span className="font-semibold text-white text-[11px]">
+                  {marsPlanet.transit_rashi_name} (Sign {marsPlanet.transit_rashi_index}) &bull; House {marsPlanet.relative_to_natal_lagna.house_number} from Natal Lagna &bull; {marsPlanet.graha_pada_chara.chara_summary}
+                  {marsPlanet.is_retrograde ? ' [Vakra / Retrograde]' : ' [Direct Motion]'}
+                </span>
+              </div>
+              <div className="text-[11px] font-mono">
+                {marsPlanet.transit_rashi_index === 5 ? (
+                  <span className="text-emerald-400 font-bold">✓ In Simham (Leo / House 9) &bull; Mars has cleared 8th house (Cancer)</span>
+                ) : marsPlanet.transit_rashi_index === 4 ? (
+                  <span className="text-rose-400 font-bold">⚠ In Katakam (Cancer / House 8) &bull; {marsPlanet.is_retrograde ? 'Vakra Ingress Loop' : 'Debilitated'}</span>
+                ) : (
+                  <span>House {marsPlanet.relative_to_natal_lagna.house_number}</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 9 Graha Sky Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2">

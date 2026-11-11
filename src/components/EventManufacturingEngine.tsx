@@ -566,13 +566,12 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
 
       const grahaMap = new Map<string, ActiveTransitGrahaDetail>();
 
-      // A. Match Current Transits in this sign (from transitPlacements)
+      // A. Match Current Transits in this sign (strictly by astronomical zodiac sign index)
       for (const t of (transitPlacements || [])) {
         const signMatch = (
           t.transit_rashi_index === rIdx ||
           t.signIndex === rIdx ||
-          t.sign_index === rIdx ||
-          t.relative_to_natal_lagna?.house_number === hLagna
+          t.sign_index === rIdx
         );
         if (signMatch) {
           const gKey = t.graha_key || t.graha_name;
@@ -716,8 +715,8 @@ ${gateDetails.map((g, idx) => {
 1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
 2. Transiting Grahas in an entry gate establish the structural potential.
 3. [THE CRITICAL CHANDRA (MOON) 2.5-DAY IGNITION & LATENCY LAW]:
-   - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. Mars in Ashlesha produces simmering internal heat but no acute vertigo). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
-   - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g., Mars in Ashlesha produces acute BPP / vertigo, acid flare-up, or sharp inflammation; Venus awakens luxury impulse into actual expenditure). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
+   - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. transiting planets create simmering internal pressure or background potential without acute externalization). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
+   - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g. the transiting planets in the active gate ignite into an acute physical symptom, decisive financial breakthrough, or urgent structural event). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
 4. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
 5. Manufacture 4 to 6 authentic, specific events that will manifest during this period based on the planets crossing these gates, their Moon support status, and each gate's chosen perspective. Include BOTH high-probability acute events (with Moon support) and dormant events (without Moon support).
 6. For each event, provide:

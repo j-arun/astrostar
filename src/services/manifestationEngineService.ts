@@ -301,7 +301,7 @@ JSON OUTPUT FORMAT:
       "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
       "probabilityScore": 85,
       "portfolio": "Work",
-      "gateTrigger": "${gates[0]?.nakshatraName || 'Ashlesha'} (Gate 1)",
+      "gateTrigger": "${gates[0]?.nakshatraName || 'Active Nakshatra Gate'} (Gate 1)",
       "hasMoonSupport": true,
       "moonWindowDates": "${gates[0]?.moonWindow || 'Target Date Window'}",
       "latencyStatus": "acute_moon_triggered"
@@ -437,7 +437,7 @@ In the prompt you write:
       "narrative": "Crisp 1-to-2 line physical or experiential manifestation statement.",
       "probabilityScore": 85,
       "portfolio": "Work",
-      "gateTrigger": "${gates[0]?.nakshatraName || 'Ashlesha'} (Gate 1)",
+      "gateTrigger": "${gates[0]?.nakshatraName || 'Active Nakshatra Gate'} (Gate 1)",
       "hasMoonSupport": true,
       "moonWindowDates": "${gates[0]?.moonWindow || 'Target Date'}",
       "latencyStatus": "acute_moon_triggered"

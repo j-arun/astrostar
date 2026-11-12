@@ -288,8 +288,10 @@ ${skySection}
 [SYNTHESIS MANDATE (VERSION 1.0 BASELINE)]:
 1. Synthesize the native's actual age (${nativeProfile.age}) and focus domains (${focusList}) against the real sky transit delivery and Dasha rulers for the date range ${dateSpanDisplay}.
 2. Ground predictions in historical and real-world realities: avoid juvenile or elderly clichés unless age warrants.
-3. Apply the Moon 2.5-day Ignition Law: If Moon triggers a gate in this horizon (${moonDeliveryStatus?.isIgnitingGate ? 'ACTIVE' : 'DORMANT'}), events are ACUTE (70-95% probability, latencyStatus: "acute_moon_triggered"). If Moon is outside the gates, events are DORMANT/LATENT (25-45% probability, latencyStatus: "dormant_latent").
-4. Output 4 to 6 specific, tangible event predictions in JSON format.
+4. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE INVENTORY):
+   Do NOT limit yourself to only 6 events. Output an exhaustive array of ALL possible events (generate 10 to 18+ specific events) across all life portfolios: Work, Health, Money, Life, Love, Friends, Trip.
+5. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
+   Order the "events" array strictly descending by probabilityScore (e.g. 95%, 90%, 85%, 80% acute Moon ignition triggers first, followed by medium probability 65%, 60%, down to dormant/latent background potentials 40%, 35%, 25%). The highest-likelihood events must appear at the top.
 
 JSON OUTPUT FORMAT:
 {
@@ -427,7 +429,7 @@ In the prompt you write:
 1. Ground the public LLM in the native's exact age (${nativeProfile.age}), historical target horizon (${dateSpanDisplay}), and current life stakes (${focusList}), explicitly warning it to avoid juvenile or geriatric clichés unless age warrants.
 2. Embed the actual sky positions and the delivering hand (${pdLord}) operating through these 3 gates to explain how these transits manifest in reality across this date range.
 3. Explicitly define the Chandra (Moon) 2.5-Day Acute Ignition Law (70-95% probability during Moon window, latencyStatus: "acute_moon_triggered") versus dormant latent potentials (25-45% probability, latencyStatus: "dormant_latent").
-4. Demand a strict JSON response containing an array of 4 to 6 specific event cards matching this schema:
+4. Demand a strict JSON response containing an exhaustive inventory of ALL possible event cards (generate 10 to 18+ specific events), ordered strictly by highest probabilityScore descending (most likely / highest probability first):
 {
   "deliveringHand": "${pdLord}",
   "events": [

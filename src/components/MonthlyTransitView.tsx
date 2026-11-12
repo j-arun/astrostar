@@ -189,7 +189,7 @@ export function calculateGrahaDrishti(
 export interface MonthlyTransitViewProps {
   personId?: string;
   initialViewMode?: 'grid' | 'report';
-  onNavigateToPredictionStudio?: (context: VedicHouseContext) => void;
+  onNavigateToPredictionStudio?: (context: VedicHouseContext, provider?: LLMProviderId) => void;
 }
 
 export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
@@ -545,7 +545,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
 
 
   // Milestone M4: Multi-LLM Provider & Audio Voice Inspector States
-  const [selectedLlmProvider, setSelectedLlmProvider] = useState<LLMProviderId>('local_qwen');
+  const [selectedLlmProvider, setSelectedLlmProvider] = useState<LLMProviderId>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? (localStorage.getItem('astro_llm_provider') as LLMProviderId) : null;
+      if (saved && LLM_PROVIDERS[saved]) return saved;
+    } catch {}
+    return 'gemini_pro';
+  });
   const [inspectorHouseContext, setInspectorHouseContext] = useState<VedicHouseContext | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
   const [reportAutoRunTimestamp, setReportAutoRunTimestamp] = useState<number | undefined>(undefined);
@@ -985,17 +991,18 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         generateDashaLordDossier('Antardasha (AD)', activeDashaHierarchy.antardasha, natalLagnaIdx, undefined, flattenedD1),
         generateDashaLordDossier('Pratyantardasha (PD)', activeDashaHierarchy.pratyantardasha, natalLagnaIdx, undefined, flattenedD1)
       ],
-      geminiApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || undefined,
+      geminiApiKey: geminiKeyInput || (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || undefined,
       geminiModel: getPreferredGeminiModel(),
       anthropicApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined,
-      anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5'
+      anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5',
+      preferredLlmProvider: overrideProvider || selectedLlmProvider
     };
 
     setInspectorHouseContext(ctx);
     setIsInspectorOpen(false);
 
     if (onNavigateToPredictionStudio && autoRun) {
-      onNavigateToPredictionStudio(ctx);
+      onNavigateToPredictionStudio(ctx, overrideProvider || selectedLlmProvider);
       return;
     }
 
@@ -1223,6 +1230,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 onChange={(e) => {
                   const newProv = e.target.value as LLMProviderId;
                   setSelectedLlmProvider(newProv);
+                  localStorage.setItem('astro_llm_provider', newProv);
                 }}
                 className="bg-transparent text-[11px] font-semibold text-slate-200 focus:outline-none cursor-pointer pr-1"
                 title="Select Multi-LLM Reasoning Engine Provider"
@@ -1673,7 +1681,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             runTriggerTimestamp={reportAutoRunTimestamp}
             onChangeProvider={(newProv) => {
               setSelectedLlmProvider(newProv);
-              handleOpenMonthlyReport(newProv, false);
+              localStorage.setItem('astro_llm_provider', newProv);
+              setReportAutoRunTimestamp(Date.now());
             }}
           />
         </div>
@@ -2306,6 +2315,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           transitPlacements={transitPlacements}
           monthlyMoonSpans={monthlyMoonSpans}
           monthlyGrahaSpans={monthlyGrahaSpans}
+          geminiApiKey={geminiKeyInput}
+          anthropicApiKey={(typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined}
         />
       )}
         </>

@@ -285,6 +285,7 @@ export interface VedicHouseContext {
   geminiModel?: string;
   anthropicApiKey?: string;
   anthropicModel?: string;
+  preferredLlmProvider?: LLMProviderId;
   anthropicThinkingMode?: 'disabled' | 'enabled' | 'auto';
   anthropicBudgetTokens?: number;
   abortSignal?: AbortSignal;

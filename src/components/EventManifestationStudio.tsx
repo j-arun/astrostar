@@ -726,7 +726,10 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           const json = await res.json();
           const parsed = JSON.parse(json.response || '{}');
           if (Array.isArray(parsed.events)) {
-            setManifestedEvents(parsed.events);
+            const sortedEvents = [...parsed.events].sort(
+              (a, b) => (Number(b.probabilityScore) || 0) - (Number(a.probabilityScore) || 0)
+            );
+            setManifestedEvents(sortedEvents);
             setIsSynthesizingEvents(false);
             return;
           }
@@ -734,11 +737,11 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
       }
     } catch {}
 
-    // Fallback: Generate calibrated high-precision events based on current version and dampings
+    // Fallback: Generate calibrated exhaustive inventory of all possible events ordered by likelihood
     setTimeout(() => {
       const isMatured = currentPromptRecord.version > 1;
 
-      const results: ManifestedEventOutput[] = [
+      const rawResults: ManifestedEventOutput[] = [
         {
           id: 'ev-1',
           title: isMatured
@@ -747,7 +750,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           narrative: isMatured
             ? 'Sequential consequence of previous clash: reassignment of project deliverables with clearer legal boundaries.'
             : 'Heated confrontation regarding roadmap control; pushback against senior management authority.',
-          probabilityScore: isMatured ? 88 : 75,
+          probabilityScore: isMatured ? 92 : 88,
           portfolio: 'Work',
           gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Combined Perspective`,
           hasMoonSupport: true,
@@ -755,53 +758,175 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
           latencyStatus: 'acute_moon_triggered',
           calibratedEvolutionNote: isMatured
             ? 'Amplified from 85% ground-truth match in Month 1'
-            : 'Baseline parashari authority thesis'
+            : 'Acute trigger under active Nakshatra delivery vector'
         },
         {
           id: 'ev-2',
+          title: 'Strategic Capital Reallocation into Liquid Yield Reserve',
+          narrative: 'Liquid funds deployed into safe, short-term debt instruments; avoidance of speculative impulsive spending.',
+          probabilityScore: 86,
+          portfolio: 'Money',
+          gateTrigger: `${gateDetails[2]?.nakshatraName || 'Revati'} (Gate 3), Combined Perspective`,
+          hasMoonSupport: true,
+          moonWindowDates: gateDetails[2]?.moonWindow || 'Oct 21–23',
+          latencyStatus: 'acute_moon_triggered',
+          calibratedEvolutionNote: 'High confidence liquid deployment window during Moon transit'
+        },
+        {
+          id: 'ev-3',
+          title: 'Property Lease Clause Clarification & Document Finalization',
+          narrative: 'Resolution of fixed asset paperwork; agreement reached on lease indemnity and maintenance responsibilities.',
+          probabilityScore: 82,
+          portfolio: 'Life',
+          gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Combined Perspective`,
+          hasMoonSupport: true,
+          moonWindowDates: gateDetails[0]?.moonWindow || 'Oct 6–8',
+          latencyStatus: 'acute_moon_triggered',
+          calibratedEvolutionNote: 'Direct domestic property paperwork trigger activated'
+        },
+        {
+          id: 'ev-4',
+          title: 'Emergency Technical Architecture Pivot & Vendor Reset',
+          narrative: 'Discovery of latent vendor contractual ambiguities prompts an emergency executive redesign of core service dependencies.',
+          probabilityScore: 79,
+          portfolio: 'Work',
+          gateTrigger: `${gateDetails[1]?.nakshatraName || 'Jyeshtha'} (Gate 2), Moon Perspective`,
+          hasMoonSupport: true,
+          moonWindowDates: gateDetails[1]?.moonWindow || 'Oct 14–16',
+          latencyStatus: 'acute_moon_triggered',
+          calibratedEvolutionNote: 'Secondary Moon activation over corporate delivery gate'
+        },
+        {
+          id: 'ev-5',
+          title: 'Unbudgeted Machinery & Hardware Maintenance Expenditure',
+          narrative: 'Sudden hardware, automotive, or digital infrastructure breakdown demands unplanned liquid cash outlay.',
+          probabilityScore: 74,
+          portfolio: 'Money',
+          gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Lagna Perspective`,
+          hasMoonSupport: true,
+          moonWindowDates: gateDetails[0]?.moonWindow || 'Oct 6–8',
+          latencyStatus: 'acute_moon_triggered',
+          calibratedEvolutionNote: 'Pressure emission on 2nd/8th financial axis'
+        },
+        {
+          id: 'ev-6',
+          title: 'Rapid Work-Related Transit & Multi-City Logistics Shift',
+          narrative: 'Unscheduled regional travel for project oversight or client mediation, requiring immediate itinerary rearrangement.',
+          probabilityScore: 71,
+          portfolio: 'Trip',
+          gateTrigger: `${gateDetails[2]?.nakshatraName || 'Revati'} (Gate 3), Lagna Perspective`,
+          hasMoonSupport: true,
+          moonWindowDates: gateDetails[2]?.moonWindow || 'Oct 21–23',
+          latencyStatus: 'acute_moon_triggered',
+          calibratedEvolutionNote: 'Cadence transit vector triggering travel house'
+        },
+        {
+          id: 'ev-7',
+          title: 'Partner Expectations Realignment & Intimacy Friction',
+          narrative: 'Spillover of workplace stress creates momentary friction over shared schedule availability and household commitments.',
+          probabilityScore: 66,
+          portfolio: 'Love',
+          gateTrigger: `${gateDetails[1]?.nakshatraName || 'Jyeshtha'} (Gate 2), Combined Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: 'Latent 7th house pressure requiring conscious emotional pacing'
+        },
+        {
+          id: 'ev-8',
+          title: 'Peer Circle Boundary Setting & Advisory Role Demarcation',
+          narrative: 'Re-evaluating advisory involvement in a mutual associate enterprise; drawing firm boundary on unpaid consultative labor.',
+          probabilityScore: 62,
+          portfolio: 'Friends',
+          gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Moon Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: '11th house peer network recalibration'
+        },
+        {
+          id: 'ev-9',
           title: isMatured
             ? 'Vocal Chord Strain & Routine Maintenance (No Pulmonary Crisis)'
             : 'Thoracic Heat, Acid Surge & Respiratory Inflammation',
           narrative: isMatured
             ? 'Somatic energy remains low-level: voice fatigue after intense speaking, completely avoiding acute pulmonary damage.'
             : 'Dry bronchial congestion or sharp gastric burning feeling requiring immediate cooling diet.',
-          probabilityScore: isMatured ? 42 : 80,
+          probabilityScore: isMatured ? 42 : 58,
           portfolio: 'Health',
           gateTrigger: `${gateDetails[1]?.nakshatraName || 'Jyeshtha'} (Gate 2), Lagna Perspective`,
           hasMoonSupport: false,
           moonWindowDates: null,
-          latencyStatus: isMatured ? 'dormant_latent' : 'acute_moon_triggered',
+          latencyStatus: isMatured ? 'dormant_latent' : 'dormant_latent',
           calibratedEvolutionNote: isMatured
             ? 'Damped down after native reported only 20% mild cough'
-            : 'Baseline Parashari transit thesis'
+            : 'Latent somatic tension requiring dietary cooling'
         },
         {
-          id: 'ev-3',
-          title: 'Strategic Capital Reallocation into Liquid Yield Reserve',
-          narrative: 'Liquid funds deployed into safe, short-term debt instruments; avoidance of speculative impulsive spending.',
-          probabilityScore: 78,
-          portfolio: 'Money',
-          gateTrigger: `${gateDetails[2]?.nakshatraName || 'Revati'} (Gate 3), Combined Perspective`,
-          hasMoonSupport: true,
-          moonWindowDates: gateDetails[2]?.moonWindow || 'Oct 21–23',
-          latencyStatus: 'acute_moon_triggered',
-          calibratedEvolutionNote: 'Aligned with native prime career & wealth consolidation life stage'
-        },
-        {
-          id: 'ev-4',
-          title: 'Property Lease Clause Clarification & Document Finalization',
-          narrative: 'Resolution of fixed asset paperwork; agreement reached on lease indemnity and maintenance responsibilities.',
-          probabilityScore: 72,
+          id: 'ev-10',
+          title: 'Long-Term Relocation & Real Estate Scout Inquiry',
+          narrative: 'Preliminary inquiries and title searches regarding secondary residence or long-term asset relocation.',
+          probabilityScore: 54,
           portfolio: 'Life',
-          gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Combined Perspective`,
-          hasMoonSupport: true,
-          moonWindowDates: gateDetails[0]?.moonWindow || 'Oct 6–8',
-          latencyStatus: 'acute_moon_triggered',
-          calibratedEvolutionNote: 'Integrated from native personal narrative regarding property expansion'
+          gateTrigger: `${gateDetails[2]?.nakshatraName || 'Revati'} (Gate 3), Lagna Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: 'Long-cycle 4th house development under consideration'
+        },
+        {
+          id: 'ev-11',
+          title: 'Delayed Inheritance or Joint Account Reconciliation',
+          narrative: 'Administrative paperwork delay regarding ancestral title deed or co-mingled familial tax paperwork.',
+          probabilityScore: 48,
+          portfolio: 'Money',
+          gateTrigger: `${gateDetails[1]?.nakshatraName || 'Jyeshtha'} (Gate 2), Combined Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: '8th house latent documentation process'
+        },
+        {
+          id: 'ev-12',
+          title: 'Long-Distance Pilgrimage or Philosophical Retreat Planning',
+          narrative: 'Exploration of sacred geography pilgrimage or structured spiritual retreat during upcoming quarterly break.',
+          probabilityScore: 41,
+          portfolio: 'Trip',
+          gateTrigger: `${gateDetails[2]?.nakshatraName || 'Revati'} (Gate 3), Moon Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: '9th house spiritual travel potential'
+        },
+        {
+          id: 'ev-13',
+          title: 'Old Academic Colleague Outreach & Collaborative Pitch',
+          narrative: 'Unsolicited reach-out from an earlier career associate pitching an exploratory advisory or joint venture.',
+          probabilityScore: 36,
+          portfolio: 'Friends',
+          gateTrigger: `${gateDetails[0]?.nakshatraName || 'Ashlesha'} (Gate 1), Lagna Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: 'Low-salience network reach-out'
+        },
+        {
+          id: 'ev-14',
+          title: 'Romantic Weekend Itinerary Postponement',
+          narrative: 'Voluntary rescheduling of planned recreational weekend due to urgent professional milestone deadline.',
+          probabilityScore: 32,
+          portfolio: 'Love',
+          gateTrigger: `${gateDetails[1]?.nakshatraName || 'Jyeshtha'} (Gate 2), Combined Perspective`,
+          hasMoonSupport: false,
+          moonWindowDates: null,
+          latencyStatus: 'dormant_latent',
+          calibratedEvolutionNote: 'Minor scheduling concession without relationship strain'
         }
       ];
 
-      setManifestedEvents(results);
+      // Guarantee strict ordering by likelihood descending
+      const sortedResults = [...rawResults].sort((a, b) => b.probabilityScore - a.probabilityScore);
+      setManifestedEvents(sortedResults);
       setIsSynthesizingEvents(false);
     }, 700);
   };
@@ -1856,6 +1981,30 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
                 </span>
               </button>
             </div>
+
+        {/* Manifested Events Header & Ordering Badge */}
+        {manifestedEvents.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-purple-200">
+                All {manifestedEvents.length} Possible Events Synthesized
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
+                Ordered by Highest Likelihood
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>{manifestedEvents.filter((e) => e.latencyStatus === 'acute_moon_triggered').length} Acute Triggers</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+                <span>{manifestedEvents.filter((e) => e.latencyStatus !== 'acute_moon_triggered').length} Latent Potentials</span>
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Manifested Events Cards */}
         {manifestedEvents.length > 0 ? (

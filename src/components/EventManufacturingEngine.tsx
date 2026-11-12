@@ -123,6 +123,8 @@ interface EventManufacturingEngineProps {
   transitPlacements: any[];
   monthlyMoonSpans: any[];
   monthlyGrahaSpans?: any[];
+  geminiApiKey?: string;
+  anthropicApiKey?: string;
 }
 
 // 9 Planetary Lords & their 3 Nakshatra Gates
@@ -268,7 +270,7 @@ function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
       moonWindowDates,
       latencyStatus
     };
-  });
+  }).sort((a, b) => b.probabilityScore - a.probabilityScore);
 }
 
 export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> = ({
@@ -282,7 +284,9 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   flattenedD1,
   transitPlacements,
   monthlyMoonSpans,
-  monthlyGrahaSpans
+  monthlyGrahaSpans,
+  geminiApiKey: propsGeminiApiKey,
+  anthropicApiKey: propsAnthropicApiKey
 }) => {
   // 1. Dasha Hierarchy State: MD, AD, and Delivering Hand (PD or AD)
   const [selectedMd, setSelectedMd] = useState<string>(() => {
@@ -484,13 +488,25 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   // Model & Provider Selection (Google Gemini / Anthropic Claude / Local Qwen)
   const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('gemini_pro');
   
-  // API Keys: Google Gemini & Anthropic Claude (synced with localStorage)
+  // API Keys: Google Gemini & Anthropic Claude (synced with parent props and localStorage)
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
+    return propsGeminiApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
   });
   const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
+    return propsAnthropicApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || '';
   });
+
+  React.useEffect(() => {
+    if (propsGeminiApiKey && propsGeminiApiKey !== geminiApiKey) {
+      setGeminiApiKey(propsGeminiApiKey);
+    }
+  }, [propsGeminiApiKey]);
+
+  React.useEffect(() => {
+    if (propsAnthropicApiKey && propsAnthropicApiKey !== anthropicApiKey) {
+      setAnthropicApiKey(propsAnthropicApiKey);
+    }
+  }, [propsAnthropicApiKey]);
 
   const [isTestingGemini, setIsTestingGemini] = useState<boolean>(false);
   const [geminiTestFeedback, setGeminiTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
@@ -718,8 +734,15 @@ ${gateDetails.map((g, idx) => {
    - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. transiting planets create simmering internal pressure or background potential without acute externalization). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
    - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g. the transiting planets in the active gate ignite into an acute physical symptom, decisive financial breakthrough, or urgent structural event). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
 4. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
-5. Manufacture 4 to 6 authentic, specific events that will manifest during this period based on the planets crossing these gates, their Moon support status, and each gate's chosen perspective. Include BOTH high-probability acute events (with Moon support) and dormant events (without Moon support).
-6. For each event, provide:
+5. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE FULL INVENTORY):
+   Do NOT restrict yourself to only 6 events! Generate an exhaustive, granular inventory of ALL possible events (generate 10 to 18+ specific events) that can manifest across all 7 life portfolios: Health, Work, Money, Life, Love, Friends, Trip. Include every possible physical, contractual, financial, anatomical, and relational consequence under the 3 Nakshatra entry gates and the AD Pressure Chamber.
+6. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
+   The "events" array MUST BE STRICTLY ORDERED from highest probability to lowest probability:
+   - High Likelihood / Acute Triggers first (probabilityScore: 95, 90, 85, 80, 75, 70)
+   - Followed by Moderate / Latent Potentials (probabilityScore: 65, 60, 55, 50)
+   - Followed by Low / Dormant Potentials (probabilityScore: 45, 40, 35, 25)
+   The most probable events must always appear at the top of the array!
+7. For each event, provide:
    - title: Direct headline of the event
    - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
    - probabilityScore: Realistic integer probability (e.g. 75, 80, 85 for acute Moon triggers; 30, 35, 40 for dormant potentials)
@@ -1717,6 +1740,26 @@ Return ONLY a valid JSON object matching this schema:
         {/* LIST OF EVENTS GENERATED BY LLM */}
         {!isSynthesizing && manufacturedEvents.length > 0 && (
           <div className="space-y-3">
+            <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-950 border border-purple-500/40 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-black uppercase text-purple-200 tracking-wider">
+                  Showing All {manufacturedEvents.length} Possible Events
+                </span>
+                <span className="text-[11px] font-mono text-amber-300 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                  Ranked by Highest Likelihood
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                  {manufacturedEvents.filter(e => e.isHighProbability).length} High Likelihood (Acute)
+                </span>
+                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                  {manufacturedEvents.filter(e => !e.isHighProbability).length} Latent / Dormant
+                </span>
+              </div>
+            </div>
+
             {manufacturedEvents.map((event, idx) => (
               <div
                 key={event.id}

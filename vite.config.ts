@@ -1075,12 +1075,16 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
               return;
             }
 
-            // Normalize models to valid @google/genai SDK aliases
-            let targetModel = requestedModel || GEMINI_PRIMARY_MODEL;
-            if (targetModel === 'gemini_pro' || targetModel === 'gemini-pro' || targetModel === 'gemini-2.5-pro') {
-              targetModel = 'gemini-4-argon';
+            // 3-Tier Free Tier Architecture for Google Gemini
+            // Tier 1: Flagship Free-Tier Pro-Grade synthesis (gemini-flash-latest / gemini-3.8-flash)
+            // Tier 2: Dedicated Pro Model if billed project available (gemini-2.5-pro / gemini-4-argon)
+            // Tier 3: High-speed resilient fallback (gemini-3.1-flash-lite)
+            let targetModel = requestedModel || 'gemini-flash-latest';
+            if (targetModel === 'gemini_pro' || targetModel === 'gemini-pro') {
+              // Free tier Gemini Pro: defaults to flagship free-tier model with 3-tier cascade
+              targetModel = 'gemini-flash-latest';
             } else if (targetModel === 'gemini-2.5-flash' || targetModel === 'gemini-2.0-flash' || targetModel === 'gemini-1.5-flash') {
-              targetModel = GEMINI_PRIMARY_MODEL;
+              targetModel = 'gemini-flash-latest';
             }
 
             const { GoogleGenAI } = await import('@google/genai');
@@ -1095,24 +1099,42 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
 
             // If this is a lightweight test ping to verify key health
             if (isTestPing || prompt === 'ping' || prompt === 'hi') {
-              try {
-                const pingRes = await ai.models.generateContent({
-                  model: targetModel,
-                  contents: 'Say hello in 3 words to confirm Gemini API key connection.',
-                  config: { maxOutputTokens: 15 }
-                });
+              const pingCandidates = [
+                'gemini-flash-latest',
+                'gemini-3.8-flash',
+                'gemini-3.1-flash-lite'
+              ];
+              let pingRes: any = null;
+              let usedPingModel = targetModel;
+              let lastPingErr: any = null;
+
+              for (const pModel of pingCandidates) {
+                try {
+                  pingRes = await ai.models.generateContent({
+                    model: pModel,
+                    contents: 'Say hello in 3 words to confirm Gemini API key connection.',
+                    config: { maxOutputTokens: 15 }
+                  });
+                  usedPingModel = pModel;
+                  break;
+                } catch (pErr: any) {
+                  lastPingErr = pErr;
+                }
+              }
+
+              if (pingRes) {
                 res.statusCode = 200;
                 res.end(JSON.stringify({
                   success: true,
                   status: 'OK',
-                  message: `Gemini API Key Verified & Connected (${targetModel})`,
-                  model: pingRes.modelVersion || targetModel,
+                  message: `Gemini API Key Verified & Connected (${pingRes.modelVersion || usedPingModel}) [Free-Tier 3-Tier Mode Active]`,
+                  model: pingRes.modelVersion || usedPingModel,
                   sampleResponse: pingRes.text
                 }));
                 return;
-              } catch (pingErr: any) {
+              } else {
                 res.statusCode = 400;
-                let errDetail = pingErr.message || 'Gemini Key Ping Failed';
+                let errDetail = lastPingErr?.message || 'Gemini Key Ping Failed';
                 try {
                   const parsed = JSON.parse(errDetail);
                   if (parsed.error?.message) {
@@ -1134,9 +1156,9 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
             const candidateModels = Array.from(new Set([
               targetModel,
               'gemini-flash-latest',
-              'gemini-4-argon',
-              GEMINI_PRIMARY_MODEL,
-              GEMINI_FALLBACK_MODEL
+              'gemini-3.8-flash',
+              'gemini-3.1-flash-lite',
+              'gemini-4-argon'
             ]));
 
             let lastError: any = null;
@@ -1160,6 +1182,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                   if (isRetryable && attempt === 1) {
                     await new Promise(r => setTimeout(r, 800));
                   } else {
+                    // Try next model in 3-tier cascade
                     break;
                   }
                 }
@@ -1194,9 +1217,12 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
             ) {
               statusCode = 401;
               errorMsg = 'Google Gemini Authentication Error (401 UNAUTHENTICATED): The service account bound to this API key is deleted or disabled. Please enter an active Gemini API Key from https://aistudio.google.com/apikey in the Gemini Key settings.';
-            } else if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('INVALID_ARGUMENT')) {
+            } else if (errorMsg.includes('API key not valid') || errorMsg.includes('API_KEY_INVALID') || (errorMsg.includes('INVALID_ARGUMENT') && (errorMsg.toLowerCase().includes('key') || errorMsg.toLowerCase().includes('credential')))) {
               statusCode = 400;
               errorMsg = 'Invalid Gemini API Key: Google Generative AI rejected the key with 400 INVALID_ARGUMENT. Please check your Gemini API key at https://aistudio.google.com/apikey and paste it into the Gemini Key input.';
+            } else if (errorMsg.includes('INVALID_ARGUMENT')) {
+              statusCode = 400;
+              errorMsg = `Gemini Request Error (400 INVALID_ARGUMENT): ${errorMsg}`;
             } else if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota') || errorMsg.includes('429')) {
               statusCode = 429;
               errorMsg = 'Gemini Quota Exceeded (429 RESOURCE_EXHAUSTED): Rate limit or quota ceiling reached. Verify that your API key is created inside a Google Cloud Project with billing enabled at https://aistudio.google.com/apikey.';

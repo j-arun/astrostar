@@ -39,7 +39,7 @@ import { MonthlyTransitView } from './components/MonthlyTransitView';
 import { PredictionStudio } from './components/PredictionStudio';
 import SettingsStudio from './components/SettingsStudio';
 import { EventManifestationStudio } from './components/EventManifestationStudio';
-import { VedicHouseContext } from './services/llm/types';
+import { VedicHouseContext, LLMProviderId } from './services/llm/types';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
 // 0,0: Meenam (Pisces)   | 0,1: Mesham (Aries)   | 0,2: Rishabam (Taurus) | 0,3: Mithunam (Gemini)
@@ -78,6 +78,13 @@ export default function App() {
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
   const [incomingPredictionContext, setIncomingPredictionContext] = useState<VedicHouseContext | null>(null);
+  const [incomingPredictionProvider, setIncomingPredictionProvider] = useState<LLMProviderId>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? (localStorage.getItem('astro_llm_provider') as LLMProviderId) : null;
+      if (saved) return saved;
+    } catch {}
+    return 'gemini_pro';
+  });
 
   // Collapsible section toggles for South Indian Chart Visualizer (Sections 2, 3, 4)
   const [expandChartGrid, setExpandChartGrid] = useState<boolean>(true);
@@ -905,8 +912,13 @@ export default function App() {
             key={`${activePersonId}-grid`}
             personId={activePersonId}
             initialViewMode="grid"
-            onNavigateToPredictionStudio={(ctx) => {
+            onNavigateToPredictionStudio={(ctx, prov) => {
               setIncomingPredictionContext(ctx);
+              const targetProv = prov || ctx.preferredLlmProvider || 'gemini_pro';
+              setIncomingPredictionProvider(targetProv);
+              try {
+                localStorage.setItem('astro_llm_provider', targetProv);
+              } catch {}
               setActiveTab('report');
             }}
           />
@@ -918,7 +930,10 @@ export default function App() {
             key={`${activePersonId}-prediction-studio`}
             personId={activePersonId}
             incomingContext={incomingPredictionContext}
-            onClearIncomingContext={() => setIncomingPredictionContext(null)}
+            incomingProvider={incomingPredictionProvider}
+            onClearIncomingContext={() => {
+              setIncomingPredictionContext(null);
+            }}
           />
         )}
 

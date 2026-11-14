@@ -189,6 +189,7 @@ export interface MoonDeliveryStatus {
  * Generate Baseline Prompt V1.0 using Private LLM reasoning or Vedic compilation
  */
 import { ADChamberDynamics } from './dashaChamberEngine';
+import type { VedicWindowAnalysis } from './vedicEventsEngine';
 
 export function constructBaselinePromptTemplate(params: {
   nativeProfile: NativeManifestationProfile;
@@ -214,6 +215,7 @@ export function constructBaselinePromptTemplate(params: {
   skyPositions?: SkyPositionItem[];
   moonDeliveryStatus?: MoonDeliveryStatus;
   adChamberDynamics?: ADChamberDynamics;
+  vedicSpecialEvents?: VedicWindowAnalysis;
 }): string {
   const {
     nativeProfile,
@@ -230,7 +232,8 @@ export function constructBaselinePromptTemplate(params: {
     gates,
     skyPositions = [],
     moonDeliveryStatus,
-    adChamberDynamics
+    adChamberDynamics,
+    vedicSpecialEvents
   } = params;
 
   const dateSpanDisplay = targetFromDate && targetToDate
@@ -285,9 +288,11 @@ ${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 - Moon (Chandra) 2.5-Day Ignition Window: ${g.moonWindow || 'Standard 2.5-day trigger'}
 `).join('\n')}
 ${skySection}
+${vedicSpecialEvents?.promptMarkdownBlock ? `\n${vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
 [SYNTHESIS MANDATE (VERSION 1.0 BASELINE)]:
 1. Synthesize the native's actual age (${nativeProfile.age}) and focus domains (${focusList}) against the real sky transit delivery and Dasha rulers for the date range ${dateSpanDisplay}.
 2. Ground predictions in historical and real-world realities: avoid juvenile or elderly clichés unless age warrants.
+3. Explicitly evaluate any Same-Sign Retrograde↔Direct Stations, Parivartana mutual exchanges (Sign-Lord & Bhava), and Debilitation/Neecha Bhanga periods listed above.
 4. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE INVENTORY):
    Do NOT limit yourself to only 6 events. Output an exhaustive array of ALL possible events (generate 10 to 18+ specific events) across all life portfolios: Work, Health, Money, Life, Love, Friends, Trip.
 5. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
@@ -340,6 +345,7 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
   skyPositions?: SkyPositionItem[];
   moonDeliveryStatus?: MoonDeliveryStatus;
   adChamberDynamics?: ADChamberDynamics;
+  vedicSpecialEvents?: VedicWindowAnalysis;
   localOllamaEndpoint?: string;
   localModelName?: string;
 }): Promise<{
@@ -365,6 +371,7 @@ export async function compileBaselinePromptWithPrivateLLM(params: {
     skyPositions = [],
     moonDeliveryStatus,
     adChamberDynamics,
+    vedicSpecialEvents,
     localOllamaEndpoint = 'http://localhost:11434',
     localModelName = 'qwen2.5:14b'
   } = params;
@@ -423,6 +430,7 @@ ${gates.map((g, idx) => `Gate ${idx + 1}: ${g.nakshatraName} in ${g.rashiName}
 - Moon (Chandra) 2.5-Day Ingress Window: ${g.moonWindow}
 `).join('\n')}
 ${skyContext}
+${vedicSpecialEvents?.promptMarkdownBlock ? `\n${vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
 [YOUR TASK AS PROMPT ENGINEER]:
 Compose the complete, ready-to-run prompt text that will be sent to the public LLM.
 In the prompt you write:

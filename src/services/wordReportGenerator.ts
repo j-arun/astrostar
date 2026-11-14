@@ -389,6 +389,19 @@ export function buildVedicWordContent(
   </table>
   ` : ''}
 
+  ${context.vedicSpecialEvents ? `
+  <div class="verdict-box" style="background-color: #f5f3ff; border-color: #8b5cf6;">
+    <strong style="color: #6d28d9; font-size: 10pt; text-transform: uppercase;">Special Window One-Liner (Parivartana, Neecha Bhanga &amp; Vakra↔Direct Stations):</strong><br>
+    <p style="font-size: 10.5pt; color: #1e1b4b; margin-top: 4pt; margin-bottom: 4pt;">
+      ${escapeHtml(context.vedicSpecialEvents.consolidatedOneLiner)}
+    </p>
+    ${context.vedicSpecialEvents.possibleEventsSummary.length > 0 ? `
+    <ul style="margin: 4pt 0 0 16pt; font-size: 9.5pt; color: #334155;">
+      ${context.vedicSpecialEvents.possibleEventsSummary.slice(0, 6).map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+    </ul>` : ''}
+  </div>
+  ` : ''}
+
   <div class="verdict-box">
     <strong style="color: #b45309; font-size: 10pt; text-transform: uppercase;">Bottom-Line Synthesis Verdict:</strong><br>
     <p style="font-size: 11pt; color: #0f172a; margin-top: 4pt; margin-bottom: 0;">

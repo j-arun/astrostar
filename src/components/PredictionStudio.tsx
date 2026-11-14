@@ -50,6 +50,12 @@ import {
 } from '../services/llm/adapters';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
+import {
+  CachedPredictionSummary,
+  CachedPredictionEntry,
+  listCachedPredictions,
+  loadCachedPrediction
+} from '../services/predictionCacheService';
 
 interface PredictionStudioProps {
   personId: string;
@@ -569,11 +575,38 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
 
   const [activeExecutionContext, setActiveExecutionContext] = useState<VedicHouseContext | null>(null);
   const [autoRunTriggerTimestamp, setAutoRunTriggerTimestamp] = useState<number | undefined>(undefined);
+  const [cachedReportList, setCachedReportList] = useState<CachedPredictionSummary[]>([]);
+  const [initialCachedEntry, setInitialCachedEntry] = useState<CachedPredictionEntry | null>(null);
+  const [loadingCachedId, setLoadingCachedId] = useState<string | null>(null);
   const bottomReportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listCachedPredictions()
+      .then(items => setCachedReportList(items))
+      .catch(() => {});
+  }, [activeExecutionContext]);
+
+  const handleOpenCachedReport = async (cacheId: string) => {
+    setLoadingCachedId(cacheId);
+    try {
+      const entry = await loadCachedPrediction(cacheId);
+      if (entry) {
+        setInitialCachedEntry(entry);
+        setAutoRunTriggerTimestamp(undefined);
+        setActiveExecutionContext(entry.context);
+        setTimeout(() => {
+          bottomReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+      }
+    } finally {
+      setLoadingCachedId(null);
+    }
+  };
 
   // If incoming context arrives from Monthly View ("Send Prompt to LLM"), sync provider and display it at bottom
   useEffect(() => {
     if (incomingContext) {
+      setInitialCachedEntry(null);
       const resolvedProv = incomingProvider || incomingContext.preferredLlmProvider;
       if (resolvedProv && LLM_PROVIDERS[resolvedProv]) {
         handleSelectProvider(resolvedProv);
@@ -593,6 +626,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const handleSynthesizeMultiYear = () => {
     if (timelineError) return;
 
+    setInitialCachedEntry(null);
     const ctx = buildCurrentVedicContext();
     setActiveExecutionContext(ctx);
     setAutoRunTriggerTimestamp(Date.now());
@@ -1131,22 +1165,57 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
             inlineView={true}
             onClose={() => {
               setActiveExecutionContext(null);
+              setInitialCachedEntry(null);
               if (onClearIncomingContext) onClearIncomingContext();
             }}
             context={activeExecutionContext}
             activeProvider={selectedProvider}
             runTriggerTimestamp={autoRunTriggerTimestamp}
             onChangeProvider={handleSelectProvider}
+            initialCachedEntry={initialCachedEntry}
           />
         ) : (
-          <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-500 space-y-2">
+          <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 sm:p-10 text-center text-slate-500 space-y-4">
             <Sparkles className="w-8 h-8 text-amber-500/40 mx-auto" />
-            <p className="text-sm font-semibold text-slate-400">
-              No Active Prediction Report Yet
-            </p>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Click <strong>&quot;Synthesize (Test LLM Engine)&quot;</strong> above to generate a continuous 1-to-2 year prediction, or click <strong>&quot;Send Prompt to LLM&quot;</strong> in Monthly View to display the monthly report here.
-            </p>
+            <div className="space-y-1.5">
+              <p className="text-sm font-semibold text-slate-300">
+                No Active Prediction Report Yet
+              </p>
+              <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                Click <strong>&quot;Synthesize (Test LLM Engine)&quot;</strong> above to generate a continuous 1-to-2 year prediction, click <strong>&quot;Send Prompt to LLM&quot;</strong> in Monthly View, or reopen a cached prediction JSON below to ask private follow-up questions with your local Ollama model.
+              </p>
+            </div>
+
+            {cachedReportList.length > 0 && (
+              <div className="pt-3 border-t border-slate-800/80 max-w-3xl mx-auto text-left space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-purple-300 text-center">
+                  Recent Cached Prediction JSONs (Ready for Local Ollama Q&amp;A)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {cachedReportList.slice(0, 6).map(item => (
+                    <button
+                      key={item.cacheId}
+                      type="button"
+                      disabled={loadingCachedId === item.cacheId}
+                      onClick={() => handleOpenCachedReport(item.cacheId)}
+                      className="p-3 rounded-xl bg-slate-950/90 hover:bg-slate-900 border border-purple-500/30 hover:border-amber-400/60 text-left transition cursor-pointer space-y-1 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-white truncate">
+                          {item.title}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-200 border border-purple-500/30 shrink-0">
+                          {loadingCachedId === item.cacheId ? 'Loading...' : item.modelUsed}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 line-clamp-2">
+                        {item.summaryPreview || item.dateRange}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

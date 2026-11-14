@@ -1645,6 +1645,150 @@ function docsServerPlugin(): Plugin {
           return;
         }
 
+        // 3b. GET /api/prediction-cache/list
+        if (pathname === '/api/prediction-cache/list' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          try {
+            const cacheCatalogPath = path.resolve(__dirname, 'docs/prediction_cache/catalog.json');
+            if (fs.existsSync(cacheCatalogPath)) {
+              const items = JSON.parse(fs.readFileSync(cacheCatalogPath, 'utf-8'));
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, items: Array.isArray(items) ? items : [] }));
+              return;
+            }
+          } catch (e: any) {
+            console.error('Error reading prediction cache catalog:', e);
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, items: [] }));
+          return;
+        }
+
+        // 3c. GET /api/prediction-cache/load?id=...
+        if (pathname === '/api/prediction-cache/load' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          const rawId = urlObj.searchParams.get('id') || '';
+          const safeId = rawId.replace(/[^a-zA-Z0-9_-]/g, '');
+          if (!safeId) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: 'Missing or invalid cache id' }));
+            return;
+          }
+          try {
+            let jsonPath = path.resolve(__dirname, 'docs/prediction_cache', `${safeId}.json`);
+            if (!fs.existsSync(jsonPath)) {
+              jsonPath = path.resolve(__dirname, 'public/docs/prediction_cache', `${safeId}.json`);
+            }
+            if (fs.existsSync(jsonPath)) {
+              const entry = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, entry }));
+              return;
+            }
+          } catch (e: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: e.message || 'Failed to load cached prediction' }));
+            return;
+          }
+          res.statusCode = 404;
+          res.end(JSON.stringify({ success: false, error: 'Cached prediction not found' }));
+          return;
+        }
+
+        // 3d. POST /api/prediction-cache/save
+        if (pathname === '/api/prediction-cache/save' && req.method === 'POST') {
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); });
+          req.on('end', () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const bodyStr = Buffer.concat(chunks).toString('utf-8');
+              const payload = JSON.parse(bodyStr || '{}');
+              const cacheEntry = payload.cacheEntry;
+              const htmlContent: string | undefined = payload.htmlContent;
+
+              if (!cacheEntry || !cacheEntry.cacheId) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Missing cacheEntry.cacheId' }));
+                return;
+              }
+
+              const safeId = String(cacheEntry.cacheId).replace(/[^a-zA-Z0-9_-]/g, '');
+              if (!safeId) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Invalid cacheId' }));
+                return;
+              }
+
+              const cacheDir = path.resolve(__dirname, 'docs/prediction_cache');
+              const publicCacheDir = path.resolve(__dirname, 'public/docs/prediction_cache');
+              [cacheDir, publicCacheDir].forEach(d => {
+                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+              });
+
+              const htmlUrl = htmlContent ? `/docs/prediction_cache/${safeId}.html` : undefined;
+              const fullEntry = {
+                ...cacheEntry,
+                cacheId: safeId,
+                htmlUrl: htmlUrl || cacheEntry.htmlUrl
+              };
+
+              if (htmlContent) {
+                [cacheDir, publicCacheDir].forEach(d => {
+                  fs.writeFileSync(path.join(d, `${safeId}.html`), htmlContent, 'utf-8');
+                });
+              }
+
+              const entryJsonStr = JSON.stringify(fullEntry, null, 2);
+              [cacheDir, publicCacheDir].forEach(d => {
+                fs.writeFileSync(path.join(d, `${safeId}.json`), entryJsonStr, 'utf-8');
+              });
+
+              const summary = {
+                cacheId: safeId,
+                title: fullEntry.title,
+                scope: fullEntry.scope,
+                personId: fullEntry.personId,
+                personName: fullEntry.personName,
+                dateRange: fullEntry.dateRange,
+                providerUsed: fullEntry.providerUsed,
+                modelUsed: fullEntry.modelUsed,
+                createdAt: fullEntry.createdAt,
+                summaryPreview: fullEntry.summaryPreview,
+                htmlUrl: fullEntry.htmlUrl
+              };
+
+              const catalogPath = path.join(cacheDir, 'catalog.json');
+              const publicCatalogPath = path.join(publicCacheDir, 'catalog.json');
+              let existingCatalog: any[] = [];
+              if (fs.existsSync(catalogPath)) {
+                try {
+                  const parsed = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+                  if (Array.isArray(parsed)) existingCatalog = parsed;
+                } catch {}
+              }
+
+              const filtered = existingCatalog.filter((item: any) => item?.cacheId !== safeId);
+              const updatedCatalog = [summary, ...filtered].slice(0, 50);
+              const catalogStr = JSON.stringify(updatedCatalog, null, 2);
+              fs.writeFileSync(catalogPath, catalogStr, 'utf-8');
+              fs.writeFileSync(publicCatalogPath, catalogStr, 'utf-8');
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                cacheId: safeId,
+                htmlUrl: fullEntry.htmlUrl,
+                jsonUrl: `/docs/prediction_cache/${safeId}.json`
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err.message || 'Failed to save prediction cache' }));
+            }
+          });
+          return;
+        }
+
         // 4. Static handler for /docs/*
         if (pathname.startsWith('/docs/')) {
           const subPath = pathname.replace(/^\/docs\//, '');

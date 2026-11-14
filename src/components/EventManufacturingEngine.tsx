@@ -54,6 +54,7 @@ import { PersonMaster } from '../data/horoscopeData';
 import { PrivatePredictionChatbot } from './PrivatePredictionChatbot';
 import { computeADChamberDynamics, ADChamberDynamics } from '../services/dashaChamberEngine';
 import { ADChamberMatrixCard } from './ADChamberMatrixCard';
+import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -675,6 +676,22 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
     });
   }, [selectedAd, selectedHandKey, natalLagnaIdx, natalRashiIdx, flattenedD1, transitPlacements, monthlyMoonSpans]);
 
+  // 2C. Special Vedic Window Events (Parivartana, Neecha Bhanga, Same-Sign Stations)
+  const vedicSpecialEvents = useMemo(() => {
+    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const mStr = String(selectedMonth + 1).padStart(2, '0');
+    return analyzeVedicWindowEvents({
+      startDateStr: `${selectedYear}-${mStr}-01`,
+      endDateStr: `${selectedYear}-${mStr}-${String(daysInMonth).padStart(2, '0')}`,
+      natalLagnaIdx,
+      natalRashiIdx,
+      flattenedNatalD1: (flattenedD1 || []).map((p: any) => ({
+        body_name: p.body_name || '',
+        rashi_name: p.rashi_name || ''
+      }))
+    });
+  }, [selectedYear, selectedMonth, natalLagnaIdx, natalRashiIdx, flattenedD1]);
+
   // 3. Complete Raw Prompt Payload for LLM Execution with Per-Gate Perspectives
   const promptPayload = useMemo(() => {
     const monthName = MONTH_NAMES[selectedMonth] || 'Active Month';
@@ -727,6 +744,8 @@ ${gateDetails.map((g, idx) => {
 `;
 }).join('\n')}
 
+${vedicSpecialEvents.promptMarkdownBlock}
+
 [CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING & MOON TIMING]
 1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
 2. Transiting Grahas in an entry gate establish the structural potential.
@@ -734,15 +753,16 @@ ${gateDetails.map((g, idx) => {
    - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. transiting planets create simmering internal pressure or background potential without acute externalization). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
    - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g. the transiting planets in the active gate ignite into an acute physical symptom, decisive financial breakthrough, or urgent structural event). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
 4. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
-5. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE FULL INVENTORY):
-   Do NOT restrict yourself to only 6 events! Generate an exhaustive, granular inventory of ALL possible events (generate 10 to 18+ specific events) that can manifest across all 7 life portfolios: Health, Work, Money, Life, Love, Friends, Trip. Include every possible physical, contractual, financial, anatomical, and relational consequence under the 3 Nakshatra entry gates and the AD Pressure Chamber.
-6. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
+5. EVALUATE SAME-SIGN MOTION STATIONS, PARIVARTANA & NEECHA BHANGA: Explicitly manufacture concrete event cards for any active Parivartana (Sign-Lord & Bhava mutual exchange), Debilitation / Neecha Bhanga reversal, and Retrograde ↔ Direct same-sign motion shift listed above!
+6. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE FULL INVENTORY):
+   Do NOT restrict yourself to only 6 events! Generate an exhaustive, granular inventory of ALL possible events (generate 10 to 18+ specific events) that can manifest across all 7 life portfolios: Health, Work, Money, Life, Love, Friends, Trip. Include every possible physical, contractual, financial, anatomical, and relational consequence under the 3 Nakshatra entry gates, Special Yogas (Parivartana/Neecha Bhanga/Stations), and the AD Pressure Chamber.
+7. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
    The "events" array MUST BE STRICTLY ORDERED from highest probability to lowest probability:
    - High Likelihood / Acute Triggers first (probabilityScore: 95, 90, 85, 80, 75, 70)
    - Followed by Moderate / Latent Potentials (probabilityScore: 65, 60, 55, 50)
    - Followed by Low / Dormant Potentials (probabilityScore: 45, 40, 35, 25)
    The most probable events must always appear at the top of the array!
-7. For each event, provide:
+8. For each event, provide:
    - title: Direct headline of the event
    - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
    - probabilityScore: Realistic integer probability (e.g. 75, 80, 85 for acute Moon triggers; 30, 35, 40 for dormant potentials)
@@ -756,6 +776,7 @@ OUTPUT FORMAT REQUIREMENT:
 Return ONLY a valid JSON object matching this schema:
 {
   "deliveringHand": "${cleanHand}",
+  "specialEventsOneLiner": "${vedicSpecialEvents.consolidatedOneLiner.replace(/"/g, "'")}",
   "events": [
     {
       "id": "evt-1",
@@ -770,7 +791,7 @@ Return ONLY a valid JSON object matching this schema:
     }
   ]
 }`;
-  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, selectedMd, selectedAd, selectedHandKey, activeDashaHierarchy, gateDetails, gatePerspectives]);
+  }, [selectedMonth, selectedYear, natalLagnaIdx, natalRashiIdx, selectedMd, selectedAd, selectedHandKey, activeDashaHierarchy, gateDetails, gatePerspectives, adChamberDynamics, vedicSpecialEvents]);
 
   // Copy prompt helper
   const handleCopyPrompt = async () => {
@@ -1287,6 +1308,28 @@ Return ONLY a valid JSON object matching this schema:
           </div>
         </div>
       )}
+
+      {/* SPECIAL EVENTS ONE-LINER IN EVENT ENGINE */}
+      <div className="bg-gradient-to-r from-purple-950/50 via-indigo-950/40 to-amber-950/40 border border-purple-500/40 rounded-xl p-3 text-xs space-y-1 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-extrabold text-amber-300 text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <span>Month Parivartana, Neecha Bhanga &amp; Vakra↔Direct One-Liner ({MONTH_NAMES[selectedMonth]} {selectedYear})</span>
+          </span>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold">
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
+              {vedicSpecialEvents.parivartanaYogas.length} Parivartana
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+              {vedicSpecialEvents.debilitationEvents.length} Neecha Bhanga
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/40">
+              {vedicSpecialEvents.sameSignStations.length} Stations
+            </span>
+          </div>
+        </div>
+        <p className="text-slate-100 font-medium leading-relaxed">{vedicSpecialEvents.consolidatedOneLiner}</p>
+      </div>
 
       {/* SECTION 1: DELIVERING HAND & DASHA SELECTION (MD, AD, ALL 9 PDS) */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3.5 shadow-xl">
@@ -1847,6 +1890,7 @@ Return ONLY a valid JSON object matching this schema:
         gateDetails={gateDetails}
         manifestedEvents={manufacturedEvents}
         adChamberDynamics={adChamberDynamics}
+        vedicSpecialEvents={vedicSpecialEvents}
       />
 
       {/* MODAL: RAW PROMPT INSPECTOR (EYE ICON) */}

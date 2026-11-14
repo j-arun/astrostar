@@ -64,6 +64,7 @@ import { toCleanEnglishPlanet, toCleanEnglishSign, checkOllamaHealth } from '../
 import { LLMProviderId } from '../services/llm/types';
 import { computeADChamberDynamics } from '../services/dashaChamberEngine';
 import { ADChamberMatrixCard } from './ADChamberMatrixCard';
+import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 
 interface EventManifestationStudioProps {
   personId: string;
@@ -435,6 +436,24 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
     });
   }, [selectedAd, selectedPd, natalLagnaIdx, natalRashiIdx, activeRecord, skySnapshot]);
 
+  // 4C. Special Vedic Window Events (Parivartana, Neecha Bhanga, Same-Sign Stations)
+  const vedicSpecialEvents = useMemo(() => {
+    const startStr = targetFromDate && targetToDate && targetFromDate <= targetToDate ? targetFromDate : '2027-01-13';
+    const endStr = targetFromDate && targetToDate && targetFromDate <= targetToDate ? targetToDate : '2027-03-21';
+    return analyzeVedicWindowEvents({
+      startDateStr: startStr,
+      endDateStr: endStr,
+      natalLagnaIdx,
+      natalRashiIdx,
+      flattenedNatalD1: ((activeRecord as any)?.placements || [])
+        .filter((p: any) => p.chart_type === 'D1')
+        .map((p: any) => ({
+          body_name: p.body_name || '',
+          rashi_name: p.rashi_name || ''
+        }))
+    });
+  }, [targetFromDate, targetToDate, natalLagnaIdx, natalRashiIdx, activeRecord]);
+
   // 5. Local Ollama Health & Connection
   const [ollamaStatus, setOllamaStatus] = useState<{ isOnline: boolean; models: string[]; error?: string }>({
     isOnline: false,
@@ -595,6 +614,7 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
         skyPositions: skyPositionsForPrompt,
         moonDeliveryStatus,
         adChamberDynamics,
+        vedicSpecialEvents,
         localOllamaEndpoint: ollamaEndpoint,
         localModelName: selectedLocalModel
       });
@@ -1158,6 +1178,13 @@ export const EventManifestationStudio: React.FC<EventManifestationStudioProps> =
             <div className="text-[11px] font-mono text-slate-400">
               Duration: <span className="text-amber-400 font-bold">{rangeDuration.days} Days</span> (~{rangeDuration.months} months)
             </div>
+          </div>
+
+          <div className="bg-purple-950/35 border border-purple-500/35 rounded-lg px-3 py-2 text-[11px] text-slate-100 leading-snug">
+            <span className="font-extrabold text-purple-300 uppercase tracking-wider text-[10px] mr-1.5">
+              Window One-Liner (Parivartana / Neecha Bhanga / Stations):
+            </span>
+            <span>{vedicSpecialEvents.consolidatedOneLiner}</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

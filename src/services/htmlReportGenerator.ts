@@ -791,6 +791,17 @@ export function buildVedicHtmlContent(
       </div>
       ` : ''}
 
+      ${context.vedicSpecialEvents ? `
+      <div class="verdict-card" style="background: #f5f3ff; border-color: #8b5cf6; border-left: 4px solid #7c3aed; margin-bottom: 14px;">
+        <div class="verdict-title" style="color: #6d28d9;">Special Window One-Liner (Parivartana, Neecha Bhanga &amp; Vakra↔Direct Stations)</div>
+        <div class="verdict-text" style="color: #1e1b4b; font-weight: 600;">${escapeHtml(context.vedicSpecialEvents.consolidatedOneLiner)}</div>
+        ${context.vedicSpecialEvents.possibleEventsSummary.length > 0 ? `
+        <ul style="margin: 8px 0 0 18px; padding: 0; font-size: 12px; color: #334155;">
+          ${context.vedicSpecialEvents.possibleEventsSummary.slice(0, 6).map(e => `<li style="margin-bottom: 3px;">${escapeHtml(e)}</li>`).join('')}
+        </ul>` : ''}
+      </div>
+      ` : ''}
+
       <div class="verdict-card">
         <div class="verdict-title">Bottom-Line Synthesis Verdict</div>
         <div class="verdict-text">${escapeHtml(cleanNarrativeText(narrative.summarySentence) || 'Vedic Parashara synthesis completed.')}</div>

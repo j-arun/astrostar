@@ -56,7 +56,16 @@ import {
 } from '../services/reportExportService';
 import { DocsBreadcrumbSidebar } from './DocsBreadcrumbSidebar';
 import { saveReportToServerDocs } from '../services/docsStorageService';
+import { buildVedicHtmlContent } from '../services/htmlReportGenerator';
 import { testGeminiConnection, testClaudeConnection } from '../services/apiHealthService';
+import { PrivateReportCopilot } from './PrivateReportCopilot';
+import {
+  CachedPredictionSummary,
+  CachedPredictionEntry,
+  savePredictionToCache,
+  listCachedPredictions,
+  loadCachedPrediction
+} from '../services/predictionCacheService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -72,6 +81,7 @@ interface AudioVoiceInspectorProps {
   inlineView?: boolean;
   runTriggerTimestamp?: number;
   onNarrativeGenerated?: (narrative: LLMThreePartNarrative) => void;
+  initialCachedEntry?: CachedPredictionEntry | null;
 }
 
 const SAMPLE_QUICK_CHIPS = [
@@ -123,12 +133,13 @@ const cleanNarrativeText = (text: string | undefined): string => {
 export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   isOpen,
   onClose,
-  context,
+  context: liveContext,
   activeProvider,
   onChangeProvider,
   inlineView = false,
   runTriggerTimestamp,
-  onNarrativeGenerated
+  onNarrativeGenerated,
+  initialCachedEntry = null
 }) => {
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [queryText, setQueryText] = useState<string>('');
@@ -136,7 +147,16 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [activeDomainTab, setActiveDomainTab] = useState<string>('career_job');
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [narrative, setNarrative] = useState<LLMThreePartNarrative | null>(null);
+  const [liveNarrative, setLiveNarrative] = useState<LLMThreePartNarrative | null>(null);
+  const [cachedEntries, setCachedEntries] = useState<CachedPredictionSummary[]>([]);
+  const [selectedCacheId, setSelectedCacheId] = useState<string>(() => initialCachedEntry?.cacheId || '__live__');
+  const [loadedCachedEntry, setLoadedCachedEntry] = useState<CachedPredictionEntry | null>(initialCachedEntry);
+  const [latestSavedEntry, setLatestSavedEntry] = useState<CachedPredictionEntry | null>(null);
+  const [isLoadingCacheEntry, setIsLoadingCacheEntry] = useState<boolean>(false);
+
+  const context = loadedCachedEntry ? loadedCachedEntry.context : liveContext;
+  const narrative = loadedCachedEntry ? loadedCachedEntry.narrative : liveNarrative;
+
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [copied, setCopied] = useState<string | null>(null);
@@ -245,14 +265,54 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     setShowPromptStudio(true);
   };
 
+  const refreshCacheList = () => {
+    listCachedPredictions()
+      .then(items => setCachedEntries(items))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      refreshCacheList();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (initialCachedEntry) {
+      setLoadedCachedEntry(initialCachedEntry);
+      setSelectedCacheId(initialCachedEntry.cacheId);
+    } else {
+      setLoadedCachedEntry(null);
+      setSelectedCacheId('__live__');
+    }
+  }, [initialCachedEntry?.cacheId]);
+
+  const handleSelectCachedPrediction = async (cacheId: string) => {
+    if (cacheId === '__live__') {
+      setSelectedCacheId('__live__');
+      setLoadedCachedEntry(null);
+      return;
+    }
+    setIsLoadingCacheEntry(true);
+    try {
+      const loaded = await loadCachedPrediction(cacheId);
+      if (loaded) {
+        setSelectedCacheId(loaded.cacheId);
+        setLoadedCachedEntry(loaded);
+      }
+    } finally {
+      setIsLoadingCacheEntry(false);
+    }
+  };
+
   // Synchronize System Prompt when context or provider changes
   useEffect(() => {
-    if (context) {
-      const generated = buildVedicPrompt({ ...context, customPromptOverride: undefined }, activeProvider);
+    if (liveContext) {
+      const generated = buildVedicPrompt({ ...liveContext, customPromptOverride: undefined }, activeProvider);
       setEditablePrompt(generated);
       setIsPromptCustomized(false);
     }
-  }, [context?.houseNumber, context?.isComprehensiveMonthly, context?.selectedMonth, context?.selectedYear, context?.activationScore, activeProvider]);
+  }, [liveContext?.houseNumber, liveContext?.isComprehensiveMonthly, liveContext?.selectedMonth, liveContext?.selectedYear, liveContext?.activationScore, activeProvider]);
 
   // Timer for generation
   useEffect(() => {
@@ -282,8 +342,8 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   // Explicit user trigger from timeline "Send Prompt to LLM" button
   useEffect(() => {
     if (runTriggerTimestamp && isOpen) {
-      const targetProv = context?.preferredLlmProvider && LLM_PROVIDERS[context.preferredLlmProvider]
-        ? context.preferredLlmProvider
+      const targetProv = liveContext?.preferredLlmProvider && LLM_PROVIDERS[liveContext.preferredLlmProvider]
+        ? liveContext.preferredLlmProvider
         : activeProviderRef.current;
       handleGenerate(undefined, undefined, targetProv);
     }
@@ -302,8 +362,12 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   }, []);
 
   const handleGenerate = async (customQuery?: string, promptOverrideToUse?: string, providerOverride?: LLMProviderId) => {
-    if (!context) return;
+    if (!liveContext) return;
     stopSpeech();
+
+    // Switch back to live view whenever user triggers a fresh synthesis
+    setLoadedCachedEntry(null);
+    setSelectedCacheId('__live__');
 
     // Abort any previous in-flight request so slow Ollama 7B cannot block or overwrite newer cloud runs
     if (abortControllerRef.current) {
@@ -328,7 +392,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         : (isPromptCustomized && editablePrompt.trim().length > 0 ? editablePrompt : undefined);
 
       const result = await llmService.generate(providerToUse, {
-        ...context,
+        ...liveContext,
         userQuery: q || undefined,
         language: selectedLanguage,
         selectedLocalModel: localOllamaModel,
@@ -348,7 +412,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         return;
       }
 
-      setNarrative(result);
+      setLiveNarrative(result);
       if (onNarrativeGenerated) {
         try {
           onNarrativeGenerated(result);
@@ -356,8 +420,18 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
           console.warn('onNarrativeGenerated callback error:', callbackErr);
         }
       }
-      if (context && result.connectionStatus !== 'cancelled') {
-        saveReportToServerDocs(context, result).catch(() => {});
+      if (liveContext && result.connectionStatus !== 'cancelled') {
+        saveReportToServerDocs(liveContext, result).catch(() => {});
+        try {
+          const htmlSnapshot = buildVedicHtmlContent(liveContext, result);
+          savePredictionToCache(liveContext, result, htmlSnapshot)
+            .then(saved => {
+              setLatestSavedEntry(saved);
+              setSelectedCacheId(saved.cacheId);
+              refreshCacheList();
+            })
+            .catch(() => {});
+        } catch {}
       }
       loadDbLogs().catch(() => {});
     } catch (e: any) {
@@ -428,7 +502,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         response_json: narrative.rawResponseBody
       });
       if (res?.log_id) {
-        setNarrative(prev => prev ? {
+        setLiveNarrative(prev => prev ? {
           ...prev,
           logId: res.log_id,
           runningNumber: res.running_number,
@@ -1820,7 +1894,9 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               currentContext={context}
               currentNarrative={narrative}
               onLoadReportIntoApp={(newNarrative) => {
-                setNarrative(newNarrative);
+                setLoadedCachedEntry(null);
+                setSelectedCacheId('__live__');
+                setLiveNarrative(newNarrative);
               }}
             />
           )}
@@ -3242,6 +3318,31 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   </button>
                 </div>
               </div>
+
+              {/* PRIVATE LOCAL LLM REPORT COPILOT (ATTACHED TO MONTHLY & PREDICTION STUDIO REPORTS) */}
+              <PrivateReportCopilot
+                activeContext={context}
+                activeNarrative={narrative}
+                cachedEntries={cachedEntries}
+                selectedCacheId={loadedCachedEntry ? loadedCachedEntry.cacheId : (latestSavedEntry && selectedCacheId === latestSavedEntry.cacheId ? latestSavedEntry.cacheId : '__live__')}
+                activeCacheEntry={loadedCachedEntry || latestSavedEntry}
+                isLoadingCacheEntry={isLoadingCacheEntry}
+                onSelectCachedPrediction={handleSelectCachedPrediction}
+                onRefreshCacheList={refreshCacheList}
+              />
+            </div>
+          ) : cachedEntries.length > 0 && !isGenerating ? (
+            <div className="pt-2">
+              <PrivateReportCopilot
+                activeContext={context}
+                activeNarrative={null}
+                cachedEntries={cachedEntries}
+                selectedCacheId={selectedCacheId}
+                activeCacheEntry={null}
+                isLoadingCacheEntry={isLoadingCacheEntry}
+                onSelectCachedPrediction={handleSelectCachedPrediction}
+                onRefreshCacheList={refreshCacheList}
+              />
             </div>
           ) : null}
 

@@ -400,6 +400,30 @@ export function buildVedicPdfDoc(
     currentY += dualH + 4;
   }
 
+  // SPECIAL WINDOW ONE-LINER (PARIVARTANA, NEECHA BHANGA & STATIONS)
+  if (context.vedicSpecialEvents?.consolidatedOneLiner) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.6);
+    const spLines = doc.splitTextToSize(context.vedicSpecialEvents.consolidatedOneLiner, contentWidth - 10);
+    const spCardH = Math.max(14, spLines.length * 4 + 8);
+    ensureSpace(spCardH + 4);
+    doc.setFillColor(245, 243, 255); // Violet 50
+    doc.setDrawColor(139, 92, 246); // Violet 500
+    doc.setLineWidth(0.4);
+    doc.roundedRect(margin, currentY, contentWidth, spCardH, 1.5, 1.5, 'FD');
+    doc.setFillColor(124, 58, 237);
+    doc.rect(margin, currentY, 2.5, spCardH, 'F');
+    doc.setTextColor(109, 40, 217);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.8);
+    doc.text('SPECIAL EVENTS ONE-LINER (PARIVARTANA / NEECHA BHANGA / VAKRA STATIONS):', margin + 5, currentY + 5);
+    doc.setTextColor(30, 27, 75);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.6);
+    doc.text(spLines, margin + 5, currentY + 9.2);
+    currentY += spCardH + 4;
+  }
+
   // BOTTOM-LINE SYNTHESIS VERDICT CARD (Clean, clearly wrapped, prominent)
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);

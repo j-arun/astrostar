@@ -30,6 +30,7 @@ import { NakshatraGateInfo, ManufacturedEventItem } from './EventManufacturingEn
 import { RASHI_LIST_META } from '../data/transitEphemeris';
 import { toCleanEnglishPlanet, toCleanEnglishSign } from '../services/llm/adapters';
 import { ADChamberDynamics } from '../services/dashaChamberEngine';
+import type { VedicWindowAnalysis } from '../services/vedicEventsEngine';
 
 export interface ChatMessage {
   id: string;
@@ -62,6 +63,7 @@ export interface PrivatePredictionChatbotProps {
   gateDetails: NakshatraGateInfo[];
   manifestedEvents: ManufacturedEventItem[];
   adChamberDynamics?: ADChamberDynamics;
+  vedicSpecialEvents?: VedicWindowAnalysis;
   nativeAge?: number;
 }
 
@@ -261,6 +263,7 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   gateDetails,
   manifestedEvents,
   adChamberDynamics,
+  vedicSpecialEvents,
   nativeAge = 40
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
@@ -417,6 +420,22 @@ Ask me specific questions comparing personal situations, like:
   const generateDeterministicAnswer = (query: string): string => {
     const qLower = query.toLowerCase();
 
+    if (qLower.includes('parivartana') || qLower.includes('neecha') || qLower.includes('debilitat') || qLower.includes('retro') || qLower.includes('station') || qLower.includes('exchange')) {
+      if (vedicSpecialEvents) {
+        return `### ⚡ Special Window Phenomena: Parivartana, Neecha Bhanga & Vakra Stations (${monthName} ${selectedYear})\n\n` +
+          `**One-Liner**: ${vedicSpecialEvents.consolidatedOneLiner}\n\n` +
+          (vedicSpecialEvents.parivartanaYogas.length > 0
+            ? `#### Parivartana Mutual Exchanges:\n` + vedicSpecialEvents.parivartanaYogas.map(p => `• **${p.grahaA} ↔ ${p.grahaB}** (${p.startDate}→${p.endDate}): ${p.bhavaExchangeSummary} — *${p.predictedEvents}*`).join('\n') + `\n\n`
+            : '') +
+          (vedicSpecialEvents.debilitationEvents.length > 0
+            ? `#### Debilitation & Neecha Bhanga:\n` + vedicSpecialEvents.debilitationEvents.map(d => `• **${d.summary}**: ${d.predictedEvents}`).join('\n') + `\n\n`
+            : '') +
+          (vedicSpecialEvents.sameSignStations.length > 0
+            ? `#### Same-Sign Motion Pivots:\n` + vedicSpecialEvents.sameSignStations.map(s => `• **${s.summary}** — *${s.eventImpact}*`).join('\n')
+            : '');
+      }
+    }
+
     // Check for AD chamber / aspect / conjunction query
     if (qLower.includes('chamber') || qLower.includes('aspect') || qLower.includes('conjunct') || qLower.includes('rahu') && qLower.includes('saturn') || qLower.includes('pressure')) {
       if (adChamberDynamics) {
@@ -540,6 +559,7 @@ ${screenContextSnapshot.gates.join('\n')}
 
 Manifested Prediction Events on Screen:
 ${screenContextSnapshot.events.join('\n')}
+${vedicSpecialEvents?.promptMarkdownBlock ? `\n${vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
 ===================================================
 
 USER QUESTION:

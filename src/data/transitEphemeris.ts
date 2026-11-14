@@ -176,12 +176,48 @@ function formatSputa(degInSign: number): string {
 
 function solveKepler(M_rad: number, e: number): number {
   let E = M_rad;
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 15; i++) {
     const delta = (E - e * Math.sin(E) - M_rad) / (1.0 - e * Math.cos(E));
     E -= delta;
-    if (Math.abs(delta) < 1e-8) break;
+    if (Math.abs(delta) < 1e-10) break;
   }
   return E;
+}
+
+// NASA JPL J2000 Keplerian Elements & Centennial Rates (1800-2050 AD)
+// [a0, da, e0, de, I0, dI, L0, dL, wbar0, dwbar, O0, dO]
+const JPL_3D_ELEMENTS: Record<string, [number, number, number, number, number, number, number, number, number, number, number, number]> = {
+  Earth:   [1.00000261,  0.00000562, 0.01671123, -0.00004392, -0.00001531, -0.01294668, 100.46457166,  35999.37244981, 102.93768193,  0.32327364,   0.0,         0.0],
+  Mercury: [0.38709927,  0.00000037, 0.20563593,  0.00001906,  7.00497902, -0.00594749, 252.25032350, 149472.67411175,  77.45779628,  0.16047689,  48.33076593, -0.12534081],
+  Venus:   [0.72333566,  0.00000390, 0.00677672, -0.00004107,  3.39467605, -0.00078890, 181.97909950,  58517.81538729, 131.60246718,  0.00268329,  76.67984255, -0.27769418],
+  Mars:    [1.52371034,  0.00001847, 0.09339410,  0.00007882,  1.84969142, -0.00813131,  -4.55343205,  19140.30268499, -23.94362959,  0.44441088,  49.55953891, -0.29257343],
+  Jupiter: [5.20288700, -0.00011607, 0.04838624, -0.00013253,  1.30439695, -0.00183714,  34.39644051,   3034.74612775,  14.72847983,  0.21252668, 100.47390909,  0.20469106],
+  Saturn:  [9.53667594, -0.00125060, 0.05386179, -0.00050991,  2.48599187,  0.00193609,  49.95424423,   1222.49362201,  92.59887831, -0.41897216, 113.66242448, -0.28867794]
+};
+
+function getHeliocentricEclipticXY(planet: string, T: number): { x: number; y: number } {
+  const el = JPL_3D_ELEMENTS[planet];
+  const [a0, da, e0, de, I0, dI, L0, dL, w0, dw, O0, dO] = el;
+  const a = a0 + da * T;
+  const e = e0 + de * T;
+  const I = toRad(I0 + dI * T);
+  const L = L0 + dL * T;
+  const wbar = w0 + dw * T;
+  const O = toRad(O0 + dO * T);
+  const w = toRad(wbar - (O0 + dO * T));
+  const M_rad = toRad(normalize360(L - wbar));
+  const E = solveKepler(M_rad, e);
+  const xp = a * (Math.cos(E) - e);
+  const yp = a * Math.sqrt(Math.max(0, 1.0 - e * e)) * Math.sin(E);
+
+  const cw = Math.cos(w), sw = Math.sin(w);
+  const cO = Math.cos(O), sO = Math.sin(O);
+  const cI = Math.cos(I);
+
+  return {
+    x: (cw * cO - sw * sO * cI) * xp + (-sw * cO - cw * sO * cI) * yp,
+    y: (cw * sO + sw * cO * cI) * xp + (-sw * sO + cw * cO * cI) * yp
+  };
 }
 
 function getPlanetTropicalLongitude(planet: string, jd: number): number {
@@ -212,42 +248,15 @@ function getPlanetTropicalLongitude(planet: string, jd: number): number {
     return normalize360(rahu + 180.0);
   }
 
-  // Earth's heliocentric position
-  const L_e = normalize360(100.466449 + 36000.769785 * T);
-  const M_e = normalize360(357.529109 + 35999.050291 * T);
-  const e_e = 0.0167086 - 0.000042037 * T;
-  const v_e = M_e + (2 * e_e - 0.25 * Math.pow(e_e, 3)) * Math.sin(toRad(M_e)) * (180 / Math.PI);
-  const l_earth = toRad(normalize360(L_e + v_e - M_e));
-  const r_e = (1.000001018 * (1 - e_e * e_e)) / (1 + e_e * Math.cos(toRad(M_e)));
-  const Xe = r_e * Math.cos(l_earth);
-  const Ye = r_e * Math.sin(l_earth);
-
-  // NASA JPL Keplerian Elements for major planets
-  // [a (AU), e, L (mean long), peri (long of perihelion)]
-  const JPL_ORBITS: Record<string, [number, number, number, number]> = {
-    Mercury: [0.38709893, 0.20563069 + 0.00002527 * T, normalize360(252.25084 + 149472.67411 * T), normalize360(77.45645 + 1.55648 * T)],
-    Venus:   [0.72333199, 0.00677323 - 0.00004938 * T, normalize360(181.97973 + 58517.81539 * T), normalize360(131.57294 + 1.40222 * T)],
-    Mars:    [1.52366231, 0.09341233 + 0.00011902 * T, normalize360(355.45332 + 19140.30268 * T), normalize360(336.04084 + 1.84104 * T)],
-    Jupiter: [5.20336301, 0.04839266 - 0.00012880 * T, normalize360(34.40438 + 3034.79203 * T),  normalize360(14.75385 + 1.61263 * T)],
-    Saturn:  [9.53707032, 0.05415060 - 0.00036762 * T, normalize360(49.94424 + 1222.49362 * T),  normalize360(92.43194 - 0.81997 * T)]
-  };
-
-  if (JPL_ORBITS[planet]) {
-    const [a, e, L, peri] = JPL_ORBITS[planet];
-    const M_deg = normalize360(L - peri);
-    const M_rad = toRad(M_deg);
-    const v_deg = M_deg + (2 * e - 0.25 * Math.pow(e, 3)) * Math.sin(M_rad) * (180 / Math.PI);
-    const l_planet = toRad(normalize360(peri + v_deg));
-    const r_planet = (a * (1 - e * e)) / (1 + e * Math.cos(M_rad));
-
-    const Xp = r_planet * Math.cos(l_planet);
-    const Yp = r_planet * Math.sin(l_planet);
-
-    // Geocentric vector (planet - earth)
-    const Xg = Xp - Xe;
-    const Yg = Yp - Ye;
-
-    return normalize360(toDeg(Math.atan2(Yg, Xg)));
+  if (JPL_3D_ELEMENTS[planet]) {
+    const pe = getHeliocentricEclipticXY("Earth", T);
+    const pp = getHeliocentricEclipticXY(planet, T);
+    const Xg = pp.x - pe.x;
+    const Yg = pp.y - pe.y;
+    const j2000Lon = normalize360(toDeg(Math.atan2(Yg, Xg)));
+    // Precess from J2000 ecliptic frame to mean equinox of date (so subtracting Lahiri(jd) yields true sidereal longitude)
+    const precessionDeg = (5029.0966 * T + 1.1116 * T * T) / 3600.0;
+    return normalize360(j2000Lon + precessionDeg);
   }
 
   return 0.0;
@@ -362,8 +371,10 @@ export function generateClientTransitTimeline(
   natalLagnaIdx: number = 9,
   natalRashiIdx: number = 8
 ): TransitEphemerisPayload {
-  const dStart = new Date(startDateStr);
-  const dEnd = new Date(endDateStr);
+  const parseMiddayUtc = (ds: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(ds.trim()) ? new Date(`${ds.trim()}T12:00:00Z`) : new Date(ds);
+  const dStart = parseMiddayUtc(startDateStr);
+  const dEnd = parseMiddayUtc(endDateStr);
 
   if (isNaN(dStart.getTime()) || isNaN(dEnd.getTime()) || dStart >= dEnd) {
     return {
@@ -393,7 +404,7 @@ export function generateClientTransitTimeline(
   const snapshotEnd = planets.map(p => getGrahaTransitPosition(p, dEnd, natalLagnaIdx, natalRashiIdx));
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const stepDays = totalDays > 1800 ? 15 : (totalDays > 365 ? 7 : (totalDays > 90 ? 3 : 1));
+  const stepDays = totalDays > 3650 ? 5 : (totalDays > 365 ? 2 : 1);
   const tracked = ["Jupiter", "Saturn", "Rahu", "Ketu", "Mars", "Sun", "Venus", "Mercury", ...(totalDays <= 365 ? ["Moon"] : [])];
   const timelineEvents: TransitTimelineEvent[] = [];
 

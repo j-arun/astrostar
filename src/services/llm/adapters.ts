@@ -428,10 +428,28 @@ export function buildVedicPromptV2(context: VedicHouseContext, providerName: str
       }).join('\n')
     : '  • Moon completes one 360-degree zodiacal circuit through 12 signs (~2.25 days per sign)';
 
-  // 5. Fast Planet Ingress Events
+  // 5. Fast Planet Ingress & Same-Sign Station Events
   const ingressTable = (context.monthlyIngressEvents && context.monthlyIngressEvents.length > 0)
     ? context.monthlyIngressEvents.map(e => `  • ${cleanEnglishSentence(e)}`).join('\n')
     : '  • Major slow planets maintain sign stability; fast planets transition per ephemeris.';
+
+  const monthlyMotionSection = (context.monthlyMotionSpans && context.monthlyMotionSpans.length > 0)
+    ? `\n#### Intra-Month Sign & Motion Phase Splits (Retrograde vs Direct inside Same House)\n` +
+      context.monthlyMotionSpans.map(sp =>
+        `  • ${toCleanEnglishPlanet(sp.grahaKey)} in ${toCleanEnglishSign(sp.signName)}: Day ${sp.startDay}–${sp.endDay} [${sp.isRetrograde ? 'VAKRA / RETROGRADE' : 'DIRECT / NORMAL'}]`
+      ).join('\n')
+    : '';
+
+  const multiYearMajorTransitsSection = (context.isMultiYearPrediction && context.multiYearMajorTransits && context.multiYearMajorTransits.length > 0)
+    ? `\n### Complete Major Planetary Transit & Motion Phases (${context.timelineStartDate} to ${context.timelineEndDate})\n` +
+      context.multiYearMajorTransits.map(t =>
+        `  • ${toCleanEnglishPlanet(t.grahaKey)} in ${toCleanEnglishSign(t.signName)} (House ${t.houseFromMoon || '?'} from Moon): ${t.startDate} to ${t.endDate} [${t.isRetrograde ? 'VAKRA / RETROGRADE' : 'DIRECT / NORMAL'}]`
+      ).join('\n')
+    : '';
+
+  const specialEventsSection = context.vedicSpecialEvents?.promptMarkdownBlock
+    ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n`
+    : '';
 
   // 6. Dasha Triad Delivery Report
   const dashaDelivery = context.dashaDeliveryReport
@@ -582,9 +600,9 @@ ${multiYearMoonTransitsSection}
 ### Sarvashtakavarga (SAV)
 ${ashtakavargaStr}
 
-### Planetary Ingress Events — ${monthName} ${context.selectedYear}
-${ingressTable}
-
+### Planetary Ingress & Intra-Window Motion Events — ${context.isMultiYearPrediction ? `${context.timelineStartDate} to ${context.timelineEndDate}` : `${monthName} ${context.selectedYear}`}
+${ingressTable}${monthlyMotionSection}${multiYearMajorTransitsSection}
+${specialEventsSection}
 ### Vimshottari Dasha Hierarchy
 ${dashaDelivery}
 Active PD Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
@@ -640,10 +658,15 @@ CLASSICAL PARASHARA REASONING DIRECTIVES (PROMPT V2):
 6. TARA BALA & CHANDRA BALA:
    - Factor auspicious (Sampat, Kshema, Sadhana, Mitra, Parama Mitra) vs friction (Vipat, Pratyak, Naidhana) stellar taras.
    - Flag 8th house Moon transits from Janma Rashi (Chandrashtama) with clear cautions.
+7. SAME-SIGN MOTION STATIONS, PARIVARTANA YOGAS & NEECHA BHANGA (MANDATORY EVALUATION):
+   - When a planet stations from Retrograde to Direct (or Direct to Retrograde) inside the SAME sign/house, explicitly contrast BEFORE (stalled/internalized/audit) vs AFTER (released/external execution) phases using the exact station dates.
+   - When a Parivartana Yoga (mutual sign exchange) is listed, evaluate BOTH levels: (i) Sign-Lord exchange between the two signs/planets and (ii) Bhava-level exchange from Janma Rashi (Moon), and specify the exact sub-period dates and real-world events (e.g., authority/government decisions, career elevation, property/contract resolution).
+   - When a planet is in Debilitation (Neecha) — especially Neecha-Vakra transitioning to Direct or supported by Neecha Bhanga cancellation factors — explicitly explain the initial test/friction vs. the cancellation reversal and resultant achievement.
+   - ALWAYS include a crisp, dedicated one-line summary covering these Parivartana, Neecha Bhanga, and station triggers (and what concrete events can happen) at the end of 'summarySentence' and analyze their timing inside 'part1_probabilityAndScope' and 'part3_microTimingWindow'.
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
-  "summarySentence": "Crisp bottom-line synthesis of event activation in plain English.",
+  "summarySentence": "Crisp bottom-line synthesis of event activation in plain English, ending with a one-liner naming active Parivartana / Neecha Bhanga / Vakra-Direct station triggers and likely real-world events.",
   "natalPromiseVsTransitDelivery": {
     "natalPromiseScore": 0.85,
     "natalPromiseVerdict": "Natal foundation and karaka strength summary in English.",
@@ -874,7 +897,7 @@ ${allTransitsTable}
 ### Vimshottari Dasha Hierarchy
 ${dashaDelivery}
 Active Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
-
+${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
 ### User Inquiry
 "${context.userQuery || `Provide an astrological evaluation for ${monthName} ${context.selectedYear}`}"
 
@@ -955,8 +978,15 @@ function synthesizeAnalyticalVedicNarrative(
   const computedConfidence = parseFloat(Math.min(0.98, Math.max(0.40, (score * 0.6 + deliveryIndex * 0.4))).toFixed(2));
 
   const isTamil = context.language === 'ta';
+  const special = context.vedicSpecialEvents;
+  const specialOneLinerSuffix = special && (special.sameSignStations.length > 0 || special.parivartanaYogas.length > 0 || special.debilitationEvents.length > 0)
+    ? ` Key Window Phenomena: ${special.consolidatedOneLiner}`
+    : '';
+  const specialEventsParagraph = special && special.possibleEventsSummary.length > 0
+    ? `\n\nSpecial Planetary Phenomena & Expected Real-World Events (${special.startDate} to ${special.endDate}): ${special.consolidatedOneLiner} Likely manifestations: ${special.possibleEventsSummary.slice(0, 4).join(' | ')}`
+    : '';
 
-  const summary = context.isMultiYearPrediction
+  const baseSummary = context.isMultiYearPrediction
     ? `Continuous 1-to-2 year Vedic timeline synthesis (${context.timelineStartDate || 'Start'} to ${context.timelineEndDate || 'End'}) evaluating multi-period Vimshottari Dashas and complete Moon transits calibrated against native's lived experience footprint.`
     : isMonthly
     ? isTamil
@@ -970,7 +1000,9 @@ function synthesizeAnalyticalVedicNarrative(
       ? `House ${context.houseNumber} (${context.rashiName}) experiences peak Gochara activation under the command of PD Lord ${pdLord}, unlocking high event manifestation.`
       : `House ${context.houseNumber} remains in an incubating preparatory phase with baseline activation score (${score.toFixed(2)}).`;
 
-  const part1 = isMonthly
+  const summary = `${baseSummary}${specialOneLinerSuffix}`;
+
+  const basePart1 = isMonthly
     ? isTamil
       ? `மாதாந்திர நிகழ்வு சாத்தியக்கூறு மற்றும் போக்கு: ${monthName} ${context.selectedYear} மாதத்தில் தசா புத்தி நாதர்களான ${context.activeDasha.mahadasha} மற்றும் ${context.activeDasha.pratyantardasha} ஆகியவற்றின் ஆதிக்கத்தில் அனைத்து 12 பாவங்களும் முறையான இயக்கத்தைப் பெறுகின்றன. தொழில், நிதி, குடும்பம் மற்றும் ஆரோக்கியம் ஆகிய முக்கிய துறைகளில் கோச்சார கிரக சேர்க்கைகள் புதிய வாய்ப்புகளையும் பொறுப்புகளையும் உருவாக்குகின்றன.`
       : `Comprehensive Monthly Event Probability & Trajectory: The overarching Gochara transit climate for ${monthName} ${context.selectedYear} is directed by active Vimshottari Pratyantardasha Lord ${context.activeDasha.pratyantardasha} and the double transit sanction of Jupiter and Saturn across the 12-house zodiac. Planetary shifts generate measurable momentum across professional pursuits, financial accumulation, interpersonal relationships, health vitality, and domestic stability without artificial house bias.`
@@ -981,6 +1013,8 @@ function synthesizeAnalyticalVedicNarrative(
     : isHigh
       ? `Event Probability is assessed at ${(computedConfidence * 100).toFixed(0)}% (High Probability). The operational Pratyantar Dasha (PD) lord ${context.activeDasha.pratyantardasha} establishes direct governance over this Bhava (${bhava.title}). Because ${context.matchedRules.map(r => r.ruleName).join(' and ')} are actively aligned, the significations of ${context.rashiName} (${context.tamilName}) will materialize with tangible real-world outcomes rather than mere psychological desire.`
       : `Event Probability is moderate-to-low (${(computedConfidence * 100).toFixed(0)}%). While the natal foundation retains latent potential in ${context.rashiName}, the current Gochara transits provide insufficient trigger energy this month. Manifestation is delayed until the PD lord transitions into an aspecting trinal angle.`;
+
+  const part1 = `${basePart1}${specialEventsParagraph}`;
 
   const part2 = isMonthly
     ? isTamil

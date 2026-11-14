@@ -49,6 +49,7 @@ import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext } from '../services/llm/types';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
+import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 
 export function getSignIndexFromName(signName: string, fallback = 9): number {
   if (!signName) return fallback;
@@ -264,6 +265,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [expandTimelineControls, setExpandTimelineControls] = useState<boolean>(true);
   const [expandTransitChart, setExpandTransitChart] = useState<boolean>(true);
   const [expandEventEngine, setExpandEventEngine] = useState<boolean>(true);
+  const [expandSpecialEventsDetail, setExpandSpecialEventsDetail] = useState<boolean>(false);
 
 
   const [savedOverrides, setSavedOverrides] = useState<Record<string, number>>(() => {
@@ -356,7 +358,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     }
   }, [daysInMonth, selectedDay]);
 
-  // Compute all sign spans for each planet across the whole selected month
+  // Compute all sign & motion-phase (Direct vs Retrograde) spans for each planet across the whole selected month
   const monthlyGrahaSpans = useMemo(() => {
     const grahaKeys = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
     const results: {
@@ -368,6 +370,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       sign_tamil: string;
       start_day: number;
       end_day: number;
+      is_retrograde: boolean;
       is_exalted: boolean;
       is_own_sign: boolean;
       is_custom: boolean;
@@ -386,6 +389,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           sign_tamil: signDef.tamil,
           start_day: 1,
           end_day: daysInMonth,
+          is_retrograde: false,
           is_exalted: (gKey === 'Venus' && userOverride === 12) || (gKey === 'Sun' && userOverride === 1) || (gKey === 'Jupiter' && userOverride === 4) || (gKey === 'Saturn' && userOverride === 7) || (gKey === 'Mars' && userOverride === 10),
           is_own_sign: getLordOwnedSigns(gKey).includes(userOverride),
           is_custom: true
@@ -394,6 +398,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       }
 
       let currSign = -1;
+      let currRetro = false;
       let spanStart = 1;
       let samplePos: any = null;
 
@@ -402,9 +407,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         const pos = getGrahaTransitPosition(gKey, dt, natalLagnaIdx, natalRashiIdx);
         if (currSign === -1) {
           currSign = pos.transit_rashi_index;
+          currRetro = !!pos.is_retrograde;
           spanStart = d;
           samplePos = pos;
-        } else if (pos.transit_rashi_index !== currSign) {
+        } else if (pos.transit_rashi_index !== currSign || !!pos.is_retrograde !== currRetro) {
           const signDef = SOUTH_INDIAN_SIGNS.find(s => s.index === currSign) || SOUTH_INDIAN_SIGNS[0];
           results.push({
             graha_key: gKey,
@@ -415,11 +421,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             sign_tamil: signDef.tamil,
             start_day: spanStart,
             end_day: d - 1,
+            is_retrograde: currRetro,
             is_exalted: (gKey === 'Venus' && currSign === 12) || (gKey === 'Sun' && currSign === 1) || (gKey === 'Jupiter' && currSign === 4) || (gKey === 'Saturn' && currSign === 7) || (gKey === 'Mars' && currSign === 10),
             is_own_sign: getLordOwnedSigns(gKey).includes(currSign),
             is_custom: false
           });
           currSign = pos.transit_rashi_index;
+          currRetro = !!pos.is_retrograde;
           spanStart = d;
           samplePos = pos;
         }
@@ -436,6 +444,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           sign_tamil: signDef.tamil,
           start_day: spanStart,
           end_day: daysInMonth,
+          is_retrograde: currRetro,
           is_exalted: (gKey === 'Venus' && currSign === 12) || (gKey === 'Sun' && currSign === 1) || (gKey === 'Jupiter' && currSign === 4) || (gKey === 'Saturn' && currSign === 7) || (gKey === 'Mars' && currSign === 10),
           is_own_sign: getLordOwnedSigns(gKey).includes(currSign),
           is_custom: false
@@ -446,11 +455,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     return results;
   }, [selectedYear, selectedMonth, daysInMonth, activeEffectiveOverrides, baseTransitPlacements, natalLagnaIdx, natalRashiIdx]);
 
-  // Major Ingresses & Exaltations in the selected month for high-visibility pills
+  // Major Ingresses, Same-Sign Retrograde/Direct Stations & Exaltations in the selected month
   const monthlyKeyIngresses = useMemo(() => {
     return monthlyGrahaSpans.filter(span => {
-      // Show planets that entered mid-month (start_day > 1) or that are exalted
-      return span.start_day > 1 || span.is_exalted;
+      return span.start_day > 1 || span.is_exalted || (span.is_retrograde && span.graha_key !== 'Rahu' && span.graha_key !== 'Ketu');
     });
   }, [monthlyGrahaSpans]);
 
@@ -586,22 +594,63 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     return calculateMonthlyMoonSpans(selectedYear, selectedMonth, natalLagnaIdx);
   }, [selectedYear, selectedMonth, natalLagnaIdx]);
 
-  // Compute Fast-Moving Grahas Ingress Events
+  // Compute Ingress & Same-Sign Retrograde/Direct Station Events
   const monthlyIngressEvents = useMemo(() => {
     const events: string[] = [];
-    const fastGrahas = ['Sun', 'Mercury', 'Venus', 'Mars'];
-    for (const g of fastGrahas) {
+    const trackedGrahas = ['Sun', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
+    for (const g of trackedGrahas) {
       const spans = monthlyGrahaSpans.filter(s => s.graha_key === g);
       if (spans.length > 1) {
+        const firstMotion = spans[0].is_retrograde ? 'Retrograde (Vakra)' : 'Direct (Normal)';
+        events.push(`${toCleanEnglishPlanet(g)} begins Day ${spans[0].start_day}–${spans[0].end_day} in ${toCleanEnglishSign(spans[0].sign_name)} [${firstMotion}]`);
         for (let i = 1; i < spans.length; i++) {
-          events.push(`${toCleanEnglishPlanet(g)} enters ${toCleanEnglishSign(spans[i].sign_name)} on Day ${spans[i].start_day}`);
+          const prev = spans[i - 1];
+          const curr = spans[i];
+          const signEng = toCleanEnglishSign(curr.sign_name);
+          const motionStr = curr.is_retrograde ? 'Retrograde (Vakra)' : 'Direct (Normal Motion)';
+          if (prev.sign_index === curr.sign_index && prev.is_retrograde !== curr.is_retrograde) {
+            events.push(`${toCleanEnglishPlanet(g)} stations ${curr.is_retrograde ? 'RETROGRADE' : 'DIRECT'} inside same sign ${signEng} on Day ${curr.start_day} (Days ${curr.start_day}–${curr.end_day})`);
+          } else {
+            events.push(`${toCleanEnglishPlanet(g)} enters ${signEng} [${motionStr}] on Day ${curr.start_day} (Days ${curr.start_day}–${curr.end_day})`);
+          }
         }
       } else if (spans.length === 1) {
-        events.push(`${toCleanEnglishPlanet(g)} transits continuously in ${toCleanEnglishSign(spans[0].sign_name)} (Days 1–${daysInMonth})`);
+        const motionStr = spans[0].is_retrograde ? ' [Retrograde / Vakra]' : '';
+        events.push(`${toCleanEnglishPlanet(g)} transits continuously in ${toCleanEnglishSign(spans[0].sign_name)}${motionStr} (Days 1–${daysInMonth})`);
       }
     }
     return events;
   }, [monthlyGrahaSpans, daysInMonth]);
+
+  // Compute Monthly Parivartana Yogas, Debilitation / Neecha Bhanga & Same-Sign Stations
+  const vedicSpecialEvents = useMemo(() => {
+    const monthStr = String(selectedMonth + 1).padStart(2, '0');
+    const startDateStr = `${selectedYear}-${monthStr}-01`;
+    const endDateStr = `${selectedYear}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
+    return analyzeVedicWindowEvents({
+      startDateStr,
+      endDateStr,
+      natalLagnaIdx,
+      natalRashiIdx,
+      flattenedNatalD1: natalD1Placements.map(np => ({
+        body_name: np.body_name,
+        rashi_name: np.rashi_name
+      })),
+      overrides: activeEffectiveOverrides
+    });
+  }, [selectedYear, selectedMonth, daysInMonth, natalLagnaIdx, natalRashiIdx, natalD1Placements, activeEffectiveOverrides]);
+
+  const monthlyMotionSpansPayload = useMemo(() => {
+    return monthlyGrahaSpans
+      .filter(s => s.graha_key !== 'Moon')
+      .map(s => ({
+        grahaKey: s.graha_key,
+        signName: toCleanEnglishSign(s.sign_name),
+        startDay: s.start_day,
+        endDay: s.end_day,
+        isRetrograde: s.is_retrograde
+      }));
+  }, [monthlyGrahaSpans]);
 
   // Compute Rule 5: Dasha Triad Delivery Capacity Report
   const dashaDeliveryReport = useMemo(() => {
@@ -775,6 +824,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       flattenedNatalD9: flattenedD9,
       monthlyMoonSpans,
       monthlyIngressEvents,
+      monthlyMotionSpans: monthlyMotionSpansPayload,
+      vedicSpecialEvents,
       dashaDeliveryReport,
       // 1. Native Janma Nakshatra foundation
       natalJanmaStar: {
@@ -930,6 +981,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       flattenedNatalD9: flattenedD9,
       monthlyMoonSpans,
       monthlyIngressEvents,
+      monthlyMotionSpans: monthlyMotionSpansPayload,
+      vedicSpecialEvents,
       dashaDeliveryReport,
       natalJanmaStar: {
         nakshatra_name: activeProfile.birth_star || 'Anuradha',
@@ -1584,25 +1637,44 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             <div className="flex flex-wrap items-center gap-1.5">
               {monthlyKeyIngresses.map((ing, idx) => {
                 const isActiveNow = selectedDay >= ing.start_day && selectedDay <= ing.end_day;
+                const prevSameGraha = idx > 0 ? monthlyKeyIngresses[idx - 1] : null;
+                const turnedDirectSameSign =
+                  prevSameGraha &&
+                  prevSameGraha.graha_key === ing.graha_key &&
+                  prevSameGraha.sign_index === ing.sign_index &&
+                  prevSameGraha.is_retrograde &&
+                  !ing.is_retrograde;
                 return (
                   <button
-                    key={`${ing.graha_key}-${ing.sign_index}-${idx}`}
+                    key={`${ing.graha_key}-${ing.sign_index}-${ing.is_retrograde ? 'R' : 'D'}-${idx}`}
                     type="button"
                     onClick={() => setSelectedDay(ing.start_day)}
                     className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border flex items-center gap-1.5 transition cursor-pointer ${
                       isActiveNow
                         ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300 shadow-md font-extrabold'
+                        : ing.is_retrograde
+                        ? 'bg-purple-950/60 border-purple-500/60 text-purple-200 hover:border-purple-400 hover:bg-purple-900/50 shadow-sm'
                         : ing.is_exalted
                         ? 'bg-gradient-to-r from-amber-950/70 to-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-amber-900/60 shadow-sm'
                         : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
                     }`}
-                    title={`Click to set chart date to Day ${ing.start_day} (${ing.graha_name} in ${ing.sign_name})`}
+                    title={`Click to set chart date to Day ${ing.start_day} (${ing.graha_name} in ${ing.sign_name}${ing.is_retrograde ? ' — Retrograde' : ' — Direct'})`}
                   >
                     <span>{ing.graha_key}:</span>
                     <span>{ing.sign_tamil} ({ing.sign_name.split(' ')[0]})</span>
                     <span className="font-mono text-[9px] opacity-80">
                       {MONTH_NAMES[selectedMonth].slice(0, 3)} {ing.start_day}–{ing.end_day}
                     </span>
+                    {ing.is_retrograde && (
+                      <span className="px-1 py-0.2 rounded bg-purple-500/80 text-white text-[9px] font-extrabold">
+                        ℞ Retro
+                      </span>
+                    )}
+                    {turnedDirectSameSign && (
+                      <span className="px-1 py-0.2 rounded bg-emerald-500/80 text-slate-950 text-[9px] font-extrabold">
+                        → Direct
+                      </span>
+                    )}
                     {ing.is_exalted && (
                       <span className="px-1 py-0.2 rounded bg-amber-500 text-slate-950 text-[9px] font-extrabold">
                         ★ Exalted
@@ -1615,6 +1687,59 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             </div>
           </div>
         )}
+
+        {/* Monthly Special Yogas One-Liner (Parivartana, Neecha Bhanga & Same-Sign Stations) */}
+        <div className="pt-2 border-t border-slate-800/60 space-y-2 text-xs">
+          <div className="flex flex-wrap items-start justify-between gap-2 bg-gradient-to-r from-indigo-950/50 via-purple-950/40 to-amber-950/40 border border-purple-500/40 rounded-xl px-3 py-2">
+            <div className="space-y-1 flex-1 min-w-[260px]">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-extrabold text-amber-300 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Month Special Events One-Liner ({MONTH_NAMES[selectedMonth]} {selectedYear}):</span>
+                </span>
+                {vedicSpecialEvents.parivartanaYogas.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[10px] font-bold">
+                    {vedicSpecialEvents.parivartanaYogas.length} Parivartana
+                  </span>
+                )}
+                {vedicSpecialEvents.debilitationEvents.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 text-[10px] font-bold">
+                    {vedicSpecialEvents.debilitationEvents.length} Neecha / Neecha Bhanga
+                  </span>
+                )}
+                {vedicSpecialEvents.sameSignStations.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/40 text-[10px] font-bold">
+                    {vedicSpecialEvents.sameSignStations.length} Vakra↔Direct Stations
+                  </span>
+                )}
+              </div>
+              <p className="text-[11.5px] text-slate-100 leading-snug font-medium">
+                {vedicSpecialEvents.consolidatedOneLiner}
+              </p>
+            </div>
+            {vedicSpecialEvents.possibleEventsSummary.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setExpandSpecialEventsDetail(prev => !prev)}
+                className="px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-purple-400/40 text-purple-200 text-[10.5px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition"
+              >
+                <span>{expandSpecialEventsDetail ? 'Hide Likely Events' : `What Can Happen (${vedicSpecialEvents.possibleEventsSummary.length})`}</span>
+                {expandSpecialEventsDetail ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+          </div>
+
+          {expandSpecialEventsDetail && vedicSpecialEvents.possibleEventsSummary.length > 0 && (
+            <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-200">
+              {vedicSpecialEvents.possibleEventsSummary.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-2 leading-relaxed">
+                  <span className="text-amber-400 font-bold shrink-0">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
           </div>
         )}
       </div>

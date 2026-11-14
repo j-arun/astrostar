@@ -2602,6 +2602,47 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                 </div>
               )}
 
+              {/* SPECIAL YOGAS & MOTION STATIONS ONE-LINER */}
+              {context?.vedicSpecialEvents && (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-purple-950/60 via-indigo-950/50 to-amber-950/40 border border-purple-500/40 text-xs space-y-1.5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-extrabold text-purple-300 uppercase tracking-wider text-[10px]">
+                      Special Window One-Liner (Parivartana, Neecha Bhanga &amp; Vakra↔Direct Stations)
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                      {context.vedicSpecialEvents.parivartanaYogas.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
+                          {context.vedicSpecialEvents.parivartanaYogas.length} Parivartana
+                        </span>
+                      )}
+                      {context.vedicSpecialEvents.debilitationEvents.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+                          {context.vedicSpecialEvents.debilitationEvents.length} Neecha Bhanga
+                        </span>
+                      )}
+                      {context.vedicSpecialEvents.sameSignStations.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/40">
+                          {context.vedicSpecialEvents.sameSignStations.length} Stations
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-white font-semibold leading-relaxed">
+                    {context.vedicSpecialEvents.consolidatedOneLiner}
+                  </p>
+                  {context.vedicSpecialEvents.possibleEventsSummary.length > 0 && (
+                    <div className="pt-1 border-t border-purple-500/25 space-y-1 text-[11px] text-slate-200">
+                      {context.vedicSpecialEvents.possibleEventsSummary.slice(0, 5).map((evt, idx) => (
+                        <div key={idx} className="flex items-start gap-1.5 leading-snug">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <span>{evt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Summary Bottom Line */}
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-medium leading-relaxed shadow-sm">
                 <span className="font-bold text-amber-400 block mb-0.5">Bottom-Line Synthesis:</span>

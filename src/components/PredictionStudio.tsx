@@ -48,6 +48,7 @@ import {
   toCleanEnglishPlanet,
   buildVedicPrompt
 } from '../services/llm/adapters';
+import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 
 interface PredictionStudioProps {
@@ -197,6 +198,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   // Collapsible cards state
   const [showDashaIntervals, setShowDashaIntervals] = useState<boolean>(true);
   const [showMajorTransits, setShowMajorTransits] = useState<boolean>(true);
+  const [showSpecialEventsCard, setShowSpecialEventsCard] = useState<boolean>(true);
 
   // 4. Astrological Multi-Year Calculations
   const activeDashaIntervals: ActiveDashaIntervalRange[] = useMemo(() => {
@@ -274,6 +276,36 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         degree_sputa: p.degree_sputa
       }));
   }, [activeRecord]);
+
+  // Special Yogas & Motion Pivots (Same-Sign Stations, Parivartana, Debilitation / Neecha Bhanga)
+  const vedicSpecialEvents = useMemo(() => {
+    try {
+      if (!startDate || !endDate || startDate > endDate) {
+        return analyzeVedicWindowEvents({
+          startDateStr: startDate || '2026-01-01',
+          endDateStr: endDate || '2026-01-01',
+          natalLagnaIdx,
+          natalRashiIdx,
+          flattenedNatalD1: flattenedD1
+        });
+      }
+      return analyzeVedicWindowEvents({
+        startDateStr: startDate,
+        endDateStr: endDate,
+        natalLagnaIdx,
+        natalRashiIdx,
+        flattenedNatalD1: flattenedD1
+      });
+    } catch {
+      return analyzeVedicWindowEvents({
+        startDateStr: '2026-01-01',
+        endDateStr: '2026-01-01',
+        natalLagnaIdx,
+        natalRashiIdx,
+        flattenedNatalD1: flattenedD1
+      });
+    }
+  }, [startDate, endDate, natalLagnaIdx, natalRashiIdx, flattenedD1]);
 
   // 4b. Authentic Database AD Narratives (Loaded Strictly from Database / DB Storage)
   const [dbAdNarratives, setDbAdNarratives] = useState<GenuineDatabaseAdNarrative[]>([]);
@@ -520,6 +552,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         houseFromMoon: t.house_from_natal_rashi,
         isRetrograde: t.is_retrograde
       })),
+      vedicSpecialEvents,
       natalJanmaStar: {
         nakshatra_name: activeProfile.birth_star || 'Anuradha',
         pada: activeProfile.birth_star_pada || 2,
@@ -589,6 +622,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
     activeDashaIntervals,
     multiYearMoonTransits,
     majorTransitsData,
+    vedicSpecialEvents,
     flattenedD1,
     flattenedD9
   ]);
@@ -864,6 +898,57 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         </div>
       </div>
 
+      {/* SECTION 2B: SPECIAL YOGAS ONE-LINER (PARIVARTANA, NEECHA BHANGA & SAME-SIGN STATIONS) */}
+      <div className="bg-gradient-to-br from-slate-900 via-purple-950/20 to-slate-900 border border-purple-500/40 rounded-2xl p-5 space-y-3 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-white">
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <span>Critical Yogas &amp; Motion Shifts in Window (Parivartana, Neecha Bhanga &amp; Vakra↔Direct Stations)</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-200 border border-amber-500/40">
+              {vedicSpecialEvents.parivartanaYogas.length} Parivartana
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+              {vedicSpecialEvents.debilitationEvents.length} Neecha / Neecha Bhanga
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-200 border border-purple-500/40">
+              {vedicSpecialEvents.sameSignStations.length} Same-Sign Stations
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSpecialEventsCard(prev => !prev)}
+            className="p-1 rounded text-slate-400 hover:text-white cursor-pointer"
+          >
+            {showSpecialEventsCard ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Dedicated Consolidated One-Liner */}
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/35 text-xs text-amber-100 leading-relaxed">
+          <span className="font-extrabold text-amber-300 uppercase tracking-wider text-[10px] block mb-1">
+            Consolidated Window One-Liner (Packed into Prompt)
+          </span>
+          <p className="font-medium text-white">{vedicSpecialEvents.consolidatedOneLiner}</p>
+        </div>
+
+        {showSpecialEventsCard && vedicSpecialEvents.possibleEventsSummary.length > 0 && (
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">
+              Predicted Real-World Events from These Alignments ({vedicSpecialEvents.possibleEventsSummary.length}):
+            </div>
+            {vedicSpecialEvents.possibleEventsSummary.map((evt, idx) => (
+              <div
+                key={idx}
+                className="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 leading-relaxed flex items-start gap-2"
+              >
+                <span className="text-amber-400 font-bold shrink-0">•</span>
+                <span>{evt}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* SECTION 3: QUERY STUDIO & SYNTHESIZE (THE LLM TEST BENCHMARK) */}
       <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
@@ -997,7 +1082,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
         {/* SYNTHESIZE & INSPECT BUTTONS */}
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-400 font-mono">
-            Prompt Payload: Bundling 2 Narratives + {activeDashaIntervals.length} Dashas + {multiYearMoonTransits.length} Moon Ingresses + Major Planets.
+            Prompt Payload: 2 Narratives + {activeDashaIntervals.length} Dashas + {multiYearMoonTransits.length} Moon Ingresses + {vedicSpecialEvents.parivartanaYogas.length} Parivartana + {vedicSpecialEvents.debilitationEvents.length} Neecha Bhanga + {vedicSpecialEvents.sameSignStations.length} Stations.
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">

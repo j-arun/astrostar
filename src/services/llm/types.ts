@@ -2,6 +2,7 @@
  * Types & Interfaces for Astro Engine Multi-LLM Reasoning System (Milestone M4)
  */
 import { GEMINI_PRIMARY_MODEL } from './geminiModels';
+import type { VedicWindowAnalysis } from '../vedicEventsEngine';
 
 export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude_fable' | 'claude';
 
@@ -289,6 +290,14 @@ export interface VedicHouseContext {
   anthropicThinkingMode?: 'disabled' | 'enabled' | 'auto';
   anthropicBudgetTokens?: number;
   abortSignal?: AbortSignal;
+  monthlyMotionSpans?: Array<{
+    grahaKey: string;
+    signName: string;
+    startDay: number;
+    endDay: number;
+    isRetrograde: boolean;
+  }>;
+  vedicSpecialEvents?: VedicWindowAnalysis;
 }
 
 export interface EmploymentStatusInference {

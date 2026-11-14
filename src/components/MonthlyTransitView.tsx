@@ -1681,8 +1681,10 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             runTriggerTimestamp={reportAutoRunTimestamp}
             onChangeProvider={(newProv) => {
               setSelectedLlmProvider(newProv);
-              localStorage.setItem('astro_llm_provider', newProv);
-              setReportAutoRunTimestamp(Date.now());
+              try {
+                localStorage.setItem('astro_llm_provider', newProv);
+              } catch {}
+              setInspectorHouseContext(prev => prev ? { ...prev, preferredLlmProvider: newProv } : prev);
             }}
           />
         </div>
@@ -2329,7 +2331,13 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           onClose={() => setIsInspectorOpen(false)}
           context={inspectorHouseContext}
           activeProvider={selectedLlmProvider}
-          onChangeProvider={setSelectedLlmProvider}
+          onChangeProvider={(newProv) => {
+            setSelectedLlmProvider(newProv);
+            try {
+              localStorage.setItem('astro_llm_provider', newProv);
+            } catch {}
+            setInspectorHouseContext(prev => prev ? { ...prev, preferredLlmProvider: newProv } : prev);
+          }}
         />
       )}
     </div>

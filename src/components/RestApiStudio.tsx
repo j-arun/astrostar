@@ -1256,6 +1256,16 @@ print(prompt_markdown[:400])
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       Visual path for each planet across your requested timeline. Click any graha to filter both the paths and timeline events table simultaneously:
                     </p>
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px]">
+                      <span className="inline-flex items-center gap-1.5 text-slate-300">
+                        <span className="w-3 h-3 rounded bg-slate-900 border border-slate-600 inline-block" />
+                        <span>Direct / Normal Motion (நேர்கதி)</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 text-purple-200 font-semibold">
+                        <span className="w-3 h-3 rounded bg-purple-500/30 border border-purple-400 inline-block" />
+                        <span>℞ Retrograde / Vakra Motion (வக்ரம் — Shaded Light Purple for All 9 Grahas)</span>
+                      </span>
+                    </div>
                   </div>
                   <div className="relative min-w-[200px]">
                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
@@ -1361,14 +1371,23 @@ print(prompt_markdown[:400])
                 return (
                   <div className="space-y-3">
                     {matchingGrahas.map(g => {
-                      const planetIngresses = activeTransitTimeline.major_transits_timeline.filter(
-                        ev => ev.graha_name.toLowerCase().includes(g.key.toLowerCase())
-                      );
+                      const planetIngresses = [...activeTransitTimeline.major_transits_timeline]
+                        .filter(ev => ev.graha_name.toLowerCase().includes(g.key.toLowerCase()))
+                        .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.end_date.localeCompare(b.end_date));
+
+                      const hasRetrogradePhase = planetIngresses.some(ev => ev.is_retrograde);
+                      const transitions = planetIngresses.slice(1).map((nextEv, idx) => ({
+                        prev: planetIngresses[idx],
+                        next: nextEv,
+                        isSameSignMotionChange:
+                          nextEv.transit_rashi_name === planetIngresses[idx].transit_rashi_name &&
+                          nextEv.is_retrograde !== planetIngresses[idx].is_retrograde,
+                      }));
 
                       return (
                         <div
                           key={g.key}
-                          className={`bg-slate-950 p-3.5 rounded-xl border ${g.border} space-y-2.5 transition hover:border-slate-600`}
+                          className={`bg-slate-950 p-3.5 rounded-xl border ${hasRetrogradePhase ? 'border-purple-500/40' : g.border} space-y-2.5 transition hover:border-slate-600`}
                         >
                           <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                             <div className="flex items-center gap-2">
@@ -1377,10 +1396,15 @@ print(prompt_markdown[:400])
                               <span className="text-[11px] text-slate-400 font-mono">
                                 ({g.speed})
                               </span>
+                              {hasRetrogradePhase && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/25 text-purple-200 border border-purple-400/50">
+                                  ℞ Retrograde Window
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-[11px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 font-mono">
-                                {planetIngresses.length} Sign Phase{planetIngresses.length > 1 ? 's' : ''} in Query
+                                {planetIngresses.length} Transit Phase{planetIngresses.length > 1 ? 's' : ''} in Query
                               </span>
                               <button
                                 onClick={() => setSelectedGrahaFilter(selectedGrahaFilter === g.key ? 'all' : g.key)}
@@ -1397,49 +1421,91 @@ print(prompt_markdown[:400])
 
                           {/* Horizontal Path Breadcrumbs */}
                           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                            {planetIngresses.map((ev, i, arr) => (
-                              <React.Fragment key={i}>
-                                <div
-                                  className="flex-shrink-0 bg-slate-900 border border-slate-700/80 hover:border-amber-400 px-3 py-2 rounded-lg text-center transition shadow-sm"
-                                  title={`${ev.graha_name} in ${ev.transit_rashi_name} (${ev.start_date} to ${ev.end_date})`}
-                                >
-                                  <div className="font-bold text-amber-300 text-xs">
-                                    {ev.transit_rashi_name}
-                                    <span className="text-[10px] text-slate-400 font-normal ml-1">
-                                      ({ev.transit_rashi_tamil})
-                                    </span>
+                            {planetIngresses.map((ev, i, arr) => {
+                              const isRetro = Boolean(ev.is_retrograde);
+                              const nextIsRetro = i < arr.length - 1 && Boolean(arr[i + 1].is_retrograde);
+                              return (
+                                <React.Fragment key={i}>
+                                  <div
+                                    className={`flex-shrink-0 px-3 py-2 rounded-lg text-center transition shadow-sm border ${
+                                      isRetro
+                                        ? 'bg-purple-500/20 border-purple-400/70 hover:border-purple-300 shadow-purple-950/30'
+                                        : 'bg-slate-900 border-slate-700/80 hover:border-amber-400'
+                                    }`}
+                                    title={`${ev.graha_name} in ${ev.transit_rashi_name} (${ev.start_date} to ${ev.end_date}) — ${isRetro ? 'RETROGRADE (வக்ரம்)' : 'Direct (நேர்கதி)'}`}
+                                  >
+                                    <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                                      {isRetro ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-purple-500/35 text-purple-100 border border-purple-300/60">
+                                          ℞ Retrograde (வக்ரம்)
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-slate-800 text-slate-300 border border-slate-700">
+                                          Direct (நேர்கதி)
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className={`font-bold text-xs ${isRetro ? 'text-purple-100' : 'text-amber-300'}`}>
+                                      {ev.transit_rashi_name}
+                                      <span className={`text-[10px] font-normal ml-1 ${isRetro ? 'text-purple-200/80' : 'text-slate-400'}`}>
+                                        ({ev.transit_rashi_tamil})
+                                      </span>
+                                    </div>
+                                    <div className={`text-[11px] font-mono mt-0.5 ${isRetro ? 'text-purple-100 font-semibold' : 'text-slate-300'}`}>
+                                      {ev.start_date} → {ev.end_date}
+                                    </div>
+                                    <div className={`text-[10px] font-semibold mt-0.5 ${isRetro ? 'text-purple-200' : 'text-cyan-400'}`}>
+                                      House {ev.house_from_natal_lagna} (Lagna) &bull; House {ev.house_from_natal_rashi} (Moon)
+                                    </div>
+                                    <div className={`text-[9px] mt-0.5 font-mono flex items-center justify-center gap-1 flex-wrap ${isRetro ? 'text-purple-200/80' : 'text-slate-400'}`}>
+                                      <span>{ev.nakshatra_name}</span>
+                                      {getStarLordShort(ev.nakshatra_name) && (
+                                        <span className={`font-bold ${isRetro ? 'text-purple-200' : 'text-amber-400'}`}>({getStarLordShort(ev.nakshatra_name)})</span>
+                                      )}
+                                      <span className={isRetro ? 'text-purple-300/80' : 'text-slate-500'}>P{ev.pada}</span>
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-slate-300 font-mono mt-0.5">
-                                    {ev.start_date} → {ev.end_date}
-                                  </div>
-                                  <div className="text-[10px] text-cyan-400 font-semibold mt-0.5">
-                                    House {ev.house_from_natal_lagna} (Lagna) &bull; House {ev.house_from_natal_rashi} (Moon)
-                                  </div>
-                                  <div className="text-[9px] text-slate-400 mt-0.5 font-mono flex items-center justify-center gap-1 flex-wrap">
-                                    <span>{ev.nakshatra_name}</span>
-                                    {getStarLordShort(ev.nakshatra_name) && (
-                                      <span className="text-amber-400 font-bold">({getStarLordShort(ev.nakshatra_name)})</span>
-                                    )}
-                                    <span className="text-slate-500">P{ev.pada}</span>
-                                  </div>
-                                </div>
-                                {i < arr.length - 1 && (
-                                  <ArrowRight className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                                )}
-                              </React.Fragment>
-                            ))}
+                                  {i < arr.length - 1 && (
+                                    <ArrowRight className={`w-3.5 h-3.5 flex-shrink-0 ${isRetro || nextIsRetro ? 'text-purple-400' : 'text-amber-500'}`} />
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
                           </div>
 
-                          {/* Sign Shift Notification if multiple ingresses */}
-                          {planetIngresses.length > 1 && (
-                            <div className="bg-emerald-950/20 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-[11px] text-emerald-200 flex items-center gap-2">
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                              <span>
-                                <strong>Sign Ingress Detected:</strong> {g.name} moved from{' '}
-                                <strong className="text-white">{planetIngresses[0].transit_rashi_name}</strong> to{' '}
-                                <strong className="text-emerald-300">{planetIngresses[1].transit_rashi_name}</strong> on{' '}
-                                <strong className="text-white font-mono">{planetIngresses[1].start_date}</strong>!
-                              </span>
+                          {/* Sign Ingress & Retrograde Station Notifications */}
+                          {transitions.length > 0 && (
+                            <div className="space-y-1">
+                              {transitions.map((tr, tIdx) =>
+                                tr.isSameSignMotionChange ? (
+                                  <div
+                                    key={tIdx}
+                                    className="bg-purple-950/35 border border-purple-400/40 px-3 py-1.5 rounded-lg text-[11px] text-purple-100 flex items-center gap-2"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+                                    <span>
+                                      <strong>{tr.next.is_retrograde ? 'Retrograde (வக்ரம்) Station:' : 'Direct Motion Resumed:'}</strong>{' '}
+                                      {g.name} stayed in <strong className="text-white">{tr.next.transit_rashi_name}</strong> ({tr.prev.start_date} → {tr.prev.end_date} {tr.prev.is_retrograde ? 'Retrograde' : 'Direct'}) and{' '}
+                                      {tr.next.is_retrograde ? 'turned Retrograde (shaded purple)' : 'resumed Direct motion'} on{' '}
+                                      <strong className="text-purple-200 font-mono">{tr.next.start_date}</strong>!
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div
+                                    key={tIdx}
+                                    className="bg-emerald-950/20 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-[11px] text-emerald-200 flex items-center gap-2"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                    <span>
+                                      <strong>Sign Ingress Detected:</strong> {g.name} moved from{' '}
+                                      <strong className="text-white">{tr.prev.transit_rashi_name}</strong> to{' '}
+                                      <strong className="text-emerald-300">{tr.next.transit_rashi_name}</strong>
+                                      {tr.next.is_retrograde ? ' (Retrograde / வக்ரம்)' : ''} on{' '}
+                                      <strong className="text-white font-mono">{tr.next.start_date}</strong>!
+                                    </span>
+                                  </div>
+                                )
+                              )}
                             </div>
                           )}
                         </div>
@@ -1508,12 +1574,15 @@ print(prompt_markdown[:400])
                         ? activeTransitTimeline.transit_snapshot_start
                         : activeTransitTimeline.transit_snapshot_end
                       ).map(g => (
-                        <tr key={g.graha_key} className="hover:bg-slate-800/40">
+                        <tr
+                          key={g.graha_key}
+                          className={g.is_retrograde ? 'bg-purple-950/25 hover:bg-purple-900/35' : 'hover:bg-slate-800/40'}
+                        >
                           <td className="py-2.5 px-3 font-bold text-white flex items-center gap-1.5">
                             <span>{g.graha_name}</span>
                             <span className="text-[10px] text-slate-400 font-normal">({g.graha_tamil})</span>
                           </td>
-                          <td className="py-2.5 px-3 font-semibold text-amber-300">
+                          <td className={`py-2.5 px-3 font-semibold ${g.is_retrograde ? 'text-purple-200' : 'text-amber-300'}`}>
                             {g.transit_rashi_name}{' '}
                             <span className="text-[10px] text-slate-400">({g.transit_rashi_tamil})</span>
                           </td>
@@ -1549,8 +1618,8 @@ print(prompt_markdown[:400])
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             {g.is_retrograde ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                                RETROGRADE
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/25 text-purple-200 border border-purple-400/50">
+                                ℞ RETROGRADE
                               </span>
                             ) : (
                               <span className="text-slate-500 text-[10px]">DIRECT</span>
@@ -1596,6 +1665,7 @@ print(prompt_markdown[:400])
                         <tr>
                           <th className="py-2.5 px-3">Graha</th>
                           <th className="py-2.5 px-3">Transit Rashi</th>
+                          <th className="py-2.5 px-3 text-center">Motion</th>
                           <th className="py-2.5 px-3">Start Date</th>
                           <th className="py-2.5 px-3">End Date</th>
                           <th className="py-2.5 px-3 text-center">From Lagna</th>
@@ -1616,9 +1686,23 @@ print(prompt_markdown[:400])
                             return matchesGraha && matchesSearch;
                           })
                           .map((ev, idx) => (
-                            <tr key={idx} className="hover:bg-slate-800/40">
+                            <tr
+                              key={idx}
+                              className={ev.is_retrograde ? 'bg-purple-950/25 hover:bg-purple-900/35' : 'hover:bg-slate-800/40'}
+                            >
                               <td className="py-2 px-3 font-bold text-white">{ev.graha_name}</td>
-                              <td className="py-2 px-3 font-semibold text-amber-300">{ev.transit_rashi_name}</td>
+                              <td className={`py-2 px-3 font-semibold ${ev.is_retrograde ? 'text-purple-200' : 'text-amber-300'}`}>
+                                {ev.transit_rashi_name}
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                {ev.is_retrograde ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/25 text-purple-200 border border-purple-400/50">
+                                    ℞ RETROGRADE
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[10px] font-semibold">DIRECT</span>
+                                )}
+                              </td>
                               <td className="py-2 px-3 font-mono text-cyan-400">{ev.start_date}</td>
                               <td className="py-2 px-3 font-mono text-rose-400">{ev.end_date}</td>
                               <td className="py-2 px-3 text-center">
@@ -1644,7 +1728,7 @@ print(prompt_markdown[:400])
                                   Pada {ev.pada}
                                 </div>
                               </td>
-                              <td className="py-2 px-3 text-slate-400 text-[11px] font-mono">
+                              <td className={`py-2 px-3 text-[11px] font-mono ${ev.is_retrograde ? 'text-purple-200/90' : 'text-slate-400'}`}>
                                 {ev.summary_text}
                               </td>
                             </tr>
@@ -1682,6 +1766,7 @@ print(prompt_markdown[:400])
                         <tr>
                           <th className="py-2.5 px-3">#</th>
                           <th className="py-2.5 px-3">Transit Sign</th>
+                          <th className="py-2.5 px-3 text-center">Motion</th>
                           <th className="py-2.5 px-3">Start Date</th>
                           <th className="py-2.5 px-3">End Date</th>
                           <th className="py-2.5 px-3 text-center">Duration</th>
@@ -1705,10 +1790,22 @@ print(prompt_markdown[:400])
                             } catch {}
 
                             return (
-                              <tr key={idx} className="hover:bg-slate-800/40">
+                              <tr
+                                key={idx}
+                                className={ev.is_retrograde ? 'bg-purple-950/25 hover:bg-purple-900/35' : 'hover:bg-slate-800/40'}
+                              >
                                 <td className="py-2.5 px-3 font-mono text-slate-500">{idx + 1}</td>
-                                <td className="py-2.5 px-3 font-bold text-amber-300">
+                                <td className={`py-2.5 px-3 font-bold ${ev.is_retrograde ? 'text-purple-200' : 'text-amber-300'}`}>
                                   {ev.transit_rashi_name} <span className="text-[10px] text-slate-400 font-normal">({ev.transit_rashi_tamil})</span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {ev.is_retrograde ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/25 text-purple-200 border border-purple-400/50">
+                                      ℞ RETROGRADE
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 text-[10px] font-semibold">DIRECT</span>
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3 font-mono text-cyan-400">{ev.start_date}</td>
                                 <td className="py-2.5 px-3 font-mono text-rose-400">{ev.end_date}</td>

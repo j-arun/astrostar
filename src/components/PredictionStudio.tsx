@@ -53,6 +53,7 @@ import { AudioVoiceInspector } from './AudioVoiceInspector';
 interface PredictionStudioProps {
   personId: string;
   incomingContext?: VedicHouseContext | null;
+  incomingProvider?: LLMProviderId;
   onClearIncomingContext?: () => void;
 }
 
@@ -82,6 +83,7 @@ export type GenuineAntardashaRecord = GenuineDatabaseAdNarrative;
 export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   personId,
   incomingContext,
+  incomingProvider,
   onClearIncomingContext
 }) => {
   // 1. Resolve Active Native Profile
@@ -162,7 +164,25 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [livedExperienceNarrative, setLivedExperienceNarrative] = useState<string>('');
   const [currentEventsNarrative, setCurrentEventsNarrative] = useState<string>('');
   const [specificQuery, setSpecificQuery] = useState<string>('');
-  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>('local_qwen');
+  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>(() => {
+    const initial = incomingProvider || incomingContext?.preferredLlmProvider;
+    if (initial && LLM_PROVIDERS[initial]) return initial;
+    try {
+      const saved = typeof window !== 'undefined' ? (localStorage.getItem('astro_llm_provider') as LLMProviderId) : null;
+      if (saved && LLM_PROVIDERS[saved]) return saved;
+    } catch {}
+    return 'gemini_pro';
+  });
+
+  const handleSelectProvider = (newProv: LLMProviderId) => {
+    setSelectedProvider(newProv);
+    setActiveExecutionContext(prev => prev ? { ...prev, preferredLlmProvider: newProv } : prev);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('astro_llm_provider', newProv);
+      }
+    } catch {}
+  };
 
   // AD Narrative Picker Modal State
   const [showAdPickerModal, setShowAdPickerModal] = useState<boolean>(false);
@@ -509,7 +529,8 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
       geminiApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || undefined,
       geminiModel: getPreferredGeminiModel(),
       anthropicApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined,
-      anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5'
+      anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5',
+      preferredLlmProvider: selectedProvider
     };
   };
 
@@ -517,16 +538,23 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
   const [autoRunTriggerTimestamp, setAutoRunTriggerTimestamp] = useState<number | undefined>(undefined);
   const bottomReportRef = useRef<HTMLDivElement>(null);
 
-  // If incoming context arrives from Monthly View ("Send Prompt to LLM"), display it at bottom
+  // If incoming context arrives from Monthly View ("Send Prompt to LLM"), sync provider and display it at bottom
   useEffect(() => {
     if (incomingContext) {
-      setActiveExecutionContext(incomingContext);
+      const resolvedProv = incomingProvider || incomingContext.preferredLlmProvider;
+      if (resolvedProv && LLM_PROVIDERS[resolvedProv]) {
+        handleSelectProvider(resolvedProv);
+      }
+      setActiveExecutionContext({
+        ...incomingContext,
+        preferredLlmProvider: (resolvedProv && LLM_PROVIDERS[resolvedProv]) ? resolvedProv : selectedProvider
+      });
       setAutoRunTriggerTimestamp(Date.now());
       setTimeout(() => {
         bottomReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 250);
     }
-  }, [incomingContext]);
+  }, [incomingContext, incomingProvider]);
 
   // Synthesize Trigger
   const handleSynthesizeMultiYear = () => {
@@ -865,7 +893,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
               <span className="text-[11px] text-slate-400 font-semibold">Model:</span>
               <select
                 value={selectedProvider}
-                onChange={e => setSelectedProvider(e.target.value as LLMProviderId)}
+                onChange={e => handleSelectProvider(e.target.value as LLMProviderId)}
                 className="bg-slate-950 border border-slate-700 text-amber-300 font-bold text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400 cursor-pointer"
               >
                 {Object.values(LLM_PROVIDERS).map(prov => (
@@ -1023,7 +1051,7 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
             context={activeExecutionContext}
             activeProvider={selectedProvider}
             runTriggerTimestamp={autoRunTriggerTimestamp}
-            onChangeProvider={setSelectedProvider}
+            onChangeProvider={handleSelectProvider}
           />
         ) : (
           <div className="bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-500 space-y-2">

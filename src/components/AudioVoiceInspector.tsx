@@ -202,6 +202,9 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   // Recognition ref
   const recognitionRef = useRef<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeProviderRef = useRef<LLMProviderId>(activeProvider);
+  activeProviderRef.current = activeProvider;
+  const requestSeqRef = useRef<number>(0);
 
   // Interactive Prompt Studio State
   const [editablePrompt, setEditablePrompt] = useState<string>('');
@@ -279,7 +282,10 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   // Explicit user trigger from timeline "Send Prompt to LLM" button
   useEffect(() => {
     if (runTriggerTimestamp && isOpen) {
-      handleGenerate();
+      const targetProv = context?.preferredLlmProvider && LLM_PROVIDERS[context.preferredLlmProvider]
+        ? context.preferredLlmProvider
+        : activeProviderRef.current;
+      handleGenerate(undefined, undefined, targetProv);
     }
   }, [runTriggerTimestamp]);
 
@@ -295,9 +301,20 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     };
   }, []);
 
-  const handleGenerate = async (customQuery?: string, promptOverrideToUse?: string) => {
+  const handleGenerate = async (customQuery?: string, promptOverrideToUse?: string, providerOverride?: LLMProviderId) => {
     if (!context) return;
     stopSpeech();
+
+    // Abort any previous in-flight request so slow Ollama 7B cannot block or overwrite newer cloud runs
+    if (abortControllerRef.current) {
+      try {
+        abortControllerRef.current.abort();
+      } catch {}
+      abortControllerRef.current = null;
+    }
+
+    const mySeq = ++requestSeqRef.current;
+    const providerToUse = providerOverride || activeProviderRef.current;
 
     // Set up AbortController for cancel support
     const controller = new AbortController();
@@ -310,7 +327,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         ? promptOverrideToUse
         : (isPromptCustomized && editablePrompt.trim().length > 0 ? editablePrompt : undefined);
 
-      const result = await llmService.generate(activeProvider, {
+      const result = await llmService.generate(providerToUse, {
         ...context,
         userQuery: q || undefined,
         language: selectedLanguage,
@@ -325,6 +342,12 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         anthropicThinkingMode,
         abortSignal: controller.signal
       });
+
+      // Ignore stale responses if user cancelled or switched providers mid-flight
+      if (mySeq !== requestSeqRef.current || controller.signal.aborted) {
+        return;
+      }
+
       setNarrative(result);
       if (onNarrativeGenerated) {
         try {
@@ -342,14 +365,19 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         console.error('LLM synthesis error:', e);
       }
     } finally {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
+      if (mySeq === requestSeqRef.current) {
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
   const handleCancelPrompt = () => {
+    requestSeqRef.current += 1;
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      try {
+        abortControllerRef.current.abort();
+      } catch {}
       abortControllerRef.current = null;
     }
     setIsGenerating(false);
@@ -820,7 +848,19 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 return (
                   <button
                     key={pid}
-                    onClick={() => onChangeProvider(pid)}
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.setItem('astro_llm_provider', pid);
+                      } catch {}
+                      if (isGenerating) {
+                        handleCancelPrompt();
+                      }
+                      onChangeProvider(pid);
+                      if (context) {
+                        handleGenerate(undefined, undefined, pid);
+                      }
+                    }}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
                       isActive
                         ? 'bg-amber-500 text-slate-950 font-bold shadow'
@@ -1188,7 +1228,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
             )}
 
             <span className="text-slate-400 text-[11px] font-mono hidden md:inline">
-              Target: <span className="text-slate-300">{narrative?.endpointUsed || 'http://localhost:11434/api/generate'}</span>
+              Target: <span className="text-slate-300">{narrative?.endpointUsed || LLM_PROVIDERS[activeProvider]?.endpoint || '/api/llm/gemini'}</span>
             </span>
 
             {narrative?.executionTimeMs !== undefined && (
@@ -2358,6 +2398,15 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                     </div>
                   )
                 )}
+                <div className="pt-3">
+                  <button
+                    type="button"
+                    onClick={handleCancelPrompt}
+                    className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition cursor-pointer"
+                  >
+                    Cancel Request
+                  </button>
+                </div>
               </div>
             </div>
           ) : narrative ? (

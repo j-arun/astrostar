@@ -392,6 +392,7 @@ export function generateClientTransitTimeline(
   const snapshotStart = planets.map(p => getGrahaTransitPosition(p, dStart, natalLagnaIdx, natalRashiIdx));
   const snapshotEnd = planets.map(p => getGrahaTransitPosition(p, dEnd, natalLagnaIdx, natalRashiIdx));
 
+  const DAY_MS = 24 * 60 * 60 * 1000;
   const stepDays = totalDays > 1800 ? 15 : (totalDays > 365 ? 7 : (totalDays > 90 ? 3 : 1));
   const tracked = ["Jupiter", "Saturn", "Rahu", "Ketu", "Mars", "Sun", "Venus", "Mercury", ...(totalDays <= 365 ? ["Moon"] : [])];
   const timelineEvents: TransitTimelineEvent[] = [];
@@ -401,37 +402,76 @@ export function generateClientTransitTimeline(
     let prevPos = getGrahaTransitPosition(p, curr, natalLagnaIdx, natalRashiIdx);
     let intervalStartStr = curr.toISOString().slice(0, 10);
 
+    const pushSegment = (pos: GrahaTransitPosition, startStr: string, endStr: string) => {
+      timelineEvents.push({
+        graha_name: pos.graha_name,
+        graha_tamil: pos.graha_tamil,
+        transit_rashi_name: pos.transit_rashi_name,
+        transit_rashi_tamil: pos.transit_rashi_tamil,
+        house_from_natal_lagna: pos.relative_to_natal_lagna.house_number,
+        house_from_natal_lagna_title: pos.relative_to_natal_lagna.house_title,
+        house_from_natal_rashi: pos.relative_to_natal_rashi.house_number,
+        house_from_natal_rashi_title: pos.relative_to_natal_rashi.house_title,
+        nakshatra_name: pos.graha_pada_chara.nakshatra_name,
+        pada: pos.graha_pada_chara.pada,
+        start_date: startStr,
+        end_date: endStr,
+        is_retrograde: pos.is_retrograde,
+        summary_text: `${pos.graha_name} in ${pos.transit_rashi_name} (${pos.relative_to_natal_lagna.house_number}th from Lagna, ${pos.relative_to_natal_rashi.house_number}th from Moon)${pos.is_retrograde ? ' [Retrograde / வக்ரம்]' : ' [Direct / நேர்கதி]'}`
+      });
+    };
+
     while (curr.getTime() < dEnd.getTime()) {
-      const nextTime = Math.min(dEnd.getTime(), curr.getTime() + stepDays * 24 * 60 * 60 * 1000);
+      const nextTime = Math.min(dEnd.getTime(), curr.getTime() + stepDays * DAY_MS);
       const nextDate = new Date(nextTime);
       const currPos = getGrahaTransitPosition(p, nextDate, natalLagnaIdx, natalRashiIdx);
 
-      if (currPos.transit_rashi_index !== prevPos.transit_rashi_index || nextTime === dEnd.getTime()) {
-        const nextDateStr = nextDate.toISOString().slice(0, 10);
-        timelineEvents.push({
-          graha_name: prevPos.graha_name,
-          graha_tamil: prevPos.graha_tamil,
-          transit_rashi_name: prevPos.transit_rashi_name,
-          transit_rashi_tamil: prevPos.transit_rashi_tamil,
-          house_from_natal_lagna: prevPos.relative_to_natal_lagna.house_number,
-          house_from_natal_lagna_title: prevPos.relative_to_natal_lagna.house_title,
-          house_from_natal_rashi: prevPos.relative_to_natal_rashi.house_number,
-          house_from_natal_rashi_title: prevPos.relative_to_natal_rashi.house_title,
-          nakshatra_name: prevPos.graha_pada_chara.nakshatra_name,
-          pada: prevPos.graha_pada_chara.pada,
-          start_date: intervalStartStr,
-          end_date: nextDateStr,
-          is_retrograde: prevPos.is_retrograde,
-          summary_text: `${prevPos.graha_name} in ${prevPos.transit_rashi_name} (${prevPos.relative_to_natal_lagna.house_number}th from Lagna, ${prevPos.relative_to_natal_rashi.house_number}th from Moon)`
-        });
-        intervalStartStr = nextDateStr;
-        prevPos = currPos;
+      const stateChanged =
+        currPos.transit_rashi_index !== prevPos.transit_rashi_index ||
+        currPos.is_retrograde !== prevPos.is_retrograde;
+
+      if (stateChanged) {
+        // Pinpoint the exact day of sign ingress or retrograde/direct station
+        let transitionTime = nextTime;
+        let transitionPos = currPos;
+        if (stepDays > 1) {
+          for (let probeTime = curr.getTime() + DAY_MS; probeTime <= nextTime; probeTime += DAY_MS) {
+            const probePos = getGrahaTransitPosition(p, new Date(probeTime), natalLagnaIdx, natalRashiIdx);
+            if (
+              probePos.transit_rashi_index !== prevPos.transit_rashi_index ||
+              probePos.is_retrograde !== prevPos.is_retrograde
+            ) {
+              transitionTime = probeTime;
+              transitionPos = probePos;
+              break;
+            }
+          }
+        }
+
+        const transitionDateStr = new Date(transitionTime).toISOString().slice(0, 10);
+        const dayBeforeMs = transitionTime - DAY_MS;
+        const dayBeforeStr = new Date(dayBeforeMs).toISOString().slice(0, 10);
+        const segmentEndStr = dayBeforeStr >= intervalStartStr ? dayBeforeStr : transitionDateStr;
+
+        pushSegment(prevPos, intervalStartStr, segmentEndStr);
+
+        intervalStartStr = transitionDateStr;
+        prevPos = transitionPos;
+        curr = new Date(transitionTime);
+
+        if (transitionTime >= dEnd.getTime()) {
+          pushSegment(prevPos, intervalStartStr, dEnd.toISOString().slice(0, 10));
+        }
+      } else if (nextTime === dEnd.getTime()) {
+        pushSegment(prevPos, intervalStartStr, nextDate.toISOString().slice(0, 10));
+        curr = nextDate;
+      } else {
+        curr = nextDate;
       }
-      curr = nextDate;
     }
   }
 
-  timelineEvents.sort((a, b) => a.start_date.localeCompare(b.start_date));
+  timelineEvents.sort((a, b) => a.start_date.localeCompare(b.start_date) || a.end_date.localeCompare(b.end_date));
 
   return {
     requested_timeline: {

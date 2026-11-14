@@ -2872,13 +2872,13 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             <span className="text-base">{DOMAIN_ICONS[selectedSc.id] || '✨'}</span>
                             <span className="font-bold text-white text-xs">{selectedSc.title}</span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              selectedSc.verdict.toLowerCase().includes('favor')
+                              (selectedSc.verdict || '').toLowerCase().includes('favor')
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                : selectedSc.verdict.toLowerCase().includes('caution') || selectedSc.verdict.toLowerCase().includes('friction')
+                                : (selectedSc.verdict || '').toLowerCase().includes('caution') || (selectedSc.verdict || '').toLowerCase().includes('friction')
                                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                                 : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                             }`}>
-                              {selectedSc.verdict}
+                              {selectedSc.verdict || 'Evaluated'}
                             </span>
                           </div>
 
@@ -3091,7 +3091,12 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
                               <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-800/80 pb-1.5">
                                 <span className="text-[11px] font-bold text-rose-400">Vulnerable Zones:</span>
-                                {selectedSc.healthDetails.vulnerableZones.map((vz, vIdx) => (
+                                {(Array.isArray(selectedSc.healthDetails.vulnerableZones)
+                                  ? selectedSc.healthDetails.vulnerableZones
+                                  : typeof selectedSc.healthDetails.vulnerableZones === 'string'
+                                  ? [selectedSc.healthDetails.vulnerableZones]
+                                  : []
+                                ).map((vz, vIdx) => (
                                   <span key={vIdx} className="px-2 py-0.5 rounded text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30">
                                     {vz}
                                   </span>
@@ -3206,13 +3211,13 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             </h5>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 border ${
-                            ev.likelihood.toLowerCase().includes('delay') || ev.likelihood.toLowerCase().includes('frictional')
+                            (ev.likelihood || '').toLowerCase().includes('delay') || (ev.likelihood || '').toLowerCase().includes('frictional')
                               ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                              : ev.likelihood.toLowerCase().includes('high')
+                              : (ev.likelihood || '').toLowerCase().includes('high')
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                               : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
                           }`}>
-                            {ev.likelihood}
+                            {ev.likelihood || 'Moderate'}
                           </span>
                         </div>
 

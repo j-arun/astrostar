@@ -74,7 +74,21 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'manifestation' | 'api' | 'settings'>('charts');
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'manifestation' | 'api' | 'settings'>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? sessionStorage.getItem('astro_active_tab_v1') : null;
+      if (saved === 'charts' || saved === 'monthly' || saved === 'report' || saved === 'manifestation' || saved === 'api' || saved === 'settings') {
+        return saved;
+      }
+    } catch {}
+    return 'charts';
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('astro_active_tab_v1', activeTab);
+    } catch {}
+  }, [activeTab]);
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
   const [incomingPredictionContext, setIncomingPredictionContext] = useState<VedicHouseContext | null>(null);

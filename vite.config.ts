@@ -1533,13 +1533,10 @@ function docsServerPlugin(): Plugin {
               }
 
               const docsDir = path.resolve(__dirname, 'docs', String(year), String(month), String(engineKey));
-              const publicDocsDir = path.resolve(__dirname, 'public/docs', String(year), String(month), String(engineKey));
               const savedAt = new Date();
               const timestamp = createReportFilenameTimestamp(savedAt);
 
-              [docsDir, publicDocsDir].forEach(d => {
-                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-              });
+              if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
 
               const fileBase = `Tamil_Vedic_Report_${month}_${year}_${engineKey}_${timestamp}`;
               const htmlFilename = `${fileBase}.html`;
@@ -1549,25 +1546,19 @@ function docsServerPlugin(): Plugin {
 
               // Save HTML
               if (htmlContent) {
-                [docsDir, publicDocsDir].forEach(d => {
-                  fs.writeFileSync(path.join(d, htmlFilename), htmlContent, 'utf-8');
-                });
+                fs.writeFileSync(path.join(docsDir, htmlFilename), htmlContent, 'utf-8');
               }
 
               // Save Word Doc
               if (docContent) {
-                [docsDir, publicDocsDir].forEach(d => {
-                  fs.writeFileSync(path.join(d, docFilename), docContent, 'utf-8');
-                });
+                fs.writeFileSync(path.join(docsDir, docFilename), docContent, 'utf-8');
               }
 
               // Save PDF
               if (pdfBase64) {
                 const base64Data = pdfBase64.replace(/^data:application\/pdf;base64,/, '').replace(/^data:.*,/, '');
                 const pdfBuffer = Buffer.from(base64Data, 'base64');
-                [docsDir, publicDocsDir].forEach(d => {
-                  fs.writeFileSync(path.join(d, pdfFilename), pdfBuffer);
-                });
+                fs.writeFileSync(path.join(docsDir, pdfFilename), pdfBuffer);
               }
 
               // Save JSON metadata
@@ -1582,13 +1573,10 @@ function docsServerPlugin(): Plugin {
                 context,
                 narrative
               };
-              [docsDir, publicDocsDir].forEach(d => {
-                fs.writeFileSync(path.join(d, jsonFilename), JSON.stringify(reportData, null, 2), 'utf-8');
-              });
+              fs.writeFileSync(path.join(docsDir, jsonFilename), JSON.stringify(reportData, null, 2), 'utf-8');
 
               // Update reports_catalog.json
               const catalogPath = path.resolve(__dirname, 'docs/reports_catalog.json');
-              const publicCatalogPath = path.resolve(__dirname, 'public/docs/reports_catalog.json');
               let cat: any = { years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} };
               if (fs.existsSync(catalogPath)) {
                 try {
@@ -1626,7 +1614,6 @@ function docsServerPlugin(): Plugin {
               };
 
               fs.writeFileSync(catalogPath, JSON.stringify(cat, null, 2), 'utf-8');
-              fs.writeFileSync(publicCatalogPath, JSON.stringify(cat, null, 2), 'utf-8');
 
               res.statusCode = 200;
               res.end(JSON.stringify({
@@ -1721,10 +1708,7 @@ function docsServerPlugin(): Plugin {
               }
 
               const cacheDir = path.resolve(__dirname, 'docs/prediction_cache');
-              const publicCacheDir = path.resolve(__dirname, 'public/docs/prediction_cache');
-              [cacheDir, publicCacheDir].forEach(d => {
-                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-              });
+              if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
               const htmlUrl = htmlContent ? `/docs/prediction_cache/${safeId}.html` : undefined;
               const fullEntry = {
@@ -1734,15 +1718,11 @@ function docsServerPlugin(): Plugin {
               };
 
               if (htmlContent) {
-                [cacheDir, publicCacheDir].forEach(d => {
-                  fs.writeFileSync(path.join(d, `${safeId}.html`), htmlContent, 'utf-8');
-                });
+                fs.writeFileSync(path.join(cacheDir, `${safeId}.html`), htmlContent, 'utf-8');
               }
 
               const entryJsonStr = JSON.stringify(fullEntry, null, 2);
-              [cacheDir, publicCacheDir].forEach(d => {
-                fs.writeFileSync(path.join(d, `${safeId}.json`), entryJsonStr, 'utf-8');
-              });
+              fs.writeFileSync(path.join(cacheDir, `${safeId}.json`), entryJsonStr, 'utf-8');
 
               const summary = {
                 cacheId: safeId,
@@ -1759,7 +1739,6 @@ function docsServerPlugin(): Plugin {
               };
 
               const catalogPath = path.join(cacheDir, 'catalog.json');
-              const publicCatalogPath = path.join(publicCacheDir, 'catalog.json');
               let existingCatalog: any[] = [];
               if (fs.existsSync(catalogPath)) {
                 try {
@@ -1772,7 +1751,6 @@ function docsServerPlugin(): Plugin {
               const updatedCatalog = [summary, ...filtered].slice(0, 50);
               const catalogStr = JSON.stringify(updatedCatalog, null, 2);
               fs.writeFileSync(catalogPath, catalogStr, 'utf-8');
-              fs.writeFileSync(publicCatalogPath, catalogStr, 'utf-8');
 
               res.statusCode = 200;
               res.end(JSON.stringify({
@@ -1834,8 +1812,17 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Always ignore docs/, public/docs/, and runtime stored_*.json files so report/cache/log saves NEVER trigger a browser full-reload.
       hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: process.env.DISABLE_HMR === 'true'
+        ? null
+        : {
+            ignored: [
+              /[/\\]docs([/\\]|$)/,
+              /[/\\]public[/\\]docs([/\\]|$)/,
+              /stored_(prompt_logs|persons|ad_narratives|pd_evaluations)\.json$/
+            ]
+          },
     },
   };
 });

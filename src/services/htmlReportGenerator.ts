@@ -61,13 +61,16 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
     return 'Google Gemini Pro';
   }
   if (providerId === 'local_qwen') {
+    if (modelName && modelName !== 'qwen2.5:7b-instruct' && modelName !== 'custom') {
+      return `Ollama (${modelName})`;
+    }
     return 'Ollama (Qwen 2.5 7B)';
   }
   if (modelName) {
     if (modelName.toLowerCase().includes('sonnet')) return 'Claude Sonnet 5.5';
     if (modelName.toLowerCase().includes('haiku')) return 'Claude Haiku 5.5';
     if (modelName.toLowerCase().includes('gemini')) return 'Google Gemini Pro';
-    if (modelName.toLowerCase().includes('qwen') || modelName.toLowerCase().includes('ollama')) return 'Ollama (Qwen 2.5 7B)';
+    if (modelName.toLowerCase().includes('qwen') || modelName.toLowerCase().includes('ollama')) return `Ollama (${modelName})`;
     return modelName;
   }
   return providerId;

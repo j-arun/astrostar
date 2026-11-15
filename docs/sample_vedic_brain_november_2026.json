@@ -1,0 +1,1161 @@
+{
+  "schemaVersion": "vedic_brain_v1",
+  "brainId": "brain_monthly_november_2026_claude_fable_20261114T221737",
+  "reportGeneratedDate": "2026-11-14",
+  "reportGeneratedLocal": "2026-11-14 22:17:37 -08:00",
+  "reportGeneratedIso": "2026-11-15T06:17:37.000Z",
+  "exportedDate": "2026-11-14",
+  "exportedAtIso": "2026-11-15T06:17:37.000Z",
+  "targetScope": {
+    "scopeType": "monthly",
+    "monthIndex": 10,
+    "monthName": "November",
+    "year": 2026,
+    "dateRange": "2026-11-01 to 2026-11-30",
+    "personName": "Native (Sample)",
+    "natalLagnaSign": "Sagittarius",
+    "natalRashiSign": "Scorpio",
+    "activeDasha": {
+      "mahadasha": "Venus",
+      "antardasha": "Saturn",
+      "pratyantardasha": "Mercury"
+    }
+  },
+  "engineMetadata": {
+    "providerId": "claude_fable",
+    "displayEngineName": "Claude Fable 5.1",
+    "exactModelId": "claude-fable-5-1",
+    "reportGeneratedDate": "2026-11-14",
+    "reportGeneratedIso": "2026-11-15T06:17:37.000Z",
+    "timeTakenMs": 18450,
+    "timeTakenSeconds": 18.45,
+    "connectionStatus": "sample_specimen"
+  },
+  "tokenTelemetry": {
+    "promptTokens": 7000,
+    "completionTokens": 3250,
+    "thinkingTokens": 1100,
+    "cachedTokens": 0,
+    "totalTokens": 11350,
+    "telemetrySource": "sample_specimen_from_real_prompt",
+    "rawUsageObject": {
+      "note": "In live runs, exact API usage fields (Claude usage / Gemini usageMetadata / OpenAI usage / Ollama eval_count) are stored verbatim here.",
+      "input_tokens": 7000,
+      "output_tokens": 3250,
+      "output_tokens_details": {
+        "thinking_tokens": 1100
+      }
+    }
+  },
+  "costTelemetry": {
+    "currency": "INR",
+    "fxRateUsdToInr": 84.5,
+    "pricingTier": "paid_api_sample",
+    "estimatedCostUsd": 0.08625,
+    "estimatedCostInr": 7.2881,
+    "usagePaisa": 728.81,
+    "pricingNotes": "Calculated from token count x model rate card x FX rate (0 paise for Free Tier / Local Ollama)."
+  },
+  "promptArtifact": {
+    "promptVersion": "v2",
+    "charLength": 28001,
+    "fullPromptText": "Role: Vedic Astrologer & Parashara/Jaimini Reasoning Engine (monthly transit synthesis).\nCRITICAL ASTROLOGICAL LAW:\n1. GOCHARA (TRANSIT) IS RECKONED EXCLUSIVELY FROM JANMA RASHI (MOON SIGN).\n2. NEVER ESTIMATE LAGNA OR LAGNA HOUSE D1 CHART STRENGTH USING TRANSITS.\n3. TRANSITS JUDGE WHAT IS CURRENTLY POSSIBLE AGAINST NATAL PROMISE (HOW FRUITFUL THE SKY IS FOR DOING KARMAS).\n4. NATAL PROMISE IS FIXED IN D1 AND D9 FROM LAGNA. DASHA TELLS WHO IS COMMISSIONED TO DELIVER.\n## HORIZON: November 2026 | House undefined(Hundefined) | Sign:Scorpio | Activation:0.00(Baseline)\nBaseline house evaluation\n## NATAL CHART (Lagna Frame — Promise & Capacity Only)\nLagna:Ascendant | JanmaRashi:Moon Sign | JanmaStar:Anuradha P2\nD1: Sun:Sagittarius H1 12° Mula P4 | Moon:Scorpio H12 8° Anuradha P2 | Mars:Capricorn H2 20° Shravana P4 | Mercury:Sagittarius H1 18° Purva Ashadha P2 | Jupiter:Sagittarius H1 5° Mula P2 | Venus:Scorpio H12 15° Anuradha P4 | Saturn:Scorpio H12 22° Jyeshtha P2 | Rahu:Pisces H4 10° Uttara Bhadrapada P3 | Ketu:Virgo H10 10° Hasta P1\nD9: Standard D9 alignments align with natal grid\n## GOCHARA FROM JANMA RASHI (Moon Sign) — November 2026\n- Jupiter:Leo Mundefined ADISARA(Adisara (Accelerated / Fast Ingress) — Guru ceases gentle advising and forcefully pushes native to execute; impatient forward momentum to get the job done.) 00°10' N/A\n- Saturn:Pisces Mundefined VAKRA(Vakra (Retrograde) — Behaving abnormal to the normal; taking a contrarian direction against the standard flow/expectations; unconventional karmic settlement.) 15°05' N/A\n- Mars:Cancer Mundefined Direct 24°38' N/A\n- Rahu:Aquarius Mundefined VAKRA(Vakra (Retrograde) — Non-linear, introspective transit motion.) 01°48' N/A\n- Ketu:Leo Mundefined VAKRA(Vakra (Retrograde) — Non-linear, introspective transit motion.) 01°48' N/A\n- Venus:Libra Mundefined VAKRA(Vakra (Retrograde) — Non-linear, introspective transit motion.) 01°46' N/A\n- Mercury:Libra Mundefined VAKRA(Vakra (Retrograde) — Non-linear, introspective transit motion.) 21°51' N/A\n- Sun:Libra Mundefined Direct 14°50' N/A\n- Moon:Cancer Mundefined Direct 09°55' N/A\n## TARA BALA (from Anuradha P2)\nComputed per ephemeris.\n## CHANDRA BALA & DAILY PROGRESSION\nComputed across 2.25-day lunar progression.\n## SAV: Full 12-house SAV baseline\n## INGRESS & MOTION PHASES (November 2026)\n- Major slow planets maintain sign stability; fast planets transition per ephemeris.\n## SPECIAL TRANSIT PHENOMENA (2026-11-01..2026-11-30)\nONE_LINER: Stations: Mercury turns Direct in Libra on 2026-11-14; Venus turns Direct in Virgo on 2026-11-14 | Parivartana: Mercury↔Venus Parivartana (H12/H11 Moon, 2026-11-06→2026-11-22); Moon↔Mars Parivartana (H1/H9 Moon, 2026-11-10→2026-11-11); Sun↔Mars Parivartana (H1/H10 Moon, 2026-11-17→2026-11-30) | Debilitation/Neecha Bhanga: Sun Neecha-Bhanga in Libra (2026-11-01→2026-11-16, Direct); Mars Neecha-Bhanga in Cancer (2026-11-01→2026-11-12, Direct); Venus Neecha-Bhanga in Virgo (2026-11-06→2026-11-13, Vakra); Venus Neecha-Bhanga in Virgo (2026-11-14→2026-11-22, Direct).\nSTATIONS(2):\n- Mercury stations DIRECT inside Libra (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30) | Impact: Mercury turning Direct in Libra (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution.\n- Venus stations DIRECT inside Virgo (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22) | Impact: Venus turning Direct in Virgo (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships.\nPARIVARTANA(3):\n- Mercury<->Venus Dainya / Karmic Parivartana [2026-11-06..2026-11-22] | From Moon: Mercury in H12 (Libra) ↔ Venus in H11 (Virgo) | From Lagna: H11 ↔ H10 | Mercury (Lord of Virgo, H11 from Moon / H10 from Lagna) sits in Libra (H12), while Venus (Lord of Libra, H12 from Moon / H11 from Lagna) sits in Virgo (H11). | Event: Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income.\n- Moon<->Mars Maha Parivartana (Kendra/Trikona/Wealth) [2026-11-10..2026-11-11] | From Moon: Moon in H1 (Scorpio) ↔ Mars in H9 (Cancer) | From Lagna: H12 ↔ H8 | Moon (Lord of Cancer, H9 from Moon / H8 from Lagna) sits in Scorpio (H1), while Mars (Lord of Scorpio, H1 from Moon / H12 from Lagna) sits in Cancer (H9). | Event: Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results.\n- Sun<->Mars Maha Parivartana (Kendra/Trikona/Wealth) [2026-11-17..2026-11-30] | From Moon: Sun in H1 (Scorpio) ↔ Mars in H10 (Leo) | From Lagna: H12 ↔ H9 | Sun (Lord of Leo, H10 from Moon / H9 from Lagna) sits in Scorpio (H1), while Mars (Lord of Scorpio, H1 from Moon / H12 from Lagna) sits in Leo (H10). | Event: Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication).\nNEECHA_BHANGA(4):\n- Sun Debilitated in Libra (H12 from Moon / H11 from Lagna) [2026-11-01 → 2026-11-16] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Venus (dispositor of Libra) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Saturn of Libra transits Kendra (H4 from Lagna); Natal Saturn (planet exalted in Libra) occupies Kendra (H12 Lagna / H1 Moon); Sun receives conjunction from dispositor Venus; Debilitation sign lord Venus transits Kendra (H10 from Lagna); Lord of Sun's exaltation sign (Mars) transits Kendra (H10 from Moon) | Event: Sun Debilitated with NEECHA BHANGA RAJA YOGA (H12 from Moon): initial test, extra effort, or compromise around authority, father/boss dynamics, vitality, and confidence is cancelled out and elevates into practical achievement/recovery during the window.\n- Mars Debilitated in Cancer (H9 from Moon / H8 from Lagna) [2026-11-01 → 2026-11-12] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Moon (dispositor of Cancer) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Jupiter of Cancer transits Kendra (H10 from Moon); Natal Jupiter (planet exalted in Cancer) occupies Kendra (H1 Lagna / H2 Moon); Mars receives conjunction from dispositor Moon; Lord of Mars's exaltation sign (Saturn) transits Kendra (H4 from Lagna); Debilitation sign lord Moon transits Kendra (H10 from Moon); Debilitation sign lord Moon transits Kendra (H10 from Lagna); Debilitation sign lord Moon transits Kendra (H1 from Moon); Mars participates in an active Parivartana mutual sign exchange; Debilitation sign lord Moon transits Kendra (H1 from Lagna) | Event: Mars Debilitated with NEECHA BHANGA RAJA YOGA (H9 from Moon): initial test, extra effort, or compromise around patience, domestic peace, property/vehicle pressure, and energy pacing is cancelled out and elevates into practical achievement/recovery during the window.\n- Venus Debilitated in Virgo (H11 from Moon / H10 from Lagna) [2026-11-06 → 2026-11-13] — Retrograde (Neecha-Vakra) — Status: NEECHA BHANGA RAJA YOGA | Factors: Venus is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength; Natal Mercury (dispositor of Virgo) sits in Kendra (H1 Lagna / H2 Moon); Natal Mercury (planet exalted in Virgo) occupies Kendra (H1 Lagna / H2 Moon); Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon); Venus participates in an active Parivartana mutual sign exchange | Event: Venus in Neecha-Vakra with Neecha Bhanga (H11 from Moon): initial vulnerability or hyper-criticism around relationships, financial expectations, comfort, and diplomacy reverses strongly into unconventional gains and hidden strength once stabilized.\n- Venus Debilitated in Virgo (H11 from Moon / H10 from Lagna) [2026-11-14 → 2026-11-22] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Mercury (dispositor of Virgo) sits in Kendra (H1 Lagna / H2 Moon); Natal Mercury (planet exalted in Virgo) occupies Kendra (H1 Lagna / H2 Moon); Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon); Venus participates in an active Parivartana mutual sign exchange | Event: Venus Debilitated with NEECHA BHANGA RAJA YOGA (H11 from Moon): initial test, extra effort, or compromise around relationships, financial expectations, comfort, and diplomacy is cancelled out and elevates into practical achievement/recovery during the window.\n## VIMSHOTTARI DASHA (PD:undefined..undefined)\nMD:Venus > AD:Saturn > PD:Mercury\nMD/AD/PD lords evaluated against natal houses and Gochara transits.\n## BHAVA KARAKAS: Career:H10,Sun,Mercury,Mars | Wealth:H2,H11,Jupiter | Home:H4,Moon | Love/Progeny:H5,H7,Venus | Health:H1,H6,Saturn\n## EVENT MANUFACTURING SUPERSET (MD:Venus>AD:Saturn>PD:Mercury)\nAD_CHAMBER:Saturn@Scorpio(LagnaH12/MoonH1) | Polarity:Moderate Baseline Transit (Controlled Delivery)(0) | PeakGate:Revati (Gate 3) | Occ:- | Asp:-\nAD_RULED:H2L/H3M(Capricorn) Occ:- Asp:Mars (7th),Moon (7th); H3L/H4M(Aquarius) Occ:Rahu Asp:Jupiter (7th),Mars (8th),Ketu (7th) | Mood:The AD Chamber operates with standard baseline dynamics. Direct occupants: None. Incoming rays: None.\nGATES:\n- G1:Ashlesha(Cancer,LagnaH8/MoonH9,COMBINED) | Seat:Stomach Lining, Gut Flora & Sleep | Themes:Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion | Moon:Nov 1–2, Nov 28–29 | Grahas:Mars(Active in House),Moon(Active in House)\n- G2:Jyeshtha(Scorpio,LagnaH12/MoonH1,COMBINED) | Seat:Secret Parts, Colon & Sensory Nerves | Themes:Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion | Moon:Nov 10–11 | Grahas:Moon (Natal)(Fixed Natal Position),Venus (Natal)(Fixed Natal Position),Saturn (Natal)(Fixed Natal Position)\n- G3:Revati(Pisces,LagnaH4/MoonH5,COMBINED) | Seat:Feet, Lymph & Peripheral Nerves | Themes:Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion | Moon:Nov 20–21 | Grahas:Saturn(Active in House),Rahu (Natal)(Fixed Natal Position)\nHOUSE_GATE_MAP:\n- L1/M2 Sagittarius(Lord:Jupiter)[Health • 1st Lagna (Vitality, Physical Body, Self)] | N:Sun,Mercury,Jupiter | T:- | AD:N | Gate:- | Moon:Nov 12–14\n- L2/M3 Capricorn(Lord:Saturn)[Money • 2nd Dhana (Liquid Cash, Family, Speech)] | N:Mars | T:- | AD:Y | Gate:- | Moon:Nov 15–16\n- L3/M4 Aquarius(Lord:Saturn)[Trip • 3rd Sahaja (Short Trips, Friends/Peers, Documentation)] | N:- | T:Rahu(R) | AD:Y | Gate:- | Moon:Nov 17–19\n- L4/M5 Pisces(Lord:Jupiter)[Life • 4th Sukha (Home, Mother, Fixed Property)] | N:Rahu | T:Saturn(R) | AD:N | Gate:Revati (Pisces) | Moon:Nov 20–21\n- L5/M6 Aries(Lord:Mars)[Love • 5th Putra (Romance, Speculation, Intellect)] | N:- | T:- | AD:N | Gate:- | Moon:Nov 22–23\n- L6/M7 Taurus(Lord:Venus)[Health • 6th Ari (Service Work, Health Obstacles, Debts)] | N:- | T:- | AD:N | Gate:- | Moon:Nov 24–25\n- L7/M8 Gemini(Lord:Mercury)[Love • 7th Kalatra (Partnership, Marriage, Public Deals)] | N:- | T:- | AD:N | Gate:- | Moon:Nov 26–27\n- L8/M9 Cancer(Lord:Moon)[Money • 8th Randhra (Joint Finance, Unexpected Shifts, Stress)] | N:- | T:Mars,Moon | AD:N | Gate:Ashlesha (Cancer) | Moon:Nov 1–2, Nov 28–29\n- L9/M10 Leo(Lord:Sun)[Trip • 9th Bhagya (Long Travel, Visas, Fortune/Mentors)] | N:- | T:Jupiter,Ketu(R) | AD:N | Gate:- | Moon:Nov 3–4\n- L10/M11 Virgo(Lord:Mercury)[Work • 10th Karma (Career Elevation, Authority, Role)] | N:Ketu | T:- | AD:N | Gate:- | Moon:Nov 5–6\n- L11/M12 Libra(Lord:Venus)[Friends • 11th Labha (Income Gains, Network Circles, Wishes)] | N:- | T:Venus(R),Mercury(R),Sun | AD:N | Gate:- | Moon:Nov 7–9\n- L12/M1 Scorpio(Lord:Mars)[Trip • 12th Vyaya (Foreign Relocation, Expenses, Sleep)] | N:Moon,Venus,Saturn | T:- | AD:N | Gate:Jyeshtha (Scorpio) | Moon:Nov 10–11\nCANDIDATE_EVENTS(Baseline):\n1.[Work] Parivartana Exchange: Mercury <-> Venus (Dainya / Karmic Parivartana) (88%,Acute,MoonInWindow:Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n2.[Life] Parivartana Exchange: Moon <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth)) (88%,Acute,MoonInWindow:Nov 10–11 (Moon in Scorpio)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n3.[Life] Parivartana Exchange: Sun <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth)) (88%,Acute,MoonInWindow:Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n4.[Money] Ashlesha Gate Trigger (Cancer): Money Activity (84%,Acute,MoonInWindow:Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer)) | Lords:Lagna H8 / Moon H9 (Cancer, Lord: Moon) | Gate:Gate 1: Ashlesha [Combined Lagna+Moon] • Grahas: Mars (Active in House), Moon (Active in House) | Sig:Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Ashlesha around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and stomach lining, gut flora & sleep. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer).\n5.[Trip] Short Movement, Paperwork Readiness & Long-Distance / Visa Planning (84%,Acute,MoonInWindow:Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius)) | Lords:H3/M4 Aquarius (Lord: Saturn; Transit: Rahu(R)) + H9/M10 Leo (Lord: Sun; Transit: Jupiter, Ketu(R)) + H12/M1 Scorpio (Lord: Mars) | Gate:AD Chamber (Saturn) -> Gate: Jyeshtha (Scorpio) | Sig:3rd Short-Trip (Aquarius), 9th Long-Journey (Leo) & 12th Foreign (Scorpio) regulate travel logistics, consular/official documentation, and commuting rhythm. Effort runs across Nov 1–30, with tangible Moon activation during Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius).\n6.[Friends] Mercury Turns Retrograde -> Direct in Same House (Libra) (81%,Acute,MoonInWindow:Nov 22–23 (Moon in Aries 7th-Aspect to Libra)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n7.[Work] Venus Turns Retrograde -> Direct in Same House (Virgo) (81%,Acute,MoonInWindow:Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n8.[Health] Somatic Stress Watch, Gut/Sleep Rhythm & Vitality Pacing (80%,Acute,MoonInWindow:Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius)) | Lords:H1/M2 Sagittarius (Lord: Jupiter) + H8/M9 Cancer (Lord: Moon; Transit: Mars, Moon) + H6/M7 Taurus (Lord: Venus) | Gate:AD Chamber (Saturn) -> Gate: Ashlesha (Cancer) | Sig:Lagna (Sagittarius), 8th (Cancer) & 6th (Taurus) interact with Mercury's anatomical seats (Stomach Lining, Gut Flora & Sleep / Secret Parts, Colon & Sensory Nerves / Feet, Lymph & Peripheral Nerves); manage rest around Chandrashtama/Moon pulses. Effort runs across Nov 1–30, with tangible Moon activation during Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius).\n9.[Friends] Sun in Libra: NEECHA BHANGA RAJA YOGA (78%,Acute,MoonInWindow:Nov 7–9 (Moon in Libra)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n10.[Money] Mars in Cancer: NEECHA BHANGA RAJA YOGA (78%,Acute,MoonInWindow:Nov 1–2 (Moon in Cancer)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n11.[Work] Venus in Virgo: NEECHA BHANGA RAJA YOGA (78%,Acute,MoonInWindow:Nov 6 (Moon in Virgo)) | Gate:Revati (Gate 3) | See SPECIAL TRANSIT PHENOMENA\n12.[Life] Revati Gate Trigger (Pisces): Life Activity (76%,Acute,MoonInWindow:Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces)) | Lords:Lagna H4 / Moon H5 (Pisces, Lord: Jupiter) | Gate:Gate 3: Revati [Combined Lagna+Moon] • Grahas: Saturn (Active in House), Rahu (Natal) (Fixed Natal Position) | Sig:Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Revati around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and feet, lymph & peripheral nerves. Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces).\n13.[Money] Liquidity Flow, Settlement & Capital Allocation (72%,Acute,MoonInWindow:Nov 1–2 (Moon in Cancer 7th-Aspect to Capricorn); Nov 15–16 (Moon in Capricorn); Nov 28–29 (Moon in Cancer 7th-Aspect to Capricorn)) | Lords:H2/M3 Capricorn (Lord: Saturn) + H11/M12 Libra (Lord: Venus; Transit: Venus(R), Mercury(R), Sun) | Gate:AD Chamber (Saturn) -> Gate: Revati (Gate 3) | Sig:2nd Dhana (Capricorn, Lord Saturn) & 11th Labha (Libra) govern cashflow stability, reimbursements, and strategic savings decisions. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer 7th-Aspect to Capricorn); Nov 15–16 (Moon in Capricorn); Nov 28–29 (Moon in Cancer 7th-Aspect to Capricorn).\n14.[Friends] Peer Circle Engagement, Social Exchanges & Advisory Support (72%,Acute,MoonInWindow:Nov 7–9 (Moon in Libra); Nov 22–23 (Moon in Aries 7th-Aspect to Libra)) | Lords:H11/M12 Libra (Lord: Venus; Transit: Venus(R), Mercury(R), Sun) + H3/M4 Aquarius (Lord: Saturn; Transit: Rahu(R)) | Gate:AD Chamber (Saturn) -> Gate: Revati (Gate 3) | Sig:11th Network (Libra, Lord Venus) & 3rd Peers (Aquarius) indicate selective reconnection or practical coordination with trusted associates. Effort runs across Nov 1–30, with tangible Moon activation during Nov 7–9 (Moon in Libra); Nov 22–23 (Moon in Aries 7th-Aspect to Libra).\n15.[Trip] Jyeshtha Gate Trigger (Scorpio): Trip Activity (63%,Acute,MoonInWindow:Nov 10–11 (Moon in Scorpio); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio)) | Lords:Lagna H12 / Moon H1 (Scorpio, Lord: Mars) | Gate:Gate 2: Jyeshtha [Combined Lagna+Moon] • Grahas: Moon (Natal) (Fixed Natal Position), Venus (Natal) (Fixed Natal Position), Saturn (Natal) (Fixed Natal Position) | Sig:Jyeshtha holds latent receptivity in Lagna H12 / Moon H1. Effort runs across Nov 1–30, with tangible Moon activation during Nov 10–11 (Moon in Scorpio); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio).\n16.[Life] Domestic Sanctuary, Mother & Property/Home Focus (62%,Acute,MoonInWindow:Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces)) | Lords:H4/M5 Pisces (Lord: Jupiter; Transit: Saturn(R)) + H9/M10 Leo (Lord: Sun; Transit: Jupiter, Ketu(R)) | Gate:AD Chamber (Saturn) -> Gate: Revati (Pisces) | Sig:4th Sukha (Pisces, Lord Jupiter) & 9th Bhagya (Leo) steer household upkeep, family conversations, and fixed asset planning. Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces).\n17.[Love] Relational Clarity, Attraction & Interpersonal Dialogue (48%,Acute,MoonInWindow:Nov 7–9 (Moon in Libra 7th-Aspect to Aries); Nov 22–23 (Moon in Aries)) | Lords:H5/M6 Aries (Lord: Mars) + H7/M8 Gemini (Lord: Mercury) | Gate:AD Chamber (Saturn) -> Gate: Revati (Gate 3) | Sig:5th Purva Punya (Aries, Lord Mars) & 7th Kalatra (Gemini) clarify emotional expectations, boundaries, or unresolved heart dialogues. Effort runs across Nov 1–30, with tangible Moon activation during Nov 7–9 (Moon in Libra 7th-Aspect to Aries); Nov 22–23 (Moon in Aries).\n18.[Work] Career Authority, Role Execution & Workload Shift (44%,Acute,MoonInWindow:Nov 5–6 (Moon in Virgo); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)) | Lords:H10/M11 Virgo (Lord: Mercury) + H6/M7 Taurus (Lord: Venus) | Gate:AD Chamber (Saturn) -> Gate: Revati (Gate 3) | Sig:10th Karma (Virgo, Lord Mercury) & 6th Service (Taurus) process under Saturn AD chamber (Moderate Baseline Transit (Controlled Delivery)) and vent through Revati (Gate 3). Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo).\n## INQUIRY & TASK\nQuery: \"Definitive astrological evaluation for House undefined in November 2026.\"\nTask: Synthesize multi-paragraph Vedic analysis for House undefined and all 5 supplementary domains (career_job, love_romance, health_vitality, finance_wealth, family_home).\nLANGUAGE: English only (signs Aries..Pisces; planets Sun..Ketu; NO Tamil/Sanskrit names or Drishti).\nPROSE RULE: part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow MUST be plain-text multi-paragraph English strings (zero nested JSON/code blocks).\nREASONING DIRECTIVES:\n1. MOON-ONLY GOCHARA: Judge all transits exclusively from Janma Rashi (Moon Sign); never reckon transits from Lagna (e.g., never write \"Saturn in 4th from Lagna\").\n2. NATAL PROMISE VS TRANSIT: D1/D9 from Lagna define capacity, yogas & lordships; Gochara from Moon judges what is fruitfully possible now.\n3. KARAKATWAS IN TRANSIT: Planets act via natural Karakatwas + Moon-house distance (e.g., strong Jupiter in 9th from Moon grants Guru Bala boosting Jupiter karakatwas & its D1 ruled houses).\n4. DASHA AUTHORIZATION: MD/AD/PD lords define who delivers; evaluate their D1 house portfolio + current Moon-relative Gochara.\n5. SAV & MOTION: SAV >=28=effortless fruition, <25=resistance; Vakra=unconventional/non-linear karmic settling; Adisara=urgent/accelerated execution.\n6. TARA & CHANDRA BALA: Weigh favorable (Sampat,Kshema,Sadhana,Mitra,Parama Mitra) vs friction (Vipat,Pratyak,Naidhana) taras; flag Chandrashtama (8th Moon) with cautions.\n7. STATIONS, PARIVARTANA & NEECHA BHANGA (MANDATORY): For same-sign Retrograde<->Direct stations contrast BEFORE (stalled/internal/audit) vs AFTER (external release) using exact dates; for Parivartana analyze BOTH Sign-Lord exchange AND Bhava exchange from Moon with exact dates & concrete events (authority/career/property/contracts); for Debilitation/Neecha Bhanga (incl. Neecha-Vakra->Direct) explain initial test vs cancellation reversal; end \"summarySentence\" with a crisp 1-line summary naming active Parivartana/Neecha Bhanga/station triggers & likely events, and detail their timing in Parts 1 & 3.\n8. SUPERSET HOUSE-GATE CORRELATION & STRICT CHRONOLOGICAL MOON-WINDOW LAW (MANDATORY): Correlate major Houses/Bhava Lordships in Parts 1-2 & \"supplementaryScenarios\" with AD Chamber & 3 Nakshatra Gates; populate \"supersetSynthesisNote\" (2-4 sentences) and \"correlatedGateEvents\" (8-16 events spanning ALL 7 portfolios Work,Money,Love,Health,Life,Friends,Trip). STRICT MOON TIMING: Mark \"hasMoonSupport\":true and cite \"moonWindowDates\" ONLY if Moon transits OR casts a 7th direct aspect onto the involved sign(s) INSIDE that event/Parivartana/station's active date window (never cite pre-activation or post-window Moon passages as active triggers—distinguish prior/later passages vs in-window fruition). CARD ORDER: Place ALL Moon-supported/aspected in-window cards (\"hasMoonSupport\":true, sorted descending by \"probabilityScore\") AT THE TOP of \"correlatedGateEvents\", followed in the SAME list by active events lacking an in-window Moon transit/7th-aspect (\"hasMoonSupport\":false,\"latencyStatus\":\"dormant_latent\",\"moonWindowDates\":null) whose narrative explicitly states that effort/momentum runs in the background without an in-window Moon transit or aspect.\nReturn ONLY raw valid JSON (no markdown fences or commentary):\n{\"summarySentence\":\"Plain English synthesis ending with 1-liner of active Parivartana/Neecha Bhanga/station triggers & likely events.\",\"natalPromiseVsTransitDelivery\":{\"natalPromiseScore\":0.85,\"natalPromiseVerdict\":\"string\",\"transitDeliveryScore\":0.78,\"transitDeliveryVerdict\":\"string(Moon Gochara,Vakra/Adisara,SAV)\",\"synthesisVerdict\":\"string\"},\"part1_probabilityAndScope\":\"Multi-paragraph plain English scope & event probabilities.\",\"part2_financialAndResources\":\"Multi-paragraph plain English capital, 2nd/4th/9th/11th analysis.\",\"part3_microTimingWindow\":\"Multi-paragraph plain English favorable vs cautionary lunar timing windows.\",\"peakDateRange\":\"November DD - DD, 2026\",\"overallConfidence\":0.85,\"supplementaryScenarios\":[\n{\"id\":\"career_job\",\"title\":\"Career, Job Search & Professional Standing\",\"verdict\":\"string\",\"confidenceScore\":0.85,\"timingWindow\":\"November DD - DD, 2026\",\"astrologicalReasoning\":\"10th/6th/Dasha\",\"practicalGuidance\":\"string\",\"employmentStatusInference\":{\"status\":\"currently_serving|actively_seeking|sabbatical_unemployed\",\"label\":\"string\",\"indicatorColor\":\"green|yellow|amber|red\",\"confidence\":0.86,\"inferenceReasoning\":\"10th/6th & Dasha\"},\"jobSearchAnalysis\":{\"momentum\":\"string\",\"pastStruggleVsCurrentPhase\":\"string\",\"timingAuspiciousness\":\"string\"},\"newJobAcquisition\":{\"jobTypeAndMood\":\"string\",\"workplaceAtmosphere\":\"string\",\"comparisonWithCurrentRole\":\"string\"},\"existingJobPhase\":{\"currentPhaseNature\":\"string\",\"retentionVsExitAdvice\":\"string\"},\"detailedParagraphs\":[\"p1\",\"p2\",\"p3\"]},\n{\"id\":\"love_romance\",\"title\":\"Love, Romance, Relationship & Interpersonal Horizon\",\"verdict\":\"string\",\"confidenceScore\":0.78,\"timingWindow\":\"November DD - DD, 2026\",\"astrologicalReasoning\":\"5th/7th/Venus/Dasha\",\"practicalGuidance\":\"string\",\"crushStatusInference\":{\"existingCrushTrajectory\":\"string\",\"newCrushProbability\":\"High|Moderate|Low\",\"newCrushDetails\":\"string\"},\"romanceAtmosphere\":{\"emotionalWeather\":\"string\",\"chemistryRating\":82},\"manifestationPath\":{\"outcomeType\":\"classical_traditional_marriage|living_together_modern|exploratory_flutter|platonic_delayed\",\"outcomeLabel\":\"string\",\"manifestationLikelihood\":\"string\",\"astrologicalPathReasoning\":\"string\"},\"detailedParagraphs\":[\"p1\",\"p2\",\"p3\"]},\n{\"id\":\"health_vitality\",\"title\":\"Health & Physical Vitality\",\"verdict\":\"string\",\"confidenceScore\":0.76,\"timingWindow\":\"November DD - DD, 2026\",\"astrologicalReasoning\":\"6th/8th/Saturn/Mars\",\"practicalGuidance\":\"string\",\"healthDetails\":{\"vulnerableZones\":[\"z1\",\"z2\"],\"mentalTranquilityAndStress\":\"string\",\"holisticRemedies\":\"string\"},\"detailedParagraphs\":[\"p1\",\"p2\"]},\n{\"id\":\"finance_wealth\",\"title\":\"Wealth, Cashflow & Assets\",\"verdict\":\"string\",\"confidenceScore\":0.84,\"timingWindow\":\"November DD - DD, 2026\",\"astrologicalReasoning\":\"2nd/4th/11th\",\"practicalGuidance\":\"string\",\"financeDetails\":{\"liquidityVsOutflow\":\"string\",\"windfallAndSpeculation\":\"string\",\"debtAndAssetFinancing\":\"string\"},\"detailedParagraphs\":[\"p1\",\"p2\"]},\n{\"id\":\"family_home\",\"title\":\"Domestic Peace & Family Harmony\",\"verdict\":\"string\",\"confidenceScore\":0.88,\"timingWindow\":\"November DD - DD, 2026\",\"astrologicalReasoning\":\"4th/Moon/Dasha\",\"practicalGuidance\":\"string\",\"familyDetails\":{\"domesticAmbiance\":\"string\",\"maternalWellbeing\":\"string\",\"propertyAndRelocation\":\"string\"},\"detailedParagraphs\":[\"p1\",\"p2\"]}\n],\"predictedSpecificEvents\":[{\"category\":\"visa_immigration|financial_pf|property_asset|career_milestone|health_alert\",\"categoryLabel\":\"string\",\"eventTitle\":\"string\",\"likelihood\":\"string\",\"likelihoodScore\":0.82,\"projectedWindow\":\"November DD - DD, 2026\",\"astrologicalTrigger\":\"Moon Gochara & Dasha\",\"concreteImplication\":\"string\",\"preventiveRemedy\":\"string\"}],\"supersetSynthesisNote\":\"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.\",\"correlatedGateEvents\":[{\"id\":\"corr-work-1\",\"title\":\"string\",\"portfolio\":\"Work|Money|Love|Health|Life|Friends|Trip\",\"probabilityScore\":84,\"isHighProbability\":true,\"latencyStatus\":\"acute_moon_triggered|dormant_latent\",\"hasMoonSupport\":true,\"moonWindowDates\":\"Nov DD-DD\",\"correlatedHousesAndLordships\":\"Lagna H#/Moon H#(Sign,Lord)+AD link\",\"nakshatraGateTrigger\":\"Gate name, transits & perspective\",\"narrative\":\"house lordship + AD chamber + gate + timing\"}]}"
+  },
+  "publicLlmResponse": {
+    "rawResponseText": "{\n  \"_sampleNote\": \"SPECIMEN STRUCTURE ONLY: Illustrates how an actual Public LLM response (Claude/Gemini/OpenAI) sits alongside the real promptSent & deterministic astro context for Private Companion App ingestion.\",\n  \"summarySentence\": \"November 2026 pivots from internal friction (Nov 1-13) to decisive career/authority breakthrough after Mercury and Venus turn Direct on Nov 14 and Sun<->Mars Maha Parivartana activates Nov 17-30; Triggers: Sun<->Mars Parivartana (Nov 17-30), Mercury & Venus Direct Stations (Nov 14), Mars/Sun/Venus Neecha Bhanga.\",\n  \"part1_probabilityAndScope\": \"Early month involves retro-station preparation (Mercury in Libra 12th from Moon until Nov 13; Venus in Virgo 11th from Moon Nov 6-13) with Mars debilitated in Cancer until Nov 12. Once both Venus and Mercury station Direct on Nov 14 and Sun enters Scorpio on Nov 17 initiating Maha Parivartana with Mars in Leo (1st<->10th from Moon), stalled work, authority recognition, and contract clearances turn sharply constructive—especially during in-window Moon triggers Nov 17-19, Nov 20-23, Nov 24-25, and Nov 30.\",\n  \"part2_financialAndResources\": \"2nd/3rd/11th house circuits open cashflow recovery and blocked receivables after Nov 14 when Venus (11th-from-Moon gains lord) stations Direct in Virgo with Neecha Bhanga. Peak financial/settlement pulses align with Moon overlapping Capricorn/Cancer axis Nov 1-2, Nov 15-16, Nov 28-29 and Virgo/Libra Nov 6-9.\",\n  \"part3_microTimingWindow\": \"Peak acute action windows: Nov 17-19 (Moon in Aquarius 7th-aspecting Mars in Leo), Nov 20-23 (Moon 7th-aspecting Venus in Virgo & Mercury in Libra post-station), Nov 24-25 (Moon in Taurus 7th-aspecting Sun in Scorpio), Nov 30 (Moon in Leo). Exercise diplomatic restraint Nov 1-2 and Nov 10-11 before Parivartana activates.\",\n  \"correlatedGateEvents\": [\n    {\n      \"id\": \"det-parivartana-1\",\n      \"title\": \"Parivartana Exchange: Mercury <-> Venus (Dainya / Karmic Parivartana)\",\n      \"portfolio\": \"Work\",\n      \"probabilityScore\": 88,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra)\",\n      \"correlatedHousesAndLordships\": \"Lagna H11 (Thulaam (Libra)) <-> H10 (Kanni (Virgo)) | From Moon: Mercury in H12 (Thulaam (Libra)) ↔ Venus in H11 (Kanni (Virgo)) | From Lagna: H11 ↔ H10 | Mercury (Lord of Kanni (Virgo), H11 from Moon / H10 from Lagna) sits in Thulaam (Libra) (H12), while Venus (Lord of Thulaam (Libra), H12 from Moon / H11 from Lagna) sits in Kanni (Virgo) (H11).\",\n      \"nakshatraGateTrigger\": \"Parivartana (2026-11-06 to 2026-11-22) vented via Revati (Gate 3)\",\n      \"narrative\": \"Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income. Effort runs across Nov 6–22 (2026-11-06 to 2026-11-22), with tangible Moon activation during Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra).\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-parivartana-2\",\n      \"title\": \"Parivartana Exchange: Moon <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))\",\n      \"portfolio\": \"Life\",\n      \"probabilityScore\": 88,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 10–11 (Moon in Scorpio)\",\n      \"correlatedHousesAndLordships\": \"Lagna H12 (Vrischigam (Scorpio)) <-> H8 (Katakam (Cancer)) | From Moon: Moon in H1 (Vrischigam (Scorpio)) ↔ Mars in H9 (Katakam (Cancer)) | From Lagna: H12 ↔ H8 | Moon (Lord of Katakam (Cancer), H9 from Moon / H8 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Katakam (Cancer) (H9).\",\n      \"nakshatraGateTrigger\": \"Parivartana (2026-11-10 to 2026-11-11) vented via Revati (Gate 3)\",\n      \"narrative\": \"Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results. Effort runs across Nov 10–11 (2026-11-10 to 2026-11-11), with tangible Moon activation during Nov 10–11 (Moon in Scorpio). Prior Moon passage (Nov 1–2 (Cancer)) occurred BEFORE Nov 10–11 (2026-11-10 to 2026-11-11) started. Later Moon passage (Nov 28–29 (Cancer)) falls AFTER Nov 10–11 (2026-11-10 to 2026-11-11) ends.\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-parivartana-3\",\n      \"title\": \"Parivartana Exchange: Sun <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))\",\n      \"portfolio\": \"Life\",\n      \"probabilityScore\": 88,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo)\",\n      \"correlatedHousesAndLordships\": \"Lagna H12 (Vrischigam (Scorpio)) <-> H9 (Simham (Leo)) | From Moon: Sun in H1 (Vrischigam (Scorpio)) ↔ Mars in H10 (Simham (Leo)) | From Lagna: H12 ↔ H9 | Sun (Lord of Simham (Leo), H10 from Moon / H9 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Simham (Leo) (H10).\",\n      \"nakshatraGateTrigger\": \"Parivartana (2026-11-17 to 2026-11-30) vented via Revati (Gate 3)\",\n      \"narrative\": \"Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication). Effort runs across Nov 17–30 (2026-11-17 to 2026-11-30), with tangible Moon activation during Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo). Prior Moon passage (Nov 10–11 (Scorpio), Nov 3–4 (Leo)) occurred BEFORE Nov 17–30 (2026-11-17 to 2026-11-30) started.\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-gate-1\",\n      \"title\": \"Ashlesha Gate Trigger (Katakam): Money Activity\",\n      \"portfolio\": \"Money\",\n      \"probabilityScore\": 84,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer)\",\n      \"correlatedHousesAndLordships\": \"Lagna H8 / Moon H9 (Katakam, Lord: Moon)\",\n      \"nakshatraGateTrigger\": \"Gate 1: Ashlesha [Combined Lagna+Moon] • Grahas: Mars (Active in House), Moon (Active in House)\",\n      \"narrative\": \"Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Ashlesha around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and stomach lining, gut flora & sleep. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer).\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-portfolio-trip-6\",\n      \"title\": \"Short Movement, Paperwork Readiness & Long-Distance / Visa Planning\",\n      \"portfolio\": \"Trip\",\n      \"probabilityScore\": 84,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius)\",\n      \"correlatedHousesAndLordships\": \"H3/M4 Kumbam (Lord: Saturn; Transit: Rahu(R)) + H9/M10 Simham (Lord: Sun; Transit: Jupiter, Ketu(R)) + H12/M1 Vrischigam (Lord: Mars)\",\n      \"nakshatraGateTrigger\": \"AD Chamber (Saturn) -> Gate: Jyeshtha (Vrischigam)\",\n      \"narrative\": \"3rd Short-Trip (Kumbam), 9th Long-Journey (Simham) & 12th Foreign (Vrischigam) regulate travel logistics, consular/official documentation, and commuting rhythm. Effort runs across Nov 1–30, with tangible Moon activation during Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius).\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-station-1\",\n      \"title\": \"Mercury Turns Retrograde -> Direct in Same House (Thulaam (Libra))\",\n      \"portfolio\": \"Friends\",\n      \"probabilityScore\": 81,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 22–23 (Moon in Aries 7th-Aspect to Libra)\",\n      \"correlatedHousesAndLordships\": \"Lagna H11 / Moon H12 (Thulaam (Libra), Lord: Venus)\",\n      \"nakshatraGateTrigger\": \"Station Date 2026-11-14 (Before 2026-11-01 to 2026-11-13 -> After 2026-11-14 to 2026-11-30)\",\n      \"narrative\": \"Mercury (Budha) stations DIRECT inside Thulaam (Libra) (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30) Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution. Effort runs across Direct/Post-Station phase Nov 14–30 (Station 2026-11-14), with tangible Moon activation during Nov 22–23 (Moon in Aries 7th-Aspect to Libra). Prior Moon passage (Nov 7–9 (Libra)) occurred BEFORE Direct/Post-Station phase Nov 14–30 (Station 2026-11-14) started.\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-station-2\",\n      \"title\": \"Venus Turns Retrograde -> Direct in Same House (Kanni (Virgo))\",\n      \"portfolio\": \"Work\",\n      \"probabilityScore\": 81,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)\",\n      \"correlatedHousesAndLordships\": \"Lagna H10 / Moon H11 (Kanni (Virgo), Lord: Mercury)\",\n      \"nakshatraGateTrigger\": \"Station Date 2026-11-14 (Before 2026-11-06 to 2026-11-13 -> After 2026-11-14 to 2026-11-22)\",\n      \"narrative\": \"Venus (Sukra) stations DIRECT inside Kanni (Virgo) (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22) Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships. Effort runs across Direct/Post-Station phase Nov 14–22 (Station 2026-11-14), with tangible Moon activation during Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo). Prior Moon passage (Nov 5–6 (Virgo)) occurred BEFORE Direct/Post-Station phase Nov 14–22 (Station 2026-11-14) started.\",\n      \"source\": \"deterministic_gate_candidate\"\n    },\n    {\n      \"id\": \"det-portfolio-health-3\",\n      \"title\": \"Somatic Stress Watch, Gut/Sleep Rhythm & Vitality Pacing\",\n      \"portfolio\": \"Health\",\n      \"probabilityScore\": 80,\n      \"isHighProbability\": true,\n      \"latencyStatus\": \"acute_moon_triggered\",\n      \"hasMoonSupport\": true,\n      \"moonWindowDates\": \"Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius)\",\n      \"correlatedHousesAndLordships\": \"H1/M2 Dhanus (Lord: Jupiter) + H8/M9 Katakam (Lord: Moon; Transit: Mars, Moon) + H6/M7 Rishabam (Lord: Venus)\",\n      \"nakshatraGateTrigger\": \"AD Chamber (Saturn) -> Gate: Ashlesha (Katakam)\",\n      \"narrative\": \"Lagna (Dhanus), 8th (Katakam) & 6th (Rishabam) interact with Mercury's anatomical seats (Stomach Lining, Gut Flora & Sleep / Secret Parts, Colon & Sensory Nerves / Feet, Lymph & Peripheral Nerves); manage rest around Chandrashtama/Moon pulses. Effort runs across Nov 1–30, with tangible Moon activation during Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius).\",\n      \"source\": \"deterministic_gate_candidate\"\n    }\n  ]\n}",
+    "extendedThinkingText": "(Specimen) In live Claude Fable / Gemini Thinking runs, extended chain-of-thought reasoning goes here verbatim.",
+    "parsedStructuredNarrative": {
+      "_sampleNote": "SPECIMEN STRUCTURE ONLY: Illustrates how an actual Public LLM response (Claude/Gemini/OpenAI) sits alongside the real promptSent & deterministic astro context for Private Companion App ingestion.",
+      "summarySentence": "November 2026 pivots from internal friction (Nov 1-13) to decisive career/authority breakthrough after Mercury and Venus turn Direct on Nov 14 and Sun<->Mars Maha Parivartana activates Nov 17-30; Triggers: Sun<->Mars Parivartana (Nov 17-30), Mercury & Venus Direct Stations (Nov 14), Mars/Sun/Venus Neecha Bhanga.",
+      "part1_probabilityAndScope": "Early month involves retro-station preparation (Mercury in Libra 12th from Moon until Nov 13; Venus in Virgo 11th from Moon Nov 6-13) with Mars debilitated in Cancer until Nov 12. Once both Venus and Mercury station Direct on Nov 14 and Sun enters Scorpio on Nov 17 initiating Maha Parivartana with Mars in Leo (1st<->10th from Moon), stalled work, authority recognition, and contract clearances turn sharply constructive—especially during in-window Moon triggers Nov 17-19, Nov 20-23, Nov 24-25, and Nov 30.",
+      "part2_financialAndResources": "2nd/3rd/11th house circuits open cashflow recovery and blocked receivables after Nov 14 when Venus (11th-from-Moon gains lord) stations Direct in Virgo with Neecha Bhanga. Peak financial/settlement pulses align with Moon overlapping Capricorn/Cancer axis Nov 1-2, Nov 15-16, Nov 28-29 and Virgo/Libra Nov 6-9.",
+      "part3_microTimingWindow": "Peak acute action windows: Nov 17-19 (Moon in Aquarius 7th-aspecting Mars in Leo), Nov 20-23 (Moon 7th-aspecting Venus in Virgo & Mercury in Libra post-station), Nov 24-25 (Moon in Taurus 7th-aspecting Sun in Scorpio), Nov 30 (Moon in Leo). Exercise diplomatic restraint Nov 1-2 and Nov 10-11 before Parivartana activates.",
+      "correlatedGateEvents": [
+        {
+          "id": "det-parivartana-1",
+          "title": "Parivartana Exchange: Mercury <-> Venus (Dainya / Karmic Parivartana)",
+          "portfolio": "Work",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra)",
+          "correlatedHousesAndLordships": "Lagna H11 (Thulaam (Libra)) <-> H10 (Kanni (Virgo)) | From Moon: Mercury in H12 (Thulaam (Libra)) ↔ Venus in H11 (Kanni (Virgo)) | From Lagna: H11 ↔ H10 | Mercury (Lord of Kanni (Virgo), H11 from Moon / H10 from Lagna) sits in Thulaam (Libra) (H12), while Venus (Lord of Thulaam (Libra), H12 from Moon / H11 from Lagna) sits in Kanni (Virgo) (H11).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-06 to 2026-11-22) vented via Revati (Gate 3)",
+          "narrative": "Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income. Effort runs across Nov 6–22 (2026-11-06 to 2026-11-22), with tangible Moon activation during Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-parivartana-2",
+          "title": "Parivartana Exchange: Moon <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))",
+          "portfolio": "Life",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 10–11 (Moon in Scorpio)",
+          "correlatedHousesAndLordships": "Lagna H12 (Vrischigam (Scorpio)) <-> H8 (Katakam (Cancer)) | From Moon: Moon in H1 (Vrischigam (Scorpio)) ↔ Mars in H9 (Katakam (Cancer)) | From Lagna: H12 ↔ H8 | Moon (Lord of Katakam (Cancer), H9 from Moon / H8 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Katakam (Cancer) (H9).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-10 to 2026-11-11) vented via Revati (Gate 3)",
+          "narrative": "Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results. Effort runs across Nov 10–11 (2026-11-10 to 2026-11-11), with tangible Moon activation during Nov 10–11 (Moon in Scorpio). Prior Moon passage (Nov 1–2 (Cancer)) occurred BEFORE Nov 10–11 (2026-11-10 to 2026-11-11) started. Later Moon passage (Nov 28–29 (Cancer)) falls AFTER Nov 10–11 (2026-11-10 to 2026-11-11) ends.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-parivartana-3",
+          "title": "Parivartana Exchange: Sun <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))",
+          "portfolio": "Life",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo)",
+          "correlatedHousesAndLordships": "Lagna H12 (Vrischigam (Scorpio)) <-> H9 (Simham (Leo)) | From Moon: Sun in H1 (Vrischigam (Scorpio)) ↔ Mars in H10 (Simham (Leo)) | From Lagna: H12 ↔ H9 | Sun (Lord of Simham (Leo), H10 from Moon / H9 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Simham (Leo) (H10).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-17 to 2026-11-30) vented via Revati (Gate 3)",
+          "narrative": "Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication). Effort runs across Nov 17–30 (2026-11-17 to 2026-11-30), with tangible Moon activation during Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo). Prior Moon passage (Nov 10–11 (Scorpio), Nov 3–4 (Leo)) occurred BEFORE Nov 17–30 (2026-11-17 to 2026-11-30) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-gate-1",
+          "title": "Ashlesha Gate Trigger (Katakam): Money Activity",
+          "portfolio": "Money",
+          "probabilityScore": 84,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer)",
+          "correlatedHousesAndLordships": "Lagna H8 / Moon H9 (Katakam, Lord: Moon)",
+          "nakshatraGateTrigger": "Gate 1: Ashlesha [Combined Lagna+Moon] • Grahas: Mars (Active in House), Moon (Active in House)",
+          "narrative": "Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Ashlesha around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and stomach lining, gut flora & sleep. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-trip-6",
+          "title": "Short Movement, Paperwork Readiness & Long-Distance / Visa Planning",
+          "portfolio": "Trip",
+          "probabilityScore": 84,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius)",
+          "correlatedHousesAndLordships": "H3/M4 Kumbam (Lord: Saturn; Transit: Rahu(R)) + H9/M10 Simham (Lord: Sun; Transit: Jupiter, Ketu(R)) + H12/M1 Vrischigam (Lord: Mars)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Jyeshtha (Vrischigam)",
+          "narrative": "3rd Short-Trip (Kumbam), 9th Long-Journey (Simham) & 12th Foreign (Vrischigam) regulate travel logistics, consular/official documentation, and commuting rhythm. Effort runs across Nov 1–30, with tangible Moon activation during Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-station-1",
+          "title": "Mercury Turns Retrograde -> Direct in Same House (Thulaam (Libra))",
+          "portfolio": "Friends",
+          "probabilityScore": 81,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 22–23 (Moon in Aries 7th-Aspect to Libra)",
+          "correlatedHousesAndLordships": "Lagna H11 / Moon H12 (Thulaam (Libra), Lord: Venus)",
+          "nakshatraGateTrigger": "Station Date 2026-11-14 (Before 2026-11-01 to 2026-11-13 -> After 2026-11-14 to 2026-11-30)",
+          "narrative": "Mercury (Budha) stations DIRECT inside Thulaam (Libra) (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30) Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution. Effort runs across Direct/Post-Station phase Nov 14–30 (Station 2026-11-14), with tangible Moon activation during Nov 22–23 (Moon in Aries 7th-Aspect to Libra). Prior Moon passage (Nov 7–9 (Libra)) occurred BEFORE Direct/Post-Station phase Nov 14–30 (Station 2026-11-14) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-station-2",
+          "title": "Venus Turns Retrograde -> Direct in Same House (Kanni (Virgo))",
+          "portfolio": "Work",
+          "probabilityScore": 81,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)",
+          "correlatedHousesAndLordships": "Lagna H10 / Moon H11 (Kanni (Virgo), Lord: Mercury)",
+          "nakshatraGateTrigger": "Station Date 2026-11-14 (Before 2026-11-06 to 2026-11-13 -> After 2026-11-14 to 2026-11-22)",
+          "narrative": "Venus (Sukra) stations DIRECT inside Kanni (Virgo) (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22) Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships. Effort runs across Direct/Post-Station phase Nov 14–22 (Station 2026-11-14), with tangible Moon activation during Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo). Prior Moon passage (Nov 5–6 (Virgo)) occurred BEFORE Direct/Post-Station phase Nov 14–22 (Station 2026-11-14) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-health-3",
+          "title": "Somatic Stress Watch, Gut/Sleep Rhythm & Vitality Pacing",
+          "portfolio": "Health",
+          "probabilityScore": 80,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius)",
+          "correlatedHousesAndLordships": "H1/M2 Dhanus (Lord: Jupiter) + H8/M9 Katakam (Lord: Moon; Transit: Mars, Moon) + H6/M7 Rishabam (Lord: Venus)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Ashlesha (Katakam)",
+          "narrative": "Lagna (Dhanus), 8th (Katakam) & 6th (Rishabam) interact with Mercury's anatomical seats (Stomach Lining, Gut Flora & Sleep / Secret Parts, Colon & Sensory Nerves / Feet, Lymph & Peripheral Nerves); manage rest around Chandrashtama/Moon pulses. Effort runs across Nov 1–30, with tangible Moon activation during Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius).",
+          "source": "deterministic_gate_candidate"
+        }
+      ]
+    }
+  },
+  "deterministicAstroContext": {
+    "flattenedNatalD1": [
+      {
+        "body_name": "Sun",
+        "rashi_name": "Sagittarius",
+        "house_number": 1,
+        "rashi_index": 9,
+        "degree_sputa": "12°",
+        "nakshatra_name": "Mula",
+        "pada": 4
+      },
+      {
+        "body_name": "Moon",
+        "rashi_name": "Scorpio",
+        "house_number": 12,
+        "rashi_index": 8,
+        "degree_sputa": "8°",
+        "nakshatra_name": "Anuradha",
+        "pada": 2
+      },
+      {
+        "body_name": "Mars",
+        "rashi_name": "Capricorn",
+        "house_number": 2,
+        "rashi_index": 10,
+        "degree_sputa": "20°",
+        "nakshatra_name": "Shravana",
+        "pada": 4
+      },
+      {
+        "body_name": "Mercury",
+        "rashi_name": "Sagittarius",
+        "house_number": 1,
+        "rashi_index": 9,
+        "degree_sputa": "18°",
+        "nakshatra_name": "Purva Ashadha",
+        "pada": 2
+      },
+      {
+        "body_name": "Jupiter",
+        "rashi_name": "Sagittarius",
+        "house_number": 1,
+        "rashi_index": 9,
+        "degree_sputa": "5°",
+        "nakshatra_name": "Mula",
+        "pada": 2
+      },
+      {
+        "body_name": "Venus",
+        "rashi_name": "Scorpio",
+        "house_number": 12,
+        "rashi_index": 8,
+        "degree_sputa": "15°",
+        "nakshatra_name": "Anuradha",
+        "pada": 4
+      },
+      {
+        "body_name": "Saturn",
+        "rashi_name": "Scorpio",
+        "house_number": 12,
+        "rashi_index": 8,
+        "degree_sputa": "22°",
+        "nakshatra_name": "Jyeshtha",
+        "pada": 2
+      },
+      {
+        "body_name": "Rahu",
+        "rashi_name": "Pisces",
+        "house_number": 4,
+        "rashi_index": 12,
+        "degree_sputa": "10°",
+        "nakshatra_name": "Uttara Bhadrapada",
+        "pada": 3
+      },
+      {
+        "body_name": "Ketu",
+        "rashi_name": "Virgo",
+        "house_number": 10,
+        "rashi_index": 6,
+        "degree_sputa": "10°",
+        "nakshatra_name": "Hasta",
+        "pada": 1
+      }
+    ],
+    "monthlyMoonSpans": [
+      {
+        "startDay": 1,
+        "endDay": 2,
+        "signIndex": 4,
+        "signName": "Katakam (Cancer)",
+        "signTamil": "கடகம்",
+        "houseNumber": 8,
+        "label": "Day 1–2: Moon in Katakam (கடகம்) [House 8]"
+      },
+      {
+        "startDay": 3,
+        "endDay": 4,
+        "signIndex": 5,
+        "signName": "Simham (Leo)",
+        "signTamil": "சிம்மம்",
+        "houseNumber": 9,
+        "label": "Day 3–4: Moon in Simham (சிம்மம்) [House 9]"
+      },
+      {
+        "startDay": 5,
+        "endDay": 6,
+        "signIndex": 6,
+        "signName": "Kanni (Virgo)",
+        "signTamil": "கன்னி",
+        "houseNumber": 10,
+        "label": "Day 5–6: Moon in Kanni (கன்னி) [House 10]"
+      },
+      {
+        "startDay": 7,
+        "endDay": 9,
+        "signIndex": 7,
+        "signName": "Thulaam (Libra)",
+        "signTamil": "துலாம்",
+        "houseNumber": 11,
+        "label": "Day 7–9: Moon in Thulaam (துலாம்) [House 11]"
+      },
+      {
+        "startDay": 10,
+        "endDay": 11,
+        "signIndex": 8,
+        "signName": "Vrischigam (Scorpio)",
+        "signTamil": "விருச்சிகம்",
+        "houseNumber": 12,
+        "label": "Day 10–11: Moon in Vrischigam (விருச்சிகம்) [House 12]"
+      },
+      {
+        "startDay": 12,
+        "endDay": 14,
+        "signIndex": 9,
+        "signName": "Dhanus (Sagittarius)",
+        "signTamil": "தனுசு",
+        "houseNumber": 1,
+        "label": "Day 12–14: Moon in Dhanus (தனுசு) [House 1]"
+      },
+      {
+        "startDay": 15,
+        "endDay": 16,
+        "signIndex": 10,
+        "signName": "Makaram (Capricorn)",
+        "signTamil": "மகரம்",
+        "houseNumber": 2,
+        "label": "Day 15–16: Moon in Makaram (மகரம்) [House 2]"
+      },
+      {
+        "startDay": 17,
+        "endDay": 19,
+        "signIndex": 11,
+        "signName": "Kumbam (Aquarius)",
+        "signTamil": "கும்பம்",
+        "houseNumber": 3,
+        "label": "Day 17–19: Moon in Kumbam (கும்பம்) [House 3]"
+      },
+      {
+        "startDay": 20,
+        "endDay": 21,
+        "signIndex": 12,
+        "signName": "Meenam (Pisces)",
+        "signTamil": "மீனம்",
+        "houseNumber": 4,
+        "label": "Day 20–21: Moon in Meenam (மீனம்) [House 4]"
+      },
+      {
+        "startDay": 22,
+        "endDay": 23,
+        "signIndex": 1,
+        "signName": "Mesham (Aries)",
+        "signTamil": "மேஷம்",
+        "houseNumber": 5,
+        "label": "Day 22–23: Moon in Mesham (மேஷம்) [House 5]"
+      },
+      {
+        "startDay": 24,
+        "endDay": 25,
+        "signIndex": 2,
+        "signName": "Rishabam (Taurus)",
+        "signTamil": "ரிஷபம்",
+        "houseNumber": 6,
+        "label": "Day 24–25: Moon in Rishabam (ரிஷபம்) [House 6]"
+      },
+      {
+        "startDay": 26,
+        "endDay": 27,
+        "signIndex": 3,
+        "signName": "Mithunam (Gemini)",
+        "signTamil": "மிதுனம்",
+        "houseNumber": 7,
+        "label": "Day 26–27: Moon in Mithunam (மிதுனம்) [House 7]"
+      },
+      {
+        "startDay": 28,
+        "endDay": 29,
+        "signIndex": 4,
+        "signName": "Katakam (Cancer)",
+        "signTamil": "கடகம்",
+        "houseNumber": 8,
+        "label": "Day 28–29: Moon in Katakam (கடகம்) [House 8]"
+      },
+      {
+        "startDay": 30,
+        "endDay": 30,
+        "signIndex": 5,
+        "signName": "Simham (Leo)",
+        "signTamil": "சிம்மம்",
+        "houseNumber": 9,
+        "label": "Day 30–30: Moon in Simham (சிம்மம்) [House 9]"
+      }
+    ],
+    "vedicSpecialEvents": {
+      "startDate": "2026-11-01",
+      "endDate": "2026-11-30",
+      "sameSignStations": [
+        {
+          "grahaKey": "Mercury",
+          "grahaName": "Mercury (Budha)",
+          "signIndex": 7,
+          "signName": "Thulaam (Libra)",
+          "houseFromLagna": 11,
+          "houseFromMoon": 12,
+          "turnType": "Retrograde -> Direct",
+          "stationDate": "2026-11-14",
+          "beforeRange": "2026-11-01 to 2026-11-13",
+          "afterRange": "2026-11-14 to 2026-11-30",
+          "summary": "Mercury (Budha) stations DIRECT inside Thulaam (Libra) (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30)",
+          "eventImpact": "Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution."
+        },
+        {
+          "grahaKey": "Venus",
+          "grahaName": "Venus (Sukra)",
+          "signIndex": 6,
+          "signName": "Kanni (Virgo)",
+          "houseFromLagna": 10,
+          "houseFromMoon": 11,
+          "turnType": "Retrograde -> Direct",
+          "stationDate": "2026-11-14",
+          "beforeRange": "2026-11-06 to 2026-11-13",
+          "afterRange": "2026-11-14 to 2026-11-22",
+          "summary": "Venus (Sukra) stations DIRECT inside Kanni (Virgo) (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22)",
+          "eventImpact": "Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships."
+        }
+      ],
+      "parivartanaYogas": [
+        {
+          "kind": "Transit-Transit",
+          "grahaA": "Mercury",
+          "grahaB": "Venus",
+          "signAIndex": 7,
+          "signAName": "Thulaam (Libra)",
+          "signBIndex": 6,
+          "signBName": "Kanni (Virgo)",
+          "moonHouseA": 12,
+          "moonHouseB": 11,
+          "lagnaHouseA": 11,
+          "lagnaHouseB": 10,
+          "startDate": "2026-11-06",
+          "endDate": "2026-11-22",
+          "yogaClass": "Dainya / Karmic Parivartana",
+          "bhavaExchangeSummary": "From Moon: Mercury in H12 (Thulaam (Libra)) ↔ Venus in H11 (Kanni (Virgo)) | From Lagna: H11 ↔ H10",
+          "lordshipSummary": "Mercury (Lord of Kanni (Virgo), H11 from Moon / H10 from Lagna) sits in Thulaam (Libra) (H12), while Venus (Lord of Thulaam (Libra), H12 from Moon / H11 from Lagna) sits in Kanni (Virgo) (H11).",
+          "predictedEvents": "Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income."
+        },
+        {
+          "kind": "Transit-Transit",
+          "grahaA": "Moon",
+          "grahaB": "Mars",
+          "signAIndex": 8,
+          "signAName": "Vrischigam (Scorpio)",
+          "signBIndex": 4,
+          "signBName": "Katakam (Cancer)",
+          "moonHouseA": 1,
+          "moonHouseB": 9,
+          "lagnaHouseA": 12,
+          "lagnaHouseB": 8,
+          "startDate": "2026-11-10",
+          "endDate": "2026-11-11",
+          "yogaClass": "Maha Parivartana (Kendra/Trikona/Wealth)",
+          "bhavaExchangeSummary": "From Moon: Moon in H1 (Vrischigam (Scorpio)) ↔ Mars in H9 (Katakam (Cancer)) | From Lagna: H12 ↔ H8",
+          "lordshipSummary": "Moon (Lord of Katakam (Cancer), H9 from Moon / H8 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Katakam (Cancer) (H9).",
+          "predictedEvents": "Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results."
+        },
+        {
+          "kind": "Transit-Transit",
+          "grahaA": "Sun",
+          "grahaB": "Mars",
+          "signAIndex": 8,
+          "signAName": "Vrischigam (Scorpio)",
+          "signBIndex": 5,
+          "signBName": "Simham (Leo)",
+          "moonHouseA": 1,
+          "moonHouseB": 10,
+          "lagnaHouseA": 12,
+          "lagnaHouseB": 9,
+          "startDate": "2026-11-17",
+          "endDate": "2026-11-30",
+          "yogaClass": "Maha Parivartana (Kendra/Trikona/Wealth)",
+          "bhavaExchangeSummary": "From Moon: Sun in H1 (Vrischigam (Scorpio)) ↔ Mars in H10 (Simham (Leo)) | From Lagna: H12 ↔ H9",
+          "lordshipSummary": "Sun (Lord of Simham (Leo), H10 from Moon / H9 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Simham (Leo) (H10).",
+          "predictedEvents": "Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication)."
+        }
+      ],
+      "debilitationEvents": [
+        {
+          "grahaKey": "Sun",
+          "grahaName": "Sun (Surya)",
+          "signIndex": 7,
+          "signName": "Thulaam (Libra)",
+          "houseFromLagna": 11,
+          "houseFromMoon": 12,
+          "startDate": "2026-11-01",
+          "endDate": "2026-11-16",
+          "motionState": "Direct (Neecha-Direct)",
+          "neechaBhangaStatus": "NEECHA BHANGA RAJA YOGA",
+          "cancellationReasons": [
+            "Natal Venus (dispositor of Thulaam (Libra)) sits in Kendra (H12 Lagna / H1 Moon)",
+            "Exaltation lord Saturn of Thulaam (Libra) transits Kendra (H4 from Lagna)",
+            "Natal Saturn (planet exalted in Thulaam (Libra)) occupies Kendra (H12 Lagna / H1 Moon)",
+            "Sun receives conjunction from dispositor Venus",
+            "Debilitation sign lord Venus transits Kendra (H10 from Lagna)",
+            "Lord of Sun's exaltation sign (Mars) transits Kendra (H10 from Moon)"
+          ],
+          "summary": "Sun (Surya) Debilitated in Thulaam (Libra) (H12 from Moon / H11 from Lagna) [2026-11-01 → 2026-11-16] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA",
+          "predictedEvents": "Sun Debilitated with NEECHA BHANGA RAJA YOGA (H12 from Moon): initial test, extra effort, or compromise around authority, father/boss dynamics, vitality, and confidence is cancelled out and elevates into practical achievement/recovery during the window."
+        },
+        {
+          "grahaKey": "Mars",
+          "grahaName": "Mars (Sevvai)",
+          "signIndex": 4,
+          "signName": "Katakam (Cancer)",
+          "houseFromLagna": 8,
+          "houseFromMoon": 9,
+          "startDate": "2026-11-01",
+          "endDate": "2026-11-12",
+          "motionState": "Direct (Neecha-Direct)",
+          "neechaBhangaStatus": "NEECHA BHANGA RAJA YOGA",
+          "cancellationReasons": [
+            "Natal Moon (dispositor of Katakam (Cancer)) sits in Kendra (H12 Lagna / H1 Moon)",
+            "Exaltation lord Jupiter of Katakam (Cancer) transits Kendra (H10 from Moon)",
+            "Natal Jupiter (planet exalted in Katakam (Cancer)) occupies Kendra (H1 Lagna / H2 Moon)",
+            "Mars receives conjunction from dispositor Moon",
+            "Lord of Mars's exaltation sign (Saturn) transits Kendra (H4 from Lagna)",
+            "Debilitation sign lord Moon transits Kendra (H10 from Moon)",
+            "Debilitation sign lord Moon transits Kendra (H10 from Lagna)",
+            "Debilitation sign lord Moon transits Kendra (H1 from Moon)",
+            "Mars participates in an active Parivartana mutual sign exchange",
+            "Debilitation sign lord Moon transits Kendra (H1 from Lagna)"
+          ],
+          "summary": "Mars (Sevvai) Debilitated in Katakam (Cancer) (H9 from Moon / H8 from Lagna) [2026-11-01 → 2026-11-12] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA",
+          "predictedEvents": "Mars Debilitated with NEECHA BHANGA RAJA YOGA (H9 from Moon): initial test, extra effort, or compromise around patience, domestic peace, property/vehicle pressure, and energy pacing is cancelled out and elevates into practical achievement/recovery during the window."
+        },
+        {
+          "grahaKey": "Venus",
+          "grahaName": "Venus (Sukra)",
+          "signIndex": 6,
+          "signName": "Kanni (Virgo)",
+          "houseFromLagna": 10,
+          "houseFromMoon": 11,
+          "startDate": "2026-11-06",
+          "endDate": "2026-11-13",
+          "motionState": "Retrograde (Neecha-Vakra)",
+          "neechaBhangaStatus": "NEECHA BHANGA RAJA YOGA",
+          "cancellationReasons": [
+            "Venus is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength",
+            "Natal Mercury (dispositor of Kanni (Virgo)) sits in Kendra (H1 Lagna / H2 Moon)",
+            "Natal Mercury (planet exalted in Kanni (Virgo)) occupies Kendra (H1 Lagna / H2 Moon)",
+            "Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon)",
+            "Venus participates in an active Parivartana mutual sign exchange"
+          ],
+          "summary": "Venus (Sukra) Debilitated in Kanni (Virgo) (H11 from Moon / H10 from Lagna) [2026-11-06 → 2026-11-13] — Retrograde (Neecha-Vakra) — Status: NEECHA BHANGA RAJA YOGA",
+          "predictedEvents": "Venus in Neecha-Vakra with Neecha Bhanga (H11 from Moon): initial vulnerability or hyper-criticism around relationships, financial expectations, comfort, and diplomacy reverses strongly into unconventional gains and hidden strength once stabilized."
+        },
+        {
+          "grahaKey": "Venus",
+          "grahaName": "Venus (Sukra)",
+          "signIndex": 6,
+          "signName": "Kanni (Virgo)",
+          "houseFromLagna": 10,
+          "houseFromMoon": 11,
+          "startDate": "2026-11-14",
+          "endDate": "2026-11-22",
+          "motionState": "Direct (Neecha-Direct)",
+          "neechaBhangaStatus": "NEECHA BHANGA RAJA YOGA",
+          "cancellationReasons": [
+            "Natal Mercury (dispositor of Kanni (Virgo)) sits in Kendra (H1 Lagna / H2 Moon)",
+            "Natal Mercury (planet exalted in Kanni (Virgo)) occupies Kendra (H1 Lagna / H2 Moon)",
+            "Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon)",
+            "Venus participates in an active Parivartana mutual sign exchange"
+          ],
+          "summary": "Venus (Sukra) Debilitated in Kanni (Virgo) (H11 from Moon / H10 from Lagna) [2026-11-14 → 2026-11-22] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA",
+          "predictedEvents": "Venus Debilitated with NEECHA BHANGA RAJA YOGA (H11 from Moon): initial test, extra effort, or compromise around relationships, financial expectations, comfort, and diplomacy is cancelled out and elevates into practical achievement/recovery during the window."
+        }
+      ],
+      "consolidatedOneLiner": "Stations: Mercury turns Direct in Thulaam on 2026-11-14; Venus turns Direct in Kanni on 2026-11-14 | Parivartana: Mercury↔Venus Parivartana (H12/H11 Moon, 2026-11-06→2026-11-22); Moon↔Mars Parivartana (H1/H9 Moon, 2026-11-10→2026-11-11); Sun↔Mars Parivartana (H1/H10 Moon, 2026-11-17→2026-11-30) | Debilitation/Neecha Bhanga: Sun Neecha-Bhanga in Thulaam (2026-11-01→2026-11-16, Direct); Mars Neecha-Bhanga in Katakam (2026-11-01→2026-11-12, Direct); Venus Neecha-Bhanga in Kanni (2026-11-06→2026-11-13, Vakra); Venus Neecha-Bhanga in Kanni (2026-11-14→2026-11-22, Direct).",
+      "possibleEventsSummary": [
+        "[Motion Pivot — 2026-11-14] Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution.",
+        "[Motion Pivot — 2026-11-14] Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships.",
+        "[Dainya / Karmic Parivartana — 2026-11-06→2026-11-22] Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income.",
+        "[Maha Parivartana (Kendra/Trikona/Wealth) — 2026-11-10→2026-11-11] Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results.",
+        "[Maha Parivartana (Kendra/Trikona/Wealth) — 2026-11-17→2026-11-30] Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication).",
+        "[NEECHA BHANGA RAJA YOGA — 2026-11-01→2026-11-16] Sun Debilitated with NEECHA BHANGA RAJA YOGA (H12 from Moon): initial test, extra effort, or compromise around authority, father/boss dynamics, vitality, and confidence is cancelled out and elevates into practical achievement/recovery during the window.",
+        "[NEECHA BHANGA RAJA YOGA — 2026-11-01→2026-11-12] Mars Debilitated with NEECHA BHANGA RAJA YOGA (H9 from Moon): initial test, extra effort, or compromise around patience, domestic peace, property/vehicle pressure, and energy pacing is cancelled out and elevates into practical achievement/recovery during the window.",
+        "[NEECHA BHANGA RAJA YOGA — 2026-11-06→2026-11-13] Venus in Neecha-Vakra with Neecha Bhanga (H11 from Moon): initial vulnerability or hyper-criticism around relationships, financial expectations, comfort, and diplomacy reverses strongly into unconventional gains and hidden strength once stabilized.",
+        "[NEECHA BHANGA RAJA YOGA — 2026-11-14→2026-11-22] Venus Debilitated with NEECHA BHANGA RAJA YOGA (H11 from Moon): initial test, extra effort, or compromise around relationships, financial expectations, comfort, and diplomacy is cancelled out and elevates into practical achievement/recovery during the window."
+      ],
+      "promptMarkdownBlock": "## SPECIAL TRANSIT PHENOMENA (2026-11-01..2026-11-30)\nONE_LINER: Stations: Mercury turns Direct in Thulaam on 2026-11-14; Venus turns Direct in Kanni on 2026-11-14 | Parivartana: Mercury↔Venus Parivartana (H12/H11 Moon, 2026-11-06→2026-11-22); Moon↔Mars Parivartana (H1/H9 Moon, 2026-11-10→2026-11-11); Sun↔Mars Parivartana (H1/H10 Moon, 2026-11-17→2026-11-30) | Debilitation/Neecha Bhanga: Sun Neecha-Bhanga in Thulaam (2026-11-01→2026-11-16, Direct); Mars Neecha-Bhanga in Katakam (2026-11-01→2026-11-12, Direct); Venus Neecha-Bhanga in Kanni (2026-11-06→2026-11-13, Vakra); Venus Neecha-Bhanga in Kanni (2026-11-14→2026-11-22, Direct).\nSTATIONS(2):\n- Mercury (Budha) stations DIRECT inside Thulaam (Libra) (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30) | Impact: Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution.\n- Venus (Sukra) stations DIRECT inside Kanni (Virgo) (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22) | Impact: Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships.\nPARIVARTANA(3):\n- Mercury<->Venus Dainya / Karmic Parivartana [2026-11-06..2026-11-22] | From Moon: Mercury in H12 (Thulaam (Libra)) ↔ Venus in H11 (Kanni (Virgo)) | From Lagna: H11 ↔ H10 | Mercury (Lord of Kanni (Virgo), H11 from Moon / H10 from Lagna) sits in Thulaam (Libra) (H12), while Venus (Lord of Thulaam (Libra), H12 from Moon / H11 from Lagna) sits in Kanni (Virgo) (H11). | Event: Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income.\n- Moon<->Mars Maha Parivartana (Kendra/Trikona/Wealth) [2026-11-10..2026-11-11] | From Moon: Moon in H1 (Vrischigam (Scorpio)) ↔ Mars in H9 (Katakam (Cancer)) | From Lagna: H12 ↔ H8 | Moon (Lord of Katakam (Cancer), H9 from Moon / H8 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Katakam (Cancer) (H9). | Event: Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results.\n- Sun<->Mars Maha Parivartana (Kendra/Trikona/Wealth) [2026-11-17..2026-11-30] | From Moon: Sun in H1 (Vrischigam (Scorpio)) ↔ Mars in H10 (Simham (Leo)) | From Lagna: H12 ↔ H9 | Sun (Lord of Simham (Leo), H10 from Moon / H9 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Simham (Leo) (H10). | Event: Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication).\nNEECHA_BHANGA(4):\n- Sun (Surya) Debilitated in Thulaam (Libra) (H12 from Moon / H11 from Lagna) [2026-11-01 → 2026-11-16] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Venus (dispositor of Thulaam (Libra)) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Saturn of Thulaam (Libra) transits Kendra (H4 from Lagna); Natal Saturn (planet exalted in Thulaam (Libra)) occupies Kendra (H12 Lagna / H1 Moon); Sun receives conjunction from dispositor Venus; Debilitation sign lord Venus transits Kendra (H10 from Lagna); Lord of Sun's exaltation sign (Mars) transits Kendra (H10 from Moon) | Event: Sun Debilitated with NEECHA BHANGA RAJA YOGA (H12 from Moon): initial test, extra effort, or compromise around authority, father/boss dynamics, vitality, and confidence is cancelled out and elevates into practical achievement/recovery during the window.\n- Mars (Sevvai) Debilitated in Katakam (Cancer) (H9 from Moon / H8 from Lagna) [2026-11-01 → 2026-11-12] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Moon (dispositor of Katakam (Cancer)) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Jupiter of Katakam (Cancer) transits Kendra (H10 from Moon); Natal Jupiter (planet exalted in Katakam (Cancer)) occupies Kendra (H1 Lagna / H2 Moon); Mars receives conjunction from dispositor Moon; Lord of Mars's exaltation sign (Saturn) transits Kendra (H4 from Lagna); Debilitation sign lord Moon transits Kendra (H10 from Moon); Debilitation sign lord Moon transits Kendra (H10 from Lagna); Debilitation sign lord Moon transits Kendra (H1 from Moon); Mars participates in an active Parivartana mutual sign exchange; Debilitation sign lord Moon transits Kendra (H1 from Lagna) | Event: Mars Debilitated with NEECHA BHANGA RAJA YOGA (H9 from Moon): initial test, extra effort, or compromise around patience, domestic peace, property/vehicle pressure, and energy pacing is cancelled out and elevates into practical achievement/recovery during the window.\n- Venus (Sukra) Debilitated in Kanni (Virgo) (H11 from Moon / H10 from Lagna) [2026-11-06 → 2026-11-13] — Retrograde (Neecha-Vakra) — Status: NEECHA BHANGA RAJA YOGA | Factors: Venus is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength; Natal Mercury (dispositor of Kanni (Virgo)) sits in Kendra (H1 Lagna / H2 Moon); Natal Mercury (planet exalted in Kanni (Virgo)) occupies Kendra (H1 Lagna / H2 Moon); Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon); Venus participates in an active Parivartana mutual sign exchange | Event: Venus in Neecha-Vakra with Neecha Bhanga (H11 from Moon): initial vulnerability or hyper-criticism around relationships, financial expectations, comfort, and diplomacy reverses strongly into unconventional gains and hidden strength once stabilized.\n- Venus (Sukra) Debilitated in Kanni (Virgo) (H11 from Moon / H10 from Lagna) [2026-11-14 → 2026-11-22] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA | Factors: Natal Mercury (dispositor of Kanni (Virgo)) sits in Kendra (H1 Lagna / H2 Moon); Natal Mercury (planet exalted in Kanni (Virgo)) occupies Kendra (H1 Lagna / H2 Moon); Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon); Venus participates in an active Parivartana mutual sign exchange | Event: Venus Debilitated with NEECHA BHANGA RAJA YOGA (H11 from Moon): initial test, extra effort, or compromise around relationships, financial expectations, comfort, and diplomacy is cancelled out and elevates into practical achievement/recovery during the window."
+    },
+    "eventManufacturingSuperset": {
+      "generatedAt": "2026-11-15T06:18:23.638Z",
+      "selectedMd": "Venus",
+      "selectedAd": "Saturn",
+      "deliveringHandKey": "Mercury (Budha)",
+      "deliveringHandClean": "Mercury",
+      "adChamberSummary": {
+        "adCleanName": "Saturn",
+        "adNatalRashiName": "Vrischigam",
+        "adNatalHouseFromLagna": 12,
+        "adNatalHouseFromRashi": 1,
+        "polarityLabel": "Moderate Baseline Transit (Controlled Delivery)",
+        "netScore": 0,
+        "peakVentingGate": "Revati (Gate 3)",
+        "atmosphereNarrative": "The AD Chamber operates with standard baseline dynamics. Direct occupants: None. Incoming rays: None.",
+        "directOccupants": [],
+        "incomingAspects": [],
+        "ruledHouses": [
+          {
+            "houseFromLagna": 2,
+            "houseFromRashi": 3,
+            "rashiName": "Makaram",
+            "occupants": [],
+            "aspectingGrahas": [
+              "Mars (7th)",
+              "Moon (7th)"
+            ]
+          },
+          {
+            "houseFromLagna": 3,
+            "houseFromRashi": 4,
+            "rashiName": "Kumbam",
+            "occupants": [
+              "Rahu"
+            ],
+            "aspectingGrahas": [
+              "Jupiter (7th)",
+              "Mars (8th)",
+              "Ketu (7th)"
+            ]
+          }
+        ]
+      },
+      "gates": [
+        {
+          "gateIndex": 1,
+          "nakshatraName": "Ashlesha",
+          "rashiIndex": 4,
+          "rashiName": "Katakam",
+          "houseFromLagna": 8,
+          "houseFromRashi": 9,
+          "perspective": "combined",
+          "anatomicalSeat": "Stomach Lining, Gut Flora & Sleep",
+          "significations": "Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion",
+          "moonIngressWindow": "Nov 1–2, Nov 28–29",
+          "activeGrahasInGate": [
+            {
+              "name": "Mars",
+              "key": "Mars",
+              "type": "transit_current",
+              "passageWindow": "Active in House"
+            },
+            {
+              "name": "Moon",
+              "key": "Moon",
+              "type": "transit_current",
+              "passageWindow": "Active in House"
+            }
+          ]
+        },
+        {
+          "gateIndex": 2,
+          "nakshatraName": "Jyeshtha",
+          "rashiIndex": 8,
+          "rashiName": "Vrischigam",
+          "houseFromLagna": 12,
+          "houseFromRashi": 1,
+          "perspective": "combined",
+          "anatomicalSeat": "Secret Parts, Colon & Sensory Nerves",
+          "significations": "Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion",
+          "moonIngressWindow": "Nov 10–11",
+          "activeGrahasInGate": [
+            {
+              "name": "Moon (Natal)",
+              "key": "Moon",
+              "type": "natal",
+              "passageWindow": "Fixed Natal Position"
+            },
+            {
+              "name": "Venus (Natal)",
+              "key": "Venus",
+              "type": "natal",
+              "passageWindow": "Fixed Natal Position"
+            },
+            {
+              "name": "Saturn (Natal)",
+              "key": "Saturn",
+              "type": "natal",
+              "passageWindow": "Fixed Natal Position"
+            }
+          ]
+        },
+        {
+          "gateIndex": 3,
+          "nakshatraName": "Revati",
+          "rashiIndex": 12,
+          "rashiName": "Meenam",
+          "houseFromLagna": 4,
+          "houseFromRashi": 5,
+          "perspective": "combined",
+          "anatomicalSeat": "Feet, Lymph & Peripheral Nerves",
+          "significations": "Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion",
+          "moonIngressWindow": "Nov 20–21",
+          "activeGrahasInGate": [
+            {
+              "name": "Saturn",
+              "key": "Saturn",
+              "type": "transit_current",
+              "passageWindow": "Active in House"
+            },
+            {
+              "name": "Rahu (Natal)",
+              "key": "Rahu",
+              "type": "natal",
+              "passageWindow": "Fixed Natal Position"
+            }
+          ]
+        }
+      ],
+      "houseLordshipToGateLinks": [
+        {
+          "houseFromLagna": 1,
+          "houseFromMoon": 2,
+          "rashiName": "Dhanus",
+          "rashiLord": "Jupiter",
+          "portfolioLabel": "Health • 1st Lagna (Vitality, Physical Body, Self)",
+          "natalOccupants": [
+            "Sun",
+            "Mercury",
+            "Jupiter"
+          ],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 12–14"
+        },
+        {
+          "houseFromLagna": 2,
+          "houseFromMoon": 3,
+          "rashiName": "Makaram",
+          "rashiLord": "Saturn",
+          "portfolioLabel": "Money • 2nd Dhana (Liquid Cash, Family, Speech)",
+          "natalOccupants": [
+            "Mars"
+          ],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": true,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 15–16"
+        },
+        {
+          "houseFromLagna": 3,
+          "houseFromMoon": 4,
+          "rashiName": "Kumbam",
+          "rashiLord": "Saturn",
+          "portfolioLabel": "Trip • 3rd Sahaja (Short Trips, Friends/Peers, Documentation)",
+          "natalOccupants": [],
+          "transitOccupants": [
+            "Rahu(R)"
+          ],
+          "isActivatedByAdLordship": true,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 17–19"
+        },
+        {
+          "houseFromLagna": 4,
+          "houseFromMoon": 5,
+          "rashiName": "Meenam",
+          "rashiLord": "Jupiter",
+          "portfolioLabel": "Life • 4th Sukha (Home, Mother, Fixed Property)",
+          "natalOccupants": [
+            "Rahu"
+          ],
+          "transitOccupants": [
+            "Saturn(R)"
+          ],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": true,
+          "matchingGateNakshatra": "Revati (Meenam)",
+          "moonIgnitionDates": "Nov 20–21"
+        },
+        {
+          "houseFromLagna": 5,
+          "houseFromMoon": 6,
+          "rashiName": "Mesham",
+          "rashiLord": "Mars",
+          "portfolioLabel": "Love • 5th Putra (Romance, Speculation, Intellect)",
+          "natalOccupants": [],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 22–23"
+        },
+        {
+          "houseFromLagna": 6,
+          "houseFromMoon": 7,
+          "rashiName": "Rishabam",
+          "rashiLord": "Venus",
+          "portfolioLabel": "Health • 6th Ari (Service Work, Health Obstacles, Debts)",
+          "natalOccupants": [],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 24–25"
+        },
+        {
+          "houseFromLagna": 7,
+          "houseFromMoon": 8,
+          "rashiName": "Mithunam",
+          "rashiLord": "Mercury",
+          "portfolioLabel": "Love • 7th Kalatra (Partnership, Marriage, Public Deals)",
+          "natalOccupants": [],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 26–27"
+        },
+        {
+          "houseFromLagna": 8,
+          "houseFromMoon": 9,
+          "rashiName": "Katakam",
+          "rashiLord": "Moon",
+          "portfolioLabel": "Money • 8th Randhra (Joint Finance, Unexpected Shifts, Stress)",
+          "natalOccupants": [],
+          "transitOccupants": [
+            "Mars",
+            "Moon"
+          ],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": true,
+          "matchingGateNakshatra": "Ashlesha (Katakam)",
+          "moonIgnitionDates": "Nov 1–2, Nov 28–29"
+        },
+        {
+          "houseFromLagna": 9,
+          "houseFromMoon": 10,
+          "rashiName": "Simham",
+          "rashiLord": "Sun",
+          "portfolioLabel": "Trip • 9th Bhagya (Long Travel, Visas, Fortune/Mentors)",
+          "natalOccupants": [],
+          "transitOccupants": [
+            "Jupiter",
+            "Ketu(R)"
+          ],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 3–4"
+        },
+        {
+          "houseFromLagna": 10,
+          "houseFromMoon": 11,
+          "rashiName": "Kanni",
+          "rashiLord": "Mercury",
+          "portfolioLabel": "Work • 10th Karma (Career Elevation, Authority, Role)",
+          "natalOccupants": [
+            "Ketu"
+          ],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 5–6"
+        },
+        {
+          "houseFromLagna": 11,
+          "houseFromMoon": 12,
+          "rashiName": "Thulaam",
+          "rashiLord": "Venus",
+          "portfolioLabel": "Friends • 11th Labha (Income Gains, Network Circles, Wishes)",
+          "natalOccupants": [],
+          "transitOccupants": [
+            "Venus(R)",
+            "Mercury(R)",
+            "Sun"
+          ],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": false,
+          "moonIgnitionDates": "Nov 7–9"
+        },
+        {
+          "houseFromLagna": 12,
+          "houseFromMoon": 1,
+          "rashiName": "Vrischigam",
+          "rashiLord": "Mars",
+          "portfolioLabel": "Trip • 12th Vyaya (Foreign Relocation, Expenses, Sleep)",
+          "natalOccupants": [
+            "Moon",
+            "Venus",
+            "Saturn"
+          ],
+          "transitOccupants": [],
+          "isActivatedByAdLordship": false,
+          "isActivatedByDeliveringHandGate": true,
+          "matchingGateNakshatra": "Jyeshtha (Vrischigam)",
+          "moonIgnitionDates": "Nov 10–11"
+        }
+      ],
+      "candidateOrSynthesizedEvents": [
+        {
+          "id": "det-parivartana-1",
+          "title": "Parivartana Exchange: Mercury <-> Venus (Dainya / Karmic Parivartana)",
+          "portfolio": "Work",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra)",
+          "correlatedHousesAndLordships": "Lagna H11 (Thulaam (Libra)) <-> H10 (Kanni (Virgo)) | From Moon: Mercury in H12 (Thulaam (Libra)) ↔ Venus in H11 (Kanni (Virgo)) | From Lagna: H11 ↔ H10 | Mercury (Lord of Kanni (Virgo), H11 from Moon / H10 from Lagna) sits in Thulaam (Libra) (H12), while Venus (Lord of Thulaam (Libra), H12 from Moon / H11 from Lagna) sits in Kanni (Virgo) (H11).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-06 to 2026-11-22) vented via Revati (Gate 3)",
+          "narrative": "Career & Gains Parivartana: professional elevation, role expansion, recognition from seniors, and direct conversion of effort into tangible status or income. Effort runs across Nov 6–22 (2026-11-06 to 2026-11-22), with tangible Moon activation during Nov 6 (Moon in Virgo); Nov 7–9 (Moon in Libra); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo); Nov 22 (Moon in Aries 7th-Aspect to Libra).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-parivartana-2",
+          "title": "Parivartana Exchange: Moon <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))",
+          "portfolio": "Life",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 10–11 (Moon in Scorpio)",
+          "correlatedHousesAndLordships": "Lagna H12 (Vrischigam (Scorpio)) <-> H8 (Katakam (Cancer)) | From Moon: Moon in H1 (Vrischigam (Scorpio)) ↔ Mars in H9 (Katakam (Cancer)) | From Lagna: H12 ↔ H8 | Moon (Lord of Katakam (Cancer), H9 from Moon / H8 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Katakam (Cancer) (H9).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-10 to 2026-11-11) vented via Revati (Gate 3)",
+          "narrative": "Mutual Bhava Exchange connecting Self / Health / Identity (1st) and Fortune / Higher Authorities / Dharma / Long Travel (9th) from Moon — planets support each other's portfolios with decisive reciprocal results. Effort runs across Nov 10–11 (2026-11-10 to 2026-11-11), with tangible Moon activation during Nov 10–11 (Moon in Scorpio). Prior Moon passage (Nov 1–2 (Cancer)) occurred BEFORE Nov 10–11 (2026-11-10 to 2026-11-11) started. Later Moon passage (Nov 28–29 (Cancer)) falls AFTER Nov 10–11 (2026-11-10 to 2026-11-11) ends.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-parivartana-3",
+          "title": "Parivartana Exchange: Sun <-> Mars (Maha Parivartana (Kendra/Trikona/Wealth))",
+          "portfolio": "Life",
+          "probabilityScore": 88,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo)",
+          "correlatedHousesAndLordships": "Lagna H12 (Vrischigam (Scorpio)) <-> H9 (Simham (Leo)) | From Moon: Sun in H1 (Vrischigam (Scorpio)) ↔ Mars in H10 (Simham (Leo)) | From Lagna: H12 ↔ H9 | Sun (Lord of Simham (Leo), H10 from Moon / H9 from Lagna) sits in Vrischigam (Scorpio) (H1), while Mars (Lord of Vrischigam (Scorpio), H1 from Moon / H12 from Lagna) sits in Simham (Leo) (H10).",
+          "nakshatraGateTrigger": "Parivartana (2026-11-17 to 2026-11-30) vented via Revati (Gate 3)",
+          "narrative": "Strong executive & authority breakthrough: leadership recognition, government/institutional approvals, decisive career moves, heightened willpower and bold action turning stagnant matters into forward command (watch against ego clashes or heated communication). Effort runs across Nov 17–30 (2026-11-17 to 2026-11-30), with tangible Moon activation during Nov 17–19 (Moon in Aquarius 7th-Aspect to Leo); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio); Nov 30 (Moon in Leo). Prior Moon passage (Nov 10–11 (Scorpio), Nov 3–4 (Leo)) occurred BEFORE Nov 17–30 (2026-11-17 to 2026-11-30) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-gate-1",
+          "title": "Ashlesha Gate Trigger (Katakam): Money Activity",
+          "portfolio": "Money",
+          "probabilityScore": 84,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer)",
+          "correlatedHousesAndLordships": "Lagna H8 / Moon H9 (Katakam, Lord: Moon)",
+          "nakshatraGateTrigger": "Gate 1: Ashlesha [Combined Lagna+Moon] • Grahas: Mars (Active in House), Moon (Active in House)",
+          "narrative": "Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Ashlesha around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and stomach lining, gut flora & sleep. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer); Nov 15–16 (Moon in Capricorn 7th-Aspect to Cancer); Nov 28–29 (Moon in Cancer).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-trip-6",
+          "title": "Short Movement, Paperwork Readiness & Long-Distance / Visa Planning",
+          "portfolio": "Trip",
+          "probabilityScore": 84,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius)",
+          "correlatedHousesAndLordships": "H3/M4 Kumbam (Lord: Saturn; Transit: Rahu(R)) + H9/M10 Simham (Lord: Sun; Transit: Jupiter, Ketu(R)) + H12/M1 Vrischigam (Lord: Mars)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Jyeshtha (Vrischigam)",
+          "narrative": "3rd Short-Trip (Kumbam), 9th Long-Journey (Simham) & 12th Foreign (Vrischigam) regulate travel logistics, consular/official documentation, and commuting rhythm. Effort runs across Nov 1–30, with tangible Moon activation during Nov 3–4 (Moon in Leo 7th-Aspect to Aquarius); Nov 17–19 (Moon in Aquarius); Nov 30 (Moon in Leo 7th-Aspect to Aquarius).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-station-1",
+          "title": "Mercury Turns Retrograde -> Direct in Same House (Thulaam (Libra))",
+          "portfolio": "Friends",
+          "probabilityScore": 81,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 22–23 (Moon in Aries 7th-Aspect to Libra)",
+          "correlatedHousesAndLordships": "Lagna H11 / Moon H12 (Thulaam (Libra), Lord: Venus)",
+          "nakshatraGateTrigger": "Station Date 2026-11-14 (Before 2026-11-01 to 2026-11-13 -> After 2026-11-14 to 2026-11-30)",
+          "narrative": "Mercury (Budha) stations DIRECT inside Thulaam (Libra) (H12 from Moon, H11 from Lagna) on 2026-11-14 (Retro 2026-11-01→2026-11-13, then Direct 2026-11-14→2026-11-30) Mercury turning Direct in Thulaam (Libra) (H12 from Moon) releases frozen contracts, stalled emails, banking/documentation delays, and miscommunications into immediate forward execution. Effort runs across Direct/Post-Station phase Nov 14–30 (Station 2026-11-14), with tangible Moon activation during Nov 22–23 (Moon in Aries 7th-Aspect to Libra). Prior Moon passage (Nov 7–9 (Libra)) occurred BEFORE Direct/Post-Station phase Nov 14–30 (Station 2026-11-14) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-station-2",
+          "title": "Venus Turns Retrograde -> Direct in Same House (Kanni (Virgo))",
+          "portfolio": "Work",
+          "probabilityScore": 81,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)",
+          "correlatedHousesAndLordships": "Lagna H10 / Moon H11 (Kanni (Virgo), Lord: Mercury)",
+          "nakshatraGateTrigger": "Station Date 2026-11-14 (Before 2026-11-06 to 2026-11-13 -> After 2026-11-14 to 2026-11-22)",
+          "narrative": "Venus (Sukra) stations DIRECT inside Kanni (Virgo) (H11 from Moon, H10 from Lagna) on 2026-11-14 (Retro 2026-11-06→2026-11-13, then Direct 2026-11-14→2026-11-22) Venus turning Direct in Kanni (Virgo) (H11 from Moon) unblocks stalled finances, receivables, relationship clarity, luxury/comfort decisions, and creative partnerships. Effort runs across Direct/Post-Station phase Nov 14–22 (Station 2026-11-14), with tangible Moon activation during Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo). Prior Moon passage (Nov 5–6 (Virgo)) occurred BEFORE Direct/Post-Station phase Nov 14–22 (Station 2026-11-14) started.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-health-3",
+          "title": "Somatic Stress Watch, Gut/Sleep Rhythm & Vitality Pacing",
+          "portfolio": "Health",
+          "probabilityScore": 80,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius)",
+          "correlatedHousesAndLordships": "H1/M2 Dhanus (Lord: Jupiter) + H8/M9 Katakam (Lord: Moon; Transit: Mars, Moon) + H6/M7 Rishabam (Lord: Venus)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Ashlesha (Katakam)",
+          "narrative": "Lagna (Dhanus), 8th (Katakam) & 6th (Rishabam) interact with Mercury's anatomical seats (Stomach Lining, Gut Flora & Sleep / Secret Parts, Colon & Sensory Nerves / Feet, Lymph & Peripheral Nerves); manage rest around Chandrashtama/Moon pulses. Effort runs across Nov 1–30, with tangible Moon activation during Nov 12–14 (Moon in Sagittarius); Nov 26–27 (Moon in Gemini 7th-Aspect to Sagittarius).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-neecha-1",
+          "title": "Sun in Thulaam (Libra): NEECHA BHANGA RAJA YOGA",
+          "portfolio": "Friends",
+          "probabilityScore": 78,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 7–9 (Moon in Libra)",
+          "correlatedHousesAndLordships": "Lagna H11 / Moon H12 (Thulaam (Libra), Lord: Venus)",
+          "nakshatraGateTrigger": "NEECHA BHANGA RAJA YOGA (Natal Venus (dispositor of Thulaam (Libra)) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Saturn of Thulaam (Libra) transits Kendra (H4 from Lagna); Natal Saturn (planet exalted in Thulaam (Libra)) occupies Kendra (H12 Lagna / H1 Moon); Sun receives conjunction from dispositor Venus; Debilitation sign lord Venus transits Kendra (H10 from Lagna); Lord of Sun's exaltation sign (Mars) transits Kendra (H10 from Moon))",
+          "narrative": "Sun (Surya) Debilitated in Thulaam (Libra) (H12 from Moon / H11 from Lagna) [2026-11-01 → 2026-11-16] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA Sun Debilitated with NEECHA BHANGA RAJA YOGA (H12 from Moon): initial test, extra effort, or compromise around authority, father/boss dynamics, vitality, and confidence is cancelled out and elevates into practical achievement/recovery during the window. Effort runs across Nov 1–16 (2026-11-01 to 2026-11-16), with tangible Moon activation during Nov 7–9 (Moon in Libra).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-neecha-2",
+          "title": "Mars in Katakam (Cancer): NEECHA BHANGA RAJA YOGA",
+          "portfolio": "Money",
+          "probabilityScore": 78,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 1–2 (Moon in Cancer)",
+          "correlatedHousesAndLordships": "Lagna H8 / Moon H9 (Katakam (Cancer), Lord: Moon)",
+          "nakshatraGateTrigger": "NEECHA BHANGA RAJA YOGA (Natal Moon (dispositor of Katakam (Cancer)) sits in Kendra (H12 Lagna / H1 Moon); Exaltation lord Jupiter of Katakam (Cancer) transits Kendra (H10 from Moon); Natal Jupiter (planet exalted in Katakam (Cancer)) occupies Kendra (H1 Lagna / H2 Moon); Mars receives conjunction from dispositor Moon; Lord of Mars's exaltation sign (Saturn) transits Kendra (H4 from Lagna); Debilitation sign lord Moon transits Kendra (H10 from Moon); Debilitation sign lord Moon transits Kendra (H10 from Lagna); Debilitation sign lord Moon transits Kendra (H1 from Moon); Mars participates in an active Parivartana mutual sign exchange; Debilitation sign lord Moon transits Kendra (H1 from Lagna))",
+          "narrative": "Mars (Sevvai) Debilitated in Katakam (Cancer) (H9 from Moon / H8 from Lagna) [2026-11-01 → 2026-11-12] — Direct (Neecha-Direct) — Status: NEECHA BHANGA RAJA YOGA Mars Debilitated with NEECHA BHANGA RAJA YOGA (H9 from Moon): initial test, extra effort, or compromise around patience, domestic peace, property/vehicle pressure, and energy pacing is cancelled out and elevates into practical achievement/recovery during the window. Effort runs across Nov 1–12 (2026-11-01 to 2026-11-12), with tangible Moon activation during Nov 1–2 (Moon in Cancer). Later Moon passage (Nov 28–29 (Cancer)) falls AFTER Nov 1–12 (2026-11-01 to 2026-11-12) ends.",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-neecha-3",
+          "title": "Venus in Kanni (Virgo): NEECHA BHANGA RAJA YOGA",
+          "portfolio": "Work",
+          "probabilityScore": 78,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 6 (Moon in Virgo)",
+          "correlatedHousesAndLordships": "Lagna H10 / Moon H11 (Kanni (Virgo), Lord: Mercury)",
+          "nakshatraGateTrigger": "NEECHA BHANGA RAJA YOGA (Venus is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength; Natal Mercury (dispositor of Kanni (Virgo)) sits in Kendra (H1 Lagna / H2 Moon); Natal Mercury (planet exalted in Kanni (Virgo)) occupies Kendra (H1 Lagna / H2 Moon); Lord of Venus's exaltation sign (Jupiter) transits Kendra (H10 from Moon); Venus participates in an active Parivartana mutual sign exchange)",
+          "narrative": "Venus (Sukra) Debilitated in Kanni (Virgo) (H11 from Moon / H10 from Lagna) [2026-11-06 → 2026-11-13] — Retrograde (Neecha-Vakra) — Status: NEECHA BHANGA RAJA YOGA Venus in Neecha-Vakra with Neecha Bhanga (H11 from Moon): initial vulnerability or hyper-criticism around relationships, financial expectations, comfort, and diplomacy reverses strongly into unconventional gains and hidden strength once stabilized. Effort runs across Nov 6–13 (2026-11-06 to 2026-11-13), with tangible Moon activation during Nov 6 (Moon in Virgo).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-gate-3",
+          "title": "Revati Gate Trigger (Meenam): Life Activity",
+          "portfolio": "Life",
+          "probabilityScore": 76,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces)",
+          "correlatedHousesAndLordships": "Lagna H4 / Moon H5 (Meenam, Lord: Jupiter)",
+          "nakshatraGateTrigger": "Gate 3: Revati [Combined Lagna+Moon] • Grahas: Saturn (Active in House), Rahu (Natal) (Fixed Natal Position)",
+          "narrative": "Mercury Delivering Hand channels Saturn AD chamber pressure (Moderate Baseline Transit (Controlled Delivery)) through Revati around communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion and feet, lymph & peripheral nerves. Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-money-1",
+          "title": "Liquidity Flow, Settlement & Capital Allocation",
+          "portfolio": "Money",
+          "probabilityScore": 72,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 1–2 (Moon in Cancer 7th-Aspect to Capricorn); Nov 15–16 (Moon in Capricorn); Nov 28–29 (Moon in Cancer 7th-Aspect to Capricorn)",
+          "correlatedHousesAndLordships": "H2/M3 Makaram (Lord: Saturn) + H11/M12 Thulaam (Lord: Venus; Transit: Venus(R), Mercury(R), Sun)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Revati (Gate 3)",
+          "narrative": "2nd Dhana (Makaram, Lord Saturn) & 11th Labha (Thulaam) govern cashflow stability, reimbursements, and strategic savings decisions. Effort runs across Nov 1–30, with tangible Moon activation during Nov 1–2 (Moon in Cancer 7th-Aspect to Capricorn); Nov 15–16 (Moon in Capricorn); Nov 28–29 (Moon in Cancer 7th-Aspect to Capricorn).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-friends-5",
+          "title": "Peer Circle Engagement, Social Exchanges & Advisory Support",
+          "portfolio": "Friends",
+          "probabilityScore": 72,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 7–9 (Moon in Libra); Nov 22–23 (Moon in Aries 7th-Aspect to Libra)",
+          "correlatedHousesAndLordships": "H11/M12 Thulaam (Lord: Venus; Transit: Venus(R), Mercury(R), Sun) + H3/M4 Kumbam (Lord: Saturn; Transit: Rahu(R))",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Revati (Gate 3)",
+          "narrative": "11th Network (Thulaam, Lord Venus) & 3rd Peers (Kumbam) indicate selective reconnection or practical coordination with trusted associates. Effort runs across Nov 1–30, with tangible Moon activation during Nov 7–9 (Moon in Libra); Nov 22–23 (Moon in Aries 7th-Aspect to Libra).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-gate-2",
+          "title": "Jyeshtha Gate Trigger (Vrischigam): Trip Activity",
+          "portfolio": "Trip",
+          "probabilityScore": 63,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 10–11 (Moon in Scorpio); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio)",
+          "correlatedHousesAndLordships": "Lagna H12 / Moon H1 (Vrischigam, Lord: Mars)",
+          "nakshatraGateTrigger": "Gate 2: Jyeshtha [Combined Lagna+Moon] • Grahas: Moon (Natal) (Fixed Natal Position), Venus (Natal) (Fixed Natal Position), Saturn (Natal) (Fixed Natal Position)",
+          "narrative": "Jyeshtha holds latent receptivity in Lagna H12 / Moon H1. Effort runs across Nov 1–30, with tangible Moon activation during Nov 10–11 (Moon in Scorpio); Nov 24–25 (Moon in Taurus 7th-Aspect to Scorpio).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-life-4",
+          "title": "Domestic Sanctuary, Mother & Property/Home Focus",
+          "portfolio": "Life",
+          "probabilityScore": 62,
+          "isHighProbability": true,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces)",
+          "correlatedHousesAndLordships": "H4/M5 Meenam (Lord: Jupiter; Transit: Saturn(R)) + H9/M10 Simham (Lord: Sun; Transit: Jupiter, Ketu(R))",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Revati (Meenam)",
+          "narrative": "4th Sukha (Meenam, Lord Jupiter) & 9th Bhagya (Simham) steer household upkeep, family conversations, and fixed asset planning. Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo 7th-Aspect to Pisces); Nov 20–21 (Moon in Pisces).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-love-2",
+          "title": "Relational Clarity, Attraction & Interpersonal Dialogue",
+          "portfolio": "Love",
+          "probabilityScore": 48,
+          "isHighProbability": false,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 7–9 (Moon in Libra 7th-Aspect to Aries); Nov 22–23 (Moon in Aries)",
+          "correlatedHousesAndLordships": "H5/M6 Mesham (Lord: Mars) + H7/M8 Mithunam (Lord: Mercury)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Revati (Gate 3)",
+          "narrative": "5th Purva Punya (Mesham, Lord Mars) & 7th Kalatra (Mithunam) clarify emotional expectations, boundaries, or unresolved heart dialogues. Effort runs across Nov 1–30, with tangible Moon activation during Nov 7–9 (Moon in Libra 7th-Aspect to Aries); Nov 22–23 (Moon in Aries).",
+          "source": "deterministic_gate_candidate"
+        },
+        {
+          "id": "det-portfolio-work-0",
+          "title": "Career Authority, Role Execution & Workload Shift",
+          "portfolio": "Work",
+          "probabilityScore": 44,
+          "isHighProbability": false,
+          "latencyStatus": "acute_moon_triggered",
+          "hasMoonSupport": true,
+          "moonWindowDates": "Nov 5–6 (Moon in Virgo); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo)",
+          "correlatedHousesAndLordships": "H10/M11 Kanni (Lord: Mercury) + H6/M7 Rishabam (Lord: Venus)",
+          "nakshatraGateTrigger": "AD Chamber (Saturn) -> Gate: Revati (Gate 3)",
+          "narrative": "10th Karma (Kanni, Lord Mercury) & 6th Service (Rishabam) process under Saturn AD chamber (Moderate Baseline Transit (Controlled Delivery)) and vent through Revati (Gate 3). Effort runs across Nov 1–30, with tangible Moon activation during Nov 5–6 (Moon in Virgo); Nov 20–21 (Moon in Pisces 7th-Aspect to Virgo).",
+          "source": "deterministic_gate_candidate"
+        }
+      ],
+      "usedLiveEventEngineEvents": false
+    }
+  }
+}

@@ -2,6 +2,9 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
+import http from 'http';
+import https from 'https';
+import { execFile } from 'child_process';
 import pg from 'pg';
 import { defineConfig, loadEnv, Plugin } from 'vite';
 import { GEMINI_FALLBACK_MODEL, GEMINI_PRIMARY_MODEL } from './src/services/llm/geminiModels.ts';
@@ -1800,11 +1803,654 @@ function docsServerPlugin(): Plugin {
   };
 }
 
+function localBatchPlugin(): Plugin {
+  const BATCH_MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  interface BatchJobState {
+    jobId: string;
+    status: 'idle' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
+    modelTag: string;
+    engineKey: string;
+    monthName: string;
+    monthIndex: number;
+    year: number;
+    ollamaEndpoint: string;
+    delaySeconds: number;
+    secondsRemaining: number;
+    scheduledAtIso?: string;
+    startedAtIso?: string;
+    completedAtIso?: string;
+    elapsedMs: number;
+    promptChars: number;
+    promptTokensEst: number;
+    promptEvalTokens?: number;
+    tokensGenerated: number;
+    savedFolder?: string;
+    savedHtmlUrl?: string;
+    savedJsonUrl?: string;
+    error?: string;
+    recentLogs: string[];
+  }
+
+  let state: BatchJobState = {
+    jobId: 'none',
+    status: 'idle',
+    modelTag: 'vedic-qwen2.5-14b-GGUF:Q4_K_M',
+    engineKey: 'vedic-qwen2.5-14b-GGUF_Q4_K_M',
+    monthName: 'November',
+    monthIndex: 10,
+    year: 2026,
+    ollamaEndpoint: 'http://localhost:11434/api/generate',
+    delaySeconds: 120,
+    secondsRemaining: 0,
+    elapsedMs: 0,
+    promptChars: 0,
+    promptTokensEst: 0,
+    tokensGenerated: 0,
+    recentLogs: []
+  };
+
+  let countdownInterval: NodeJS.Timeout | null = null;
+  let heartbeatInterval: NodeJS.Timeout | null = null;
+  let activeHttpReq: http.ClientRequest | null = null;
+  let activeContextPayload: any = null;
+
+  const sanitizeFolderKey = (raw: string): string => {
+    const clean = String(raw || 'vedic-qwen2.5-14b-GGUF_Q4_K_M')
+      .trim()
+      .replace(/[:/\\?*|"<>]/g, '_')
+      .replace(/\s+/g, '_');
+    return clean || 'vedic_local_batch';
+  };
+
+  const setConsoleTitle = (title: string) => {
+    try {
+      if (process.stdout.isTTY) {
+        process.stdout.write(`\x1b]0;${title}\x07`);
+      }
+    } catch {}
+  };
+
+  const formatElapsed = (ms: number): string => {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    if (hrs > 0) return `${hrs}h ${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
+    return `${mins}m ${String(secs).padStart(2, '0')}s`;
+  };
+
+  const persistBatchStatusFile = () => {
+    try {
+      const dir = path.resolve(__dirname, 'docs/batch_jobs');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'latest_batch_status.json'), JSON.stringify(state, null, 2), 'utf-8');
+    } catch {}
+  };
+
+  const pushLog = (line: string) => {
+    const stamped = `[${new Date().toLocaleTimeString('en-US', { hour12: false })}] ${line}`;
+    console.log(stamped);
+    state.recentLogs = [...state.recentLogs.slice(-39), stamped];
+    persistBatchStatusFile();
+  };
+
+  const notifyOsTray = (title: string, message: string) => {
+    try {
+      // Terminal audible bell
+      process.stdout.write('\x07');
+    } catch {}
+
+    if (process.platform === 'win32') {
+      const psScript = [
+        'Add-Type -AssemblyName System.Windows.Forms',
+        'Add-Type -AssemblyName System.Drawing',
+        '$n = New-Object System.Windows.Forms.NotifyIcon',
+        '$n.Icon = [System.Drawing.SystemIcons]::Information',
+        '$n.Visible = $true',
+        '$n.BalloonTipTitle = $env:VEDIC_NOTIFY_TITLE',
+        '$n.BalloonTipText = $env:VEDIC_NOTIFY_BODY',
+        '$n.ShowBalloonTip(15000)',
+        '[System.Media.SystemSounds]::Exclamation.Play()',
+        'Start-Sleep -Milliseconds 16000',
+        '$n.Dispose()'
+      ].join('; ');
+
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', psScript],
+        {
+          env: {
+            ...process.env,
+            VEDIC_NOTIFY_TITLE: title,
+            VEDIC_NOTIFY_BODY: message
+          },
+          windowsHide: true
+        },
+        () => {}
+      );
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      const safeTitle = title.replace(/"/g, '\\"');
+      const safeMsg = message.replace(/"/g, '\\"');
+      execFile('osascript', ['-e', `display notification "${safeMsg}" with title "${safeTitle}" sound name "Glass"`], () => {});
+      return;
+    }
+
+    execFile('notify-send', ['-u', 'normal', title, message], () => {});
+  };
+
+  const releaseOllamaModel = (endpointUrl: string, modelTag: string) => {
+    try {
+      const parsed = new URL(endpointUrl);
+      const client = parsed.protocol === 'https:' ? https : http;
+      const body = JSON.stringify({ model: modelTag, prompt: '', keep_alive: 0 });
+      const req = client.request(
+        {
+          hostname: parsed.hostname,
+          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+          path: parsed.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body)
+          }
+        },
+        res => {
+          res.resume();
+        }
+      );
+      req.on('error', () => {});
+      req.write(body);
+      req.end();
+    } catch {}
+  };
+
+  const clearTimers = () => {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  };
+
+  return {
+    name: 'local-batch-runner-plugin',
+    configureServer(server) {
+      const runBatchInference = async () => {
+        clearTimers();
+        if (!activeContextPayload) {
+          state.status = 'failed';
+          state.error = 'Missing astronomical context payload for batch run.';
+          pushLog(`[BATCH ERROR] ${state.error}`);
+          return;
+        }
+
+        const startMs = Date.now();
+        state.status = 'running';
+        state.startedAtIso = new Date(startMs).toISOString();
+        state.secondsRemaining = 0;
+        state.tokensGenerated = 0;
+        state.elapsedMs = 0;
+
+        const periodLabel = `${state.monthName} ${state.year}`;
+        pushLog('=========================================================================');
+        pushLog(`[BATCH START] Firing ${periodLabel} on ${state.modelTag}`);
+        pushLog(`[BATCH INFO] Endpoint: ${state.ollamaEndpoint} | stream=true | num_ctx=16384 | timeout=UNLIMITED`);
+        setConsoleTitle(`[BATCH RUNNING] ${periodLabel} (${state.modelTag})`);
+
+        try {
+          const adaptersMod: any = await server.ssrLoadModule('/src/services/llm/adapters.ts');
+          const htmlMod: any = await server.ssrLoadModule('/src/services/htmlReportGenerator.ts');
+
+          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag);
+          state.promptChars = prompt.length;
+          state.promptTokensEst = Math.round(prompt.length / 4);
+          pushLog(`[BATCH PROMPT] Built prompt: ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
+
+          const requestBody = {
+            model: state.modelTag,
+            prompt,
+            stream: true,
+            format: 'json',
+            keep_alive: '2m',
+            options: {
+              temperature: 0.3,
+              num_predict: 3800,
+              num_ctx: 16384
+            }
+          };
+
+          const payloadStr = JSON.stringify(requestBody);
+          const targetUrl = new URL(state.ollamaEndpoint);
+          const client = targetUrl.protocol === 'https:' ? https : http;
+
+          // Periodic console heartbeat every 15s while streaming
+          heartbeatInterval = setInterval(() => {
+            if (state.status !== 'running') return;
+            state.elapsedMs = Date.now() - startMs;
+            const secs = Math.max(1, state.elapsedMs / 1000);
+            const tokPerSec = state.tokensGenerated > 0 ? (state.tokensGenerated / secs).toFixed(2) : '0.00';
+            const statusText = state.tokensGenerated > 0
+              ? `${state.tokensGenerated} tokens | ${formatElapsed(state.elapsedMs)} elapsed | ${tokPerSec} tok/s`
+              : `Prompt prefill / thinking | ${formatElapsed(state.elapsedMs)} elapsed`;
+            pushLog(`[BATCH PROGRESS][${periodLabel}] ${statusText}`);
+            setConsoleTitle(`[BATCH ${periodLabel}] ${statusText}`);
+          }, 15000);
+
+          const streamResult: {
+            responseText: string;
+            finalMeta: any;
+          } = await new Promise((resolve, reject) => {
+            let aggregated = '';
+            let ndjsonBuffer = '';
+            let finalMeta: any = {};
+            let firstTokenLogged = false;
+
+            const outReq = client.request(
+              {
+                hostname: targetUrl.hostname,
+                port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+                path: targetUrl.pathname + targetUrl.search,
+                method: 'POST',
+                timeout: 0,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payloadStr)
+                }
+              },
+              (inRes) => {
+                inRes.setTimeout(0);
+                if (inRes.socket) {
+                  inRes.socket.setTimeout(0);
+                  inRes.socket.setKeepAlive(true, 15000);
+                }
+
+                if ((inRes.statusCode || 500) >= 400) {
+                  let errBody = '';
+                  inRes.on('data', chunk => { errBody += chunk.toString('utf-8'); });
+                  inRes.on('end', () => {
+                    reject(new Error(`Ollama HTTP ${inRes.statusCode}: ${errBody || inRes.statusMessage}`));
+                  });
+                  return;
+                }
+
+                inRes.on('data', (chunk: Buffer) => {
+                  ndjsonBuffer += chunk.toString('utf-8');
+                  const lines = ndjsonBuffer.split('\n');
+                  ndjsonBuffer = lines.pop() || '';
+
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+                    try {
+                      const obj = JSON.parse(trimmed);
+                      if (typeof obj.response === 'string' && obj.response.length > 0) {
+                        aggregated += obj.response;
+                        state.tokensGenerated += 1;
+                        if (!firstTokenLogged) {
+                          firstTokenLogged = true;
+                          pushLog(`[BATCH STREAM][${periodLabel}] Prefill complete in ${formatElapsed(Date.now() - startMs)} — streaming response tokens...`);
+                        }
+                      }
+                      if (obj.done) {
+                        finalMeta = obj;
+                      }
+                    } catch {}
+                  }
+                });
+
+                inRes.on('end', () => {
+                  if (ndjsonBuffer.trim()) {
+                    try {
+                      const tail = JSON.parse(ndjsonBuffer.trim());
+                      if (typeof tail.response === 'string') aggregated += tail.response;
+                      if (tail.done) finalMeta = tail;
+                    } catch {}
+                  }
+                  resolve({ responseText: aggregated, finalMeta });
+                });
+
+                inRes.on('error', err => reject(err));
+              }
+            );
+
+            activeHttpReq = outReq;
+            outReq.setTimeout(0);
+            outReq.on('socket', sock => {
+              sock.setTimeout(0);
+              sock.setKeepAlive(true, 15000);
+            });
+            outReq.on('error', err => reject(err));
+            outReq.write(payloadStr);
+            outReq.end();
+          });
+
+          activeHttpReq = null;
+          clearTimers();
+
+          const elapsedMs = Date.now() - startMs;
+          state.elapsedMs = elapsedMs;
+          state.promptEvalTokens = streamResult.finalMeta?.prompt_eval_count ?? state.promptTokensEst;
+          if (typeof streamResult.finalMeta?.eval_count === 'number') {
+            state.tokensGenerated = streamResult.finalMeta.eval_count;
+          }
+
+          const ollamaStats = {
+            model: streamResult.finalMeta?.model || state.modelTag,
+            totalDurationMs: streamResult.finalMeta?.total_duration ? Math.round(streamResult.finalMeta.total_duration / 1e6) : elapsedMs,
+            loadDurationMs: streamResult.finalMeta?.load_duration ? Math.round(streamResult.finalMeta.load_duration / 1e6) : undefined,
+            promptEvalCount: streamResult.finalMeta?.prompt_eval_count,
+            evalCount: streamResult.finalMeta?.eval_count ?? state.tokensGenerated
+          };
+
+          const narrative = adaptersMod.buildBatchNarrativeFromRawResponse(
+            activeContextPayload,
+            streamResult.responseText,
+            {
+              modelTag: state.modelTag,
+              promptSent: prompt,
+              endpointUsed: state.ollamaEndpoint,
+              executionTimeMs: elapsedMs,
+              requestBody,
+              rawResponseBody: { ...streamResult.finalMeta, response: streamResult.responseText },
+              ollamaStats
+            }
+          );
+
+          const htmlContent = htmlMod.buildVedicHtmlContent(activeContextPayload, narrative);
+
+          const savedAt = new Date();
+          const yyyyMmDd = `${savedAt.getFullYear()}-${String(savedAt.getMonth() + 1).padStart(2, '0')}-${String(savedAt.getDate()).padStart(2, '0')}`;
+          const savedAtLocal = savedAt.toLocaleString('en-US', { hour12: false });
+          const timestampSlug = createReportFilenameTimestamp(savedAt);
+
+          const engineKey = state.engineKey;
+          const engineDisplayName = `Vedic Qwen 2.5 14B (${state.modelTag})`;
+          const docsDir = path.resolve(__dirname, 'docs', String(state.year), state.monthName, engineKey);
+          if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+
+          const fileBase = `Tamil_Vedic_Report_${state.monthName}_${state.year}_${engineKey}_${timestampSlug}`;
+          const htmlFilename = `${fileBase}.html`;
+          const jsonFilename = 'report_data.json';
+
+          fs.writeFileSync(path.join(docsDir, htmlFilename), htmlContent, 'utf-8');
+
+          const reportData = {
+            schemaVersion: 'vedic_brain_v1',
+            year: state.year,
+            month: state.monthName,
+            monthIndex: state.monthIndex,
+            engineKey,
+            engineName: engineDisplayName,
+            modelTag: state.modelTag,
+            reportGeneratedDate: yyyyMmDd,
+            reportGeneratedLocal: savedAtLocal,
+            reportGeneratedIso: savedAt.toISOString(),
+            savedAt: savedAt.toISOString(),
+            summarySentence: narrative.summarySentence,
+            tokenTelemetry: {
+              promptTokens: ollamaStats.promptEvalCount ?? state.promptTokensEst,
+              completionTokens: ollamaStats.evalCount ?? state.tokensGenerated,
+              totalTokens: (ollamaStats.promptEvalCount ?? state.promptTokensEst) + (ollamaStats.evalCount ?? state.tokensGenerated),
+              telemetrySource: ollamaStats.evalCount ? 'api_reported' : 'char_estimated'
+            },
+            costTelemetry: {
+              currency: 'INR',
+              pricingTier: 'local_zero_cost',
+              usagePaisa: 0
+            },
+            promptArtifact: {
+              promptVersion: 'v2',
+              charLength: prompt.length,
+              fullPromptText: prompt
+            },
+            publicLlmResponse: {
+              rawResponseText: streamResult.responseText,
+              parsedStructuredNarrative: narrative
+            },
+            context: activeContextPayload,
+            narrative
+          };
+          fs.writeFileSync(path.join(docsDir, jsonFilename), JSON.stringify(reportData, null, 2), 'utf-8');
+
+          // Update docs/reports_catalog.json
+          const catalogPath = path.resolve(__dirname, 'docs/reports_catalog.json');
+          let cat: any = { years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} };
+          if (fs.existsSync(catalogPath)) {
+            try {
+              cat = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+            } catch {}
+          }
+          if (!cat.years.includes(Number(state.year))) {
+            cat.years.push(Number(state.year));
+            cat.years.sort((a: number, b: number) => a - b);
+          }
+          if (!cat.catalog[state.year]) {
+            cat.catalog[state.year] = { year: Number(state.year), months: {} };
+          }
+          if (!cat.catalog[state.year].months[state.monthName]) {
+            cat.catalog[state.year].months[state.monthName] = {
+              monthName: state.monthName,
+              monthIndex: state.monthIndex,
+              reports: {}
+            };
+          }
+
+          const htmlUrl = `/docs/${state.year}/${state.monthName}/${engineKey}/${htmlFilename}`;
+          const jsonUrl = `/docs/${state.year}/${state.monthName}/${engineKey}/${jsonFilename}`;
+
+          cat.catalog[state.year].months[state.monthName].reports[engineKey] = {
+            engineKey,
+            engineName: engineDisplayName,
+            categoryLabel: 'Local 14B Batch',
+            badge: '🖥️ Vedic Qwen 14B',
+            providerId: 'local_qwen',
+            htmlUrl,
+            pdfUrl: '',
+            docUrl: '',
+            dataUrl: jsonUrl,
+            timestamp: savedAt.toISOString(),
+            reportGeneratedDate: yyyyMmDd,
+            hasNarrative: true,
+            summarySentence: narrative.summarySentence || ''
+          };
+          fs.writeFileSync(catalogPath, JSON.stringify(cat, null, 2), 'utf-8');
+
+          state.status = 'completed';
+          state.completedAtIso = savedAt.toISOString();
+          state.savedFolder = `docs/${state.year}/${state.monthName}/${engineKey}/`;
+          state.savedHtmlUrl = htmlUrl;
+          state.savedJsonUrl = jsonUrl;
+
+          releaseOllamaModel(state.ollamaEndpoint, state.modelTag);
+
+          pushLog('=========================================================================');
+          pushLog(`[BATCH COMPLETE] ${periodLabel} finished in ${formatElapsed(elapsedMs)}!`);
+          pushLog(`  Model  : ${state.modelTag}`);
+          pushLog(`  Tokens : prompt=${ollamaStats.promptEvalCount ?? state.promptTokensEst}, generated=${ollamaStats.evalCount ?? state.tokensGenerated}`);
+          pushLog(`  HTML   : ${state.savedFolder}${htmlFilename}`);
+          pushLog(`  JSON   : ${state.savedFolder}${jsonFilename}`);
+          pushLog('=========================================================================');
+          setConsoleTitle(`[BATCH DONE] ${periodLabel} saved in ${formatElapsed(elapsedMs)}`);
+
+          notifyOsTray(
+            `Vedic 14B Batch Complete — ${periodLabel}`,
+            `Generated in ${formatElapsed(elapsedMs)} (${state.tokensGenerated} tokens). Saved to ${state.savedFolder}`
+          );
+        } catch (err: any) {
+          activeHttpReq = null;
+          clearTimers();
+          if ((state.status as string) === 'cancelled') return;
+          state.status = 'failed';
+          state.elapsedMs = Date.now() - startMs;
+          state.error = err?.message || 'Unknown local Ollama batch failure';
+          pushLog(`[BATCH FAILED][${periodLabel}] ${state.error}`);
+          setConsoleTitle(`[BATCH FAILED] ${periodLabel}`);
+          notifyOsTray(
+            `Vedic 14B Batch Failed — ${periodLabel}`,
+            state.error || 'Check npm server console for details.'
+          );
+        }
+      };
+
+      server.middlewares.use(async (req, res, next) => {
+        const rawUrl = req.url || '';
+        if (!rawUrl.startsWith('/api/batch/')) return next();
+
+        const pathname = rawUrl.split('?')[0];
+        res.setHeader('Content-Type', 'application/json');
+
+        if (pathname === '/api/batch/status' && req.method === 'GET') {
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, state }));
+          return;
+        }
+
+        if (pathname === '/api/batch/test-notify' && req.method === 'POST') {
+          pushLog('[BATCH TEST] Triggered OS Notification Tray popup + chime check.');
+          notifyOsTray(
+            'Vedic Batch Notification Ready',
+            'Your OS notification tray & chime alert works! When 14B finishes, you will see this popup automatically.'
+          );
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+
+        if (pathname === '/api/batch/cancel' && req.method === 'POST') {
+          clearTimers();
+          const prevStatus = state.status;
+          state.status = 'cancelled';
+          state.secondsRemaining = 0;
+          if (activeHttpReq) {
+            try {
+              activeHttpReq.destroy(new Error('Cancelled by user'));
+            } catch {}
+            activeHttpReq = null;
+          }
+          if (prevStatus === 'running') {
+            releaseOllamaModel(state.ollamaEndpoint, state.modelTag);
+          }
+          pushLog(`[BATCH CANCELLED] Job ${state.jobId} (${state.monthName} ${state.year}) stopped by user.`);
+          setConsoleTitle('Vedic Horoscope Server (Batch Cancelled)');
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, state }));
+          return;
+        }
+
+        if (pathname === '/api/batch/schedule' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', () => {
+            try {
+              if (state.status === 'running') {
+                res.statusCode = 409;
+                res.end(JSON.stringify({
+                  success: false,
+                  error: `A batch job (${state.monthName} ${state.year}) is currently running. Wait for completion or cancel it first.`,
+                  state
+                }));
+                return;
+              }
+
+              clearTimers();
+              const payload = JSON.parse(body || '{}');
+              const ctx = payload.context;
+              if (!ctx || typeof ctx.selectedMonth !== 'number' || !ctx.selectedYear) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Missing single-month context (selectedMonth, selectedYear).' }));
+                return;
+              }
+
+              const modelTag = String(payload.modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+              const engineKey = sanitizeFolderKey(modelTag);
+              const delaySeconds = Math.max(0, Math.min(300, Number(payload.delaySeconds ?? 120)));
+              const ollamaEndpoint = String(payload.ollamaEndpoint || 'http://localhost:11434/api/generate').trim();
+              const monthIndex = ctx.selectedMonth;
+              const monthName = BATCH_MONTH_NAMES[monthIndex] || `Month${monthIndex + 1}`;
+              const year = Number(ctx.selectedYear);
+
+              activeContextPayload = ctx;
+              state = {
+                jobId: `batch_${year}_${monthName.toLowerCase()}_${Date.now()}`,
+                status: delaySeconds === 0 ? 'running' : 'scheduled',
+                modelTag,
+                engineKey,
+                monthName,
+                monthIndex,
+                year,
+                ollamaEndpoint,
+                delaySeconds,
+                secondsRemaining: delaySeconds,
+                scheduledAtIso: new Date().toISOString(),
+                elapsedMs: 0,
+                promptChars: 0,
+                promptTokensEst: 0,
+                tokensGenerated: 0,
+                recentLogs: []
+              };
+
+              pushLog('=========================================================================');
+              pushLog(`[BATCH SCHEDULED] Single-Month Offline Job: ${monthName} ${year}`);
+              pushLog(`  Model Tag  : ${modelTag}`);
+              pushLog(`  Save Path  : docs/${year}/${monthName}/${engineKey}/`);
+              pushLog(`  Trigger    : ${delaySeconds === 0 ? 'IMMEDIATE START' : `Starting in ${delaySeconds}s (${formatElapsed(delaySeconds * 1000)}) — Close browsers & background apps now!`}`);
+              pushLog('=========================================================================');
+
+              if (delaySeconds === 0) {
+                void runBatchInference();
+              } else {
+                setConsoleTitle(`[BATCH TIMER ${formatElapsed(delaySeconds * 1000)}] ${monthName} ${year}`);
+                countdownInterval = setInterval(() => {
+                  state.secondsRemaining = Math.max(0, state.secondsRemaining - 1);
+                  if (
+                    state.secondsRemaining === 90 ||
+                    state.secondsRemaining === 60 ||
+                    state.secondsRemaining === 30 ||
+                    state.secondsRemaining === 10
+                  ) {
+                    pushLog(`[BATCH COUNTDOWN][${monthName} ${year}] Starting in ${formatElapsed(state.secondsRemaining * 1000)}...`);
+                    setConsoleTitle(`[BATCH TIMER ${formatElapsed(state.secondsRemaining * 1000)}] ${monthName} ${year}`);
+                  } else if (state.secondsRemaining % 5 === 0) {
+                    persistBatchStatusFile();
+                    setConsoleTitle(`[BATCH TIMER ${formatElapsed(state.secondsRemaining * 1000)}] ${monthName} ${year}`);
+                  }
+                  if (state.secondsRemaining <= 0) {
+                    void runBatchInference();
+                  }
+                }, 1000);
+              }
+
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, state }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err?.message || 'Failed to schedule batch job.' }));
+            }
+          });
+          return;
+        }
+
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin()],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin(), localBatchPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

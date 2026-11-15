@@ -28,7 +28,8 @@ import {
   Move,
   Download,
   AlertCircle,
-  Key
+  Key,
+  Cpu
 } from 'lucide-react';
 import { testGeminiConnection } from '../services/apiHealthService';
 import { getPreferredGeminiModel } from '../services/llm/geminiModels';
@@ -47,6 +48,7 @@ import {
 } from '../data/parasharaCalculations';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
+import { LocalBatchSchedulerModal } from './LocalBatchSchedulerModal';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
@@ -565,6 +567,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
   const [reportAutoRunTimestamp, setReportAutoRunTimestamp] = useState<number | undefined>(undefined);
   const [liveEventEngineSuperset, setLiveEventEngineSuperset] = useState<EventManufacturingSupersetPayload | null>(null);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
 
   const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
@@ -905,12 +908,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
     setIsInspectorOpen(true);
   };
 
-  const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId, autoRun: boolean = true) => {
-    if (overrideProvider) {
-      setSelectedLlmProvider(overrideProvider);
-    }
-    const signDef = SOUTH_INDIAN_SIGNS.find(s => s.index === natalLagnaIdx) || SOUTH_INDIAN_SIGNS[0];
-
+  const buildMonthlyHouseContext = (overrideProvider?: LLMProviderId): VedicHouseContext => {
     const flattenedD1 = activeRecord.placements
       .filter(p => p.chart_type === 'D1')
       .map(p => {
@@ -1084,6 +1082,15 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         });
       })()
     };
+
+    return ctx;
+  };
+
+  const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId, autoRun: boolean = true) => {
+    if (overrideProvider) {
+      setSelectedLlmProvider(overrideProvider);
+    }
+    const ctx = buildMonthlyHouseContext(overrideProvider);
 
     setInspectorHouseContext(ctx);
     setIsInspectorOpen(false);
@@ -1389,6 +1396,17 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             >
               <Sparkles className="w-4 h-4 fill-current" />
               <span>Send Prompt to LLM</span>
+            </button>
+
+            {/* BUTTON 2: SCHEDULE OFFLINE LOCAL 14B BATCH */}
+            <button
+              type="button"
+              onClick={() => setIsBatchModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 border border-indigo-500/40 font-bold transition text-xs cursor-pointer active:scale-95"
+              title={`Schedule headless offline 14B batch (${MONTH_NAMES[selectedMonth]} ${selectedYear}) via npm server command prompt`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Schedule 14B Batch</span>
             </button>
 
             {/* PD Micro-Focus Mode Slider */}
@@ -2500,6 +2518,19 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           }}
         />
       )}
+
+      <LocalBatchSchedulerModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        onChangeMonthYear={(m, y) => {
+          setSelectedMonth(m);
+          setSelectedYear(y);
+        }}
+        buildContextForSelectedMonth={() => buildMonthlyHouseContext('local_qwen')}
+        yearOptions={yearOptions}
+      />
     </div>
   );
 };

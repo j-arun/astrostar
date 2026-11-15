@@ -331,9 +331,22 @@ export const DocsBreadcrumbSidebar: React.FC<DocsBreadcrumbSidebarProps> = ({
             </span>
           </div>
 
-          {/* List the 4 Standard Engines */}
+          {/* List Standard Engines + Any Scheduled Local Batch Models Found in Month */}
           <div className="space-y-2">
-            {STANDARD_REASONING_ENGINES.map((engine) => {
+            {(() => {
+              const standardKeys = new Set(STANDARD_REASONING_ENGINES.map(e => e.key));
+              const extraEngines = Object.entries(activeMonthData?.reports || {})
+                .filter(([key]) => !standardKeys.has(key))
+                .map(([key, rep], i) => ({
+                  key,
+                  name: rep.engineName || key,
+                  categoryLabel: `${STANDARD_REASONING_ENGINES.length + i + 1}. Local Batch`,
+                  badge: rep.badge || '🖥️ Local 14B Batch',
+                  providerId: rep.providerId || 'local_qwen',
+                  color: 'purple'
+                }));
+              return [...STANDARD_REASONING_ENGINES, ...extraEngines];
+            })().map((engine) => {
               const reportEntry: DocReportEntry | undefined = activeMonthData?.reports[engine.key];
               const isEngineActive = selectedEngineKey === engine.key;
 

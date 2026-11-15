@@ -1,0 +1,26 @@
+{
+  "jobId": "batch_2026_november_1794725096138",
+  "status": "cancelled",
+  "modelTag": "vedic-qwen2.5-14b-GGUF:Q4_K_M",
+  "engineKey": "vedic-qwen2.5-14b-GGUF_Q4_K_M",
+  "monthName": "November",
+  "monthIndex": 10,
+  "year": 2026,
+  "ollamaEndpoint": "http://localhost:11434/api/generate",
+  "delaySeconds": 120,
+  "secondsRemaining": 0,
+  "scheduledAtIso": "2026-11-15T06:44:56.138Z",
+  "elapsedMs": 0,
+  "promptChars": 0,
+  "promptTokensEst": 0,
+  "tokensGenerated": 0,
+  "recentLogs": [
+    "[06:44:56] =========================================================================",
+    "[06:44:56] [BATCH SCHEDULED] Single-Month Offline Job: November 2026",
+    "[06:44:56]   Model Tag  : vedic-qwen2.5-14b-GGUF:Q4_K_M",
+    "[06:44:56]   Save Path  : docs/2026/November/vedic-qwen2.5-14b-GGUF_Q4_K_M/",
+    "[06:44:56]   Trigger    : Starting in 120s (2m 00s) — Close browsers & background apps now!",
+    "[06:44:56] =========================================================================",
+    "[06:44:57] [BATCH CANCELLED] Job batch_2026_november_1794725096138 (November 2026) stopped by user."
+  ]
+}

@@ -1954,6 +1954,56 @@ function resStatusSuggestion(errorMsg?: string, model?: string): string {
   return 'Make sure Ollama is running with CORS enabled: `OLLAMA_ORIGINS="*" ollama serve`';
 }
 
+export function buildBatchNarrativeFromRawResponse(
+  context: VedicHouseContext,
+  rawResponseText: string,
+  meta: {
+    modelTag: string;
+    promptSent: string;
+    endpointUsed: string;
+    executionTimeMs: number;
+    requestBody?: any;
+    rawResponseBody?: any;
+    ollamaStats?: {
+      model?: string;
+      totalDurationMs?: number;
+      loadDurationMs?: number;
+      promptEvalCount?: number;
+      evalCount?: number;
+    };
+  }
+): LLMThreePartNarrative {
+  const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen', Date.now() - meta.executionTimeMs);
+  const parsed = extractAndParseVedicJson(rawResponseText || '', fallback);
+
+  return {
+    part1_probabilityAndScope: parsed.part1_probabilityAndScope || fallback.part1_probabilityAndScope,
+    part2_financialAndResources: parsed.part2_financialAndResources || fallback.part2_financialAndResources,
+    part3_microTimingWindow: parsed.part3_microTimingWindow || fallback.part3_microTimingWindow,
+    summarySentence: parsed.summarySentence || fallback.summarySentence,
+    overallConfidence: typeof parsed.overallConfidence === 'number' ? parsed.overallConfidence : fallback.overallConfidence,
+    peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
+    natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
+    supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
+    predictedSpecificEvents: normalizePredictedSpecificEvents(parsed.predictedSpecificEvents, fallback.predictedSpecificEvents),
+    supersetSynthesisNote: parsed.supersetSynthesisNote || fallback.supersetSynthesisNote,
+    correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
+    rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
+    providerUsed: 'local_qwen',
+    executionTimeMs: meta.executionTimeMs,
+    timeoutEnforced: false,
+    endpointUsed: meta.endpointUsed,
+    connectionStatus: rawResponseText && rawResponseText.trim().length > 0 ? 'connected_live' : 'connection_failed_fallback',
+    isPrivateLocal: true,
+    promptSent: meta.promptSent,
+    rawRequestBody: meta.requestBody,
+    rawResponseBody: meta.rawResponseBody,
+    httpStatus: 200,
+    memoryPurged: true,
+    ollamaStats: meta.ollamaStats || { model: meta.modelTag }
+  };
+}
+
 
 /**
  * 2. Google Gemini Pro Adapter (@google/genai SDK)

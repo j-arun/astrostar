@@ -1096,7 +1096,8 @@ export function generateVedicHtmlReport(
 
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
-    providerTag = 'Ollama-7B';
+    const rawM = narrative.ollamaStats?.model || '';
+    providerTag = rawM ? `Ollama-${rawM.replace(/[:/\\?*|"<>]/g, '_')}` : 'Ollama-Local';
   } else if (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') {
     providerTag = 'Claude-Sonnet';
   } else if (narrative.providerUsed === 'claude_haiku') {

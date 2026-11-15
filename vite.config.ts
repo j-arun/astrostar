@@ -1971,6 +1971,107 @@ function localBatchPlugin(): Plugin {
     } catch {}
   };
 
+  interface InstalledOllamaModelInfo {
+    name: string;
+    sizeBytes: number;
+    sizeGb: string;
+    modifiedAt?: string;
+  }
+
+  const fetchInstalledOllamaModels = (
+    endpointUrl: string
+  ): Promise<{ reachable: boolean; tagsUrl: string; models: InstalledOllamaModelInfo[]; error?: string }> => {
+    return new Promise(resolve => {
+      try {
+        const parsed = new URL(endpointUrl || 'http://localhost:11434/api/generate');
+        const tagsPath = parsed.pathname.replace(/\/api\/(generate|chat)\/?$/i, '/api/tags') || '/api/tags';
+        const finalPath = tagsPath.includes('/api/tags') ? tagsPath : '/api/tags';
+        const tagsUrl = `${parsed.protocol}//${parsed.host}${finalPath}`;
+        const client = parsed.protocol === 'https:' ? https : http;
+
+        const req = client.request(
+          {
+            hostname: parsed.hostname,
+            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+            path: finalPath,
+            method: 'GET',
+            timeout: 4000
+          },
+          res => {
+            let body = '';
+            res.on('data', c => { body += c.toString('utf-8'); });
+            res.on('end', () => {
+              if ((res.statusCode || 500) >= 400) {
+                resolve({ reachable: true, tagsUrl, models: [], error: `HTTP ${res.statusCode}` });
+                return;
+              }
+              try {
+                const json = JSON.parse(body || '{}');
+                const models: InstalledOllamaModelInfo[] = Array.isArray(json.models)
+                  ? json.models.map((m: any) => {
+                      const bytes = Number(m.size || 0);
+                      return {
+                        name: String(m.name || m.model || '').trim(),
+                        sizeBytes: bytes,
+                        sizeGb: bytes > 0 ? (bytes / (1024 ** 3)).toFixed(1) : '?',
+                        modifiedAt: m.modified_at
+                      };
+                    }).filter((m: InstalledOllamaModelInfo) => m.name.length > 0)
+                  : [];
+                resolve({ reachable: true, tagsUrl, models });
+              } catch (e: any) {
+                resolve({ reachable: true, tagsUrl, models: [], error: e?.message || 'Invalid /api/tags JSON' });
+              }
+            });
+          }
+        );
+        req.on('timeout', () => {
+          req.destroy(new Error('Timeout connecting to Ollama'));
+        });
+        req.on('error', err => {
+          resolve({ reachable: false, tagsUrl, models: [], error: err?.message || 'Connection refused' });
+        });
+        req.end();
+      } catch (err: any) {
+        resolve({ reachable: false, tagsUrl: endpointUrl, models: [], error: err?.message || 'Invalid URL' });
+      }
+    });
+  };
+
+  const resolveOllamaModelTag = (
+    requestedTag: string,
+    installedNames: string[]
+  ): { resolved: string; matchType: 'exact' | 'case' | 'base_or_prefix' | 'not_found' } => {
+    const req = requestedTag.trim();
+    if (installedNames.includes(req)) {
+      return { resolved: req, matchType: 'exact' };
+    }
+    const reqLow = req.toLowerCase();
+    const caseHit = installedNames.find(n => n.toLowerCase() === reqLow);
+    if (caseHit) {
+      return { resolved: caseHit, matchType: 'case' };
+    }
+    // Match HuggingFace prefix (e.g. hf.co/user/vedic-qwen2.5-14b-GGUF:Q4_K_M) or :latest suffix
+    const reqRepoNoTag = reqLow.split(':')[0];
+    const reqTail = reqLow.split('/').pop() || reqLow;
+    const reqTailNoTag = reqTail.split(':')[0];
+    const prefixHits = installedNames.filter(n => {
+      const nLow = n.toLowerCase();
+      const nTail = nLow.split('/').pop() || nLow;
+      const nNoTag = nLow.split(':')[0];
+      const nTailNoTag = nTail.split(':')[0];
+      return (
+        nTail === reqTail ||
+        nNoTag === reqRepoNoTag ||
+        nTailNoTag === reqTailNoTag
+      );
+    });
+    if (prefixHits.length === 1) {
+      return { resolved: prefixHits[0], matchType: 'base_or_prefix' };
+    }
+    return { resolved: req, matchType: 'not_found' };
+  };
+
   const clearTimers = () => {
     if (countdownInterval) {
       clearInterval(countdownInterval);
@@ -2011,10 +2112,10 @@ function localBatchPlugin(): Plugin {
           const adaptersMod: any = await server.ssrLoadModule('/src/services/llm/adapters.ts');
           const htmlMod: any = await server.ssrLoadModule('/src/services/htmlReportGenerator.ts');
 
-          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag);
+          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, 'v2');
           state.promptChars = prompt.length;
           state.promptTokensEst = Math.round(prompt.length / 4);
-          pushLog(`[BATCH PROMPT] Built prompt: ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
+          pushLog(`[BATCH PROMPT] Built V2 unified prompt (Monthly Prediction + Manifestation Events): ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
 
           const requestBody = {
             model: state.modelTag,
@@ -2024,7 +2125,7 @@ function localBatchPlugin(): Plugin {
             keep_alive: '2m',
             options: {
               temperature: 0.3,
-              num_predict: 3800,
+              num_predict: 6144,
               num_ctx: 16384
             }
           };
@@ -2315,6 +2416,15 @@ function localBatchPlugin(): Plugin {
           return;
         }
 
+        if (pathname === '/api/batch/ollama-models' && req.method === 'GET') {
+          const urlObj = new URL(rawUrl, 'http://localhost');
+          const endpointParam = urlObj.searchParams.get('endpoint') || state.ollamaEndpoint || 'http://localhost:11434/api/generate';
+          const info = await fetchInstalledOllamaModels(endpointParam);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, ...info }));
+          return;
+        }
+
         if (pathname === '/api/batch/test-notify' && req.method === 'POST') {
           pushLog('[BATCH TEST] Triggered OS Notification Tray popup + chime check.');
           notifyOsTray(
@@ -2350,7 +2460,7 @@ function localBatchPlugin(): Plugin {
         if (pathname === '/api/batch/schedule' && req.method === 'POST') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
-          req.on('end', () => {
+          req.on('end', async () => {
             try {
               if (state.status === 'running') {
                 res.statusCode = 409;
@@ -2362,7 +2472,6 @@ function localBatchPlugin(): Plugin {
                 return;
               }
 
-              clearTimers();
               const payload = JSON.parse(body || '{}');
               const ctx = payload.context;
               if (!ctx || typeof ctx.selectedMonth !== 'number' || !ctx.selectedYear) {
@@ -2371,15 +2480,50 @@ function localBatchPlugin(): Plugin {
                 return;
               }
 
-              const modelTag = String(payload.modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
-              const engineKey = sanitizeFolderKey(modelTag);
+              const requestedTag = String(payload.modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
               const delaySeconds = Math.max(0, Math.min(300, Number(payload.delaySeconds ?? 120)));
               const ollamaEndpoint = String(payload.ollamaEndpoint || 'http://localhost:11434/api/generate').trim();
+
+              // Verify Ollama model tag BEFORE starting countdown so user never waits 2 min only to hit a 404
+              let modelTag = requestedTag;
+              const tagsCheck = await fetchInstalledOllamaModels(ollamaEndpoint);
+              const installedNames = tagsCheck.models.map(m => m.name);
+              if (tagsCheck.reachable && installedNames.length > 0) {
+                const resolution = resolveOllamaModelTag(requestedTag, installedNames);
+                if (resolution.matchType === 'not_found') {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({
+                    success: false,
+                    error: `Model '${requestedTag}' was not found in local Ollama. Select one of your installed models instead: ${installedNames.join(', ')}`,
+                    installedModels: tagsCheck.models
+                  }));
+                  return;
+                }
+                modelTag = resolution.resolved;
+              } else if (tagsCheck.reachable && installedNames.length === 0 && !payload.skipModelCheck) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({
+                  success: false,
+                  error: `Ollama is running at ${tagsCheck.tagsUrl}, but has 0 models installed. Run 'ollama list' or pull/create your 14B model first.`,
+                  installedModels: []
+                }));
+                return;
+              } else if (!tagsCheck.reachable && !payload.skipModelCheck) {
+                res.statusCode = 503;
+                res.end(JSON.stringify({
+                  success: false,
+                  error: `Cannot reach local Ollama (${tagsCheck.error || 'connection refused'}). Start Ollama first before scheduling.`
+                }));
+                return;
+              }
+
+              clearTimers();
+              const engineKey = sanitizeFolderKey(modelTag);
               const monthIndex = ctx.selectedMonth;
               const monthName = BATCH_MONTH_NAMES[monthIndex] || `Month${monthIndex + 1}`;
               const year = Number(ctx.selectedYear);
 
-              activeContextPayload = ctx;
+              activeContextPayload = { ...ctx, promptVersion: 'v2' };
               state = {
                 jobId: `batch_${year}_${monthName.toLowerCase()}_${Date.now()}`,
                 status: delaySeconds === 0 ? 'running' : 'scheduled',

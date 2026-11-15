@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Calendar,
@@ -10,14 +10,28 @@ import {
   Play,
   Terminal,
   X,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw,
+  Eye,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { VedicHouseContext } from '../services/llm/types';
+import { buildVedicPrompt } from '../services/llm/adapters';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+export interface InstalledOllamaModel {
+  name: string;
+  sizeBytes: number;
+  sizeGb: string;
+  modifiedAt?: string;
+}
 
 export interface BackendBatchState {
   jobId: string;
@@ -97,11 +111,18 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     }
   });
 
+  const [installedModels, setInstalledModels] = useState<InstalledOllamaModel[]>([]);
+  const [ollamaReachable, setOllamaReachable] = useState<boolean | null>(null);
+  const [ollamaModelsError, setOllamaModelsError] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState<boolean>(false);
+
   const [batchState, setBatchState] = useState<BackendBatchState | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [testingNotify, setTestingNotify] = useState<boolean>(false);
   const [notifyTested, setNotifyTested] = useState<boolean>(false);
   const [uiError, setUiError] = useState<string | null>(null);
+  const [showPromptPreview, setShowPromptPreview] = useState<boolean>(false);
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
 
   const fetchStatus = async () => {
     try {
@@ -113,12 +134,60 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     } catch {}
   };
 
+  const fetchOllamaModels = async (endpointOverride?: string) => {
+    setLoadingModels(true);
+    setOllamaModelsError(null);
+    try {
+      const target = (endpointOverride ?? ollamaEndpoint).trim() || 'http://localhost:11434/api/generate';
+      const res = await fetch(`/api/batch/ollama-models?endpoint=${encodeURIComponent(target)}`);
+      const data = await res.json().catch(() => ({}));
+      setOllamaReachable(Boolean(data?.reachable));
+      if (Array.isArray(data?.models)) {
+        setInstalledModels(data.models);
+        // Auto-select matching installed vedic/14b model if current tag is absent
+        const exactExists = data.models.some(
+          (m: InstalledOllamaModel) => m.name.toLowerCase() === modelTag.trim().toLowerCase()
+        );
+        if (!exactExists && data.models.length > 0) {
+          const vedicHit =
+            data.models.find((m: InstalledOllamaModel) => m.name.toLowerCase().includes('vedic')) ||
+            data.models.find((m: InstalledOllamaModel) => m.name.toLowerCase().includes('14b')) ||
+            data.models[0];
+          if (vedicHit) {
+            setModelTag(vedicHit.name);
+          }
+        }
+      } else {
+        setInstalledModels([]);
+      }
+      if (!data?.reachable && data?.error) {
+        setOllamaModelsError(data.error);
+      }
+    } catch (e: any) {
+      setOllamaReachable(false);
+      setOllamaModelsError(e?.message || 'Failed to query Ollama /api/tags');
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     fetchStatus();
+    fetchOllamaModels();
     const timer = setInterval(fetchStatus, 2000);
     return () => clearInterval(timer);
   }, [isOpen]);
+
+  const unifiedPromptPreview = useMemo(() => {
+    if (!isOpen) return '';
+    try {
+      const ctx = buildContextForSelectedMonth();
+      return buildVedicPrompt({ ...ctx, promptVersion: 'v2' }, modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M', 'v2');
+    } catch {
+      return '';
+    }
+  }, [isOpen, selectedMonth, selectedYear, modelTag]);
 
   if (!isOpen) return null;
 
@@ -126,31 +195,48 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
   const folderKey = sanitizeFolderPreview(modelTag);
   const isBusy = batchState?.status === 'running' || batchState?.status === 'scheduled';
 
+  const exactModelMatched = installedModels.some(
+    m =>
+      m.name.toLowerCase() === modelTag.trim().toLowerCase() ||
+      (m.name.toLowerCase().split('/').pop() || '') === modelTag.trim().toLowerCase() ||
+      m.name.toLowerCase().split(':')[0] === modelTag.trim().toLowerCase().split(':')[0]
+  );
+
   const handleSchedule = async () => {
     setUiError(null);
     setSubmitting(true);
     try {
+      const trimmedModel = modelTag.trim() || 'vedic-qwen2.5-14b-GGUF:Q4_K_M';
       try {
-        localStorage.setItem('astro_batch_14b_model', modelTag.trim());
+        localStorage.setItem('astro_batch_14b_model', trimmedModel);
+        localStorage.setItem('astro_ollama_endpoint', ollamaEndpoint.trim());
       } catch {}
 
-      const context = buildContextForSelectedMonth();
+      const context = { ...buildContextForSelectedMonth(), promptVersion: 'v2' as const };
       const res = await fetch('/api/batch/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           context,
-          modelTag: modelTag.trim() || 'vedic-qwen2.5-14b-GGUF:Q4_K_M',
+          modelTag: trimmedModel,
           delaySeconds,
           ollamaEndpoint: ollamaEndpoint.trim() || 'http://localhost:11434/api/generate'
         })
       });
 
       const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data?.installedModels)) {
+        setInstalledModels(data.installedModels);
+      }
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Server error (${res.status})`);
       }
-      if (data.state) setBatchState(data.state);
+      if (data.state) {
+        setBatchState(data.state);
+        if (data.state.modelTag && data.state.modelTag !== modelTag) {
+          setModelTag(data.state.modelTag);
+        }
+      }
     } catch (err: any) {
       setUiError(err?.message || 'Failed to schedule local 14B batch.');
     } finally {
@@ -178,6 +264,18 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     }
   };
 
+  const handleCopyPrompt = async () => {
+    if (!unifiedPromptPreview) return;
+    try {
+      await navigator.clipboard.writeText(unifiedPromptPreview);
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    } catch {}
+  };
+
+  const promptTokensEst = Math.round(unifiedPromptPreview.length / 4);
+  const hasSupersetEventsInPrompt = unifiedPromptPreview.includes('EVENT MANUFACTURING SUPERSET');
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4"
@@ -198,7 +296,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 Offline Local 14B Batch Scheduler (Single Month)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Runs inside the npm server command prompt &bull; Safe to close browser &amp; background apps after scheduling
+                Runs full V2 Unified Prompt (1-Month Prediction + Manifestation Events) inside npm prompt
               </p>
             </div>
           </div>
@@ -211,8 +309,8 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
-          {/* 1. Single Month Selection */}
+        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* 1. Single Month Selection & Model Tag */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-1.5">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -248,10 +346,22 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
             </div>
 
             <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3 space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Local Ollama 14B Model Tag</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Exact Ollama Model Tag</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fetchOllamaModels()}
+                  disabled={loadingModels}
+                  className="flex items-center gap-1 text-[10px] font-bold text-cyan-300 hover:text-cyan-200 cursor-pointer"
+                  title="Query installed models from local Ollama (/api/tags)"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
+                  <span>Detect Models</span>
+                </button>
+              </div>
               <input
                 type="text"
                 value={modelTag}
@@ -263,7 +373,72 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
             </div>
           </div>
 
-          {/* 2. Output Folder Preview & Endpoint */}
+          {/* 2. Detected Installed Ollama Models */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    ollamaReachable === true
+                      ? 'bg-emerald-400'
+                      : ollamaReachable === false
+                      ? 'bg-rose-400'
+                      : 'bg-slate-500'
+                  }`}
+                />
+                {ollamaReachable === true
+                  ? `Ollama Connected — ${installedModels.length} Installed Model(s)`
+                  : ollamaReachable === false
+                  ? `Ollama Not Reachable (${ollamaModelsError || 'check if Ollama is running'})`
+                  : 'Checking local Ollama models...'}
+              </span>
+              {ollamaReachable === true && installedModels.length > 0 && (
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    exactModelMatched
+                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  }`}
+                >
+                  {exactModelMatched ? 'Model Tag Verified' : 'Tag Not Found — Pick Below'}
+                </span>
+              )}
+            </div>
+
+            {installedModels.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {installedModels.map(m => {
+                  const selected = m.name.toLowerCase() === modelTag.trim().toLowerCase();
+                  return (
+                    <button
+                      key={m.name}
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => {
+                        setModelTag(m.name);
+                        setUiError(null);
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-mono border transition cursor-pointer ${
+                        selected
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
+                          : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      {m.name} <span className="text-slate-400">({m.sizeGb}GB)</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {ollamaReachable === true && !exactModelMatched && (
+              <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200">
+                Ollama does not have <code className="font-mono">{modelTag}</code> registered under that exact name. Click one of the installed model chips above, or verify the exact name using <code className="font-mono">ollama list</code> in Command Prompt.
+              </div>
+            )}
+          </div>
+
+          {/* 3. Output Folder Preview & Endpoint */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-slate-300">
@@ -280,13 +455,63 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 type="text"
                 value={ollamaEndpoint}
                 onChange={e => setOllamaEndpoint(e.target.value)}
+                onBlur={() => fetchOllamaModels()}
                 disabled={isBusy}
                 className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-indigo-400"
               />
             </div>
           </div>
 
-          {/* 3. Trigger Delay Radio Options */}
+          {/* 4. Full Unified Prompt Inspection */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="font-bold text-indigo-300">V2 Full Unified Prompt:</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+                  1-Month Prediction
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded font-semibold border ${
+                    hasSupersetEventsInPrompt
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  }`}
+                >
+                  {hasSupersetEventsInPrompt ? 'Manifestation Events + Moon Windows' : 'Baseline Superset'}
+                </span>
+                <span className="text-slate-400 font-mono">
+                  {unifiedPromptPreview.length.toLocaleString()} chars (~{promptTokensEst.toLocaleString()} tok)
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCopyPrompt}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10.5px] font-bold text-slate-200 cursor-pointer"
+                >
+                  {copiedPrompt ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedPrompt ? 'Copied' : 'Copy'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPromptPreview(v => !v)}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-[10.5px] font-bold text-indigo-200 cursor-pointer"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>{showPromptPreview ? 'Hide Prompt' : 'Inspect Prompt'}</span>
+                  {showPromptPreview ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              </div>
+            </div>
+
+            {showPromptPreview && (
+              <pre className="mt-2 max-h-56 overflow-y-auto rounded-lg bg-black/70 border border-slate-800 p-2.5 text-[10.5px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
+                {unifiedPromptPreview}
+              </pre>
+            )}
+          </div>
+
+          {/* 5. Trigger Delay Options */}
           <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
@@ -319,7 +544,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
             </div>
           </div>
 
-          {/* 4. Error Banner */}
+          {/* 6. Error Banner */}
           {uiError && (
             <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-950/50 border border-rose-500/40 text-xs text-rose-200">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -327,7 +552,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
             </div>
           )}
 
-          {/* 5. Live Status & Server Command Prompt Logs */}
+          {/* 7. Live Status & Server Command Prompt Logs */}
           {batchState && batchState.status !== 'idle' && (
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">

@@ -27,7 +27,8 @@ import {
   getActivePromptVersion,
   setActivePromptVersion,
   buildVedicPromptV1,
-  buildVedicPromptV2
+  buildVedicPromptV2,
+  buildVedicPromptV3
 } from '../services/llm/adapters';
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import storedPersonsData from '../data/stored_persons.json';
@@ -38,7 +39,7 @@ interface SettingsStudioProps {
 }
 
 export default function SettingsStudio({ activePersonId = '001ME', onNavigateToReport }: SettingsStudioProps) {
-  // Current active prompt version loaded from localStorage (default: 'v2')
+  // Current active prompt version loaded from localStorage (default: 'v3')
   const [selectedVersion, setSelectedVersion] = useState<AstroPromptVersion>(() => getActivePromptVersion());
   const [inspectVersion, setInspectVersion] = useState<AstroPromptVersion>(() => getActivePromptVersion());
   const [copied, setCopied] = useState<boolean>(false);
@@ -208,7 +209,10 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
     if (inspectVersion === 'v1') {
       return buildVedicPromptV1(previewContext, 'LLM Provider Engine');
     }
-    return buildVedicPromptV2(previewContext, 'LLM Provider Engine');
+    if (inspectVersion === 'v2') {
+      return buildVedicPromptV2(previewContext, 'LLM Provider Engine');
+    }
+    return buildVedicPromptV3(previewContext, 'LLM Provider Engine');
   }, [inspectVersion, previewContext]);
 
   const handleCopyPrompt = () => {
@@ -285,8 +289,88 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
         </div>
 
         {/* Version Selection Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Version 2 Card (Default & Recommended) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Version 3 Card (Default & Recommended) */}
+          <div
+            onClick={() => handleSelectVersion('v3')}
+            className={`rounded-2xl p-5 border-2 transition-all cursor-pointer relative ${
+              selectedVersion === 'v3'
+                ? 'bg-amber-500/5 border-amber-500 shadow-lg shadow-amber-500/10'
+                : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 hover:bg-slate-950/90'
+            }`}
+          >
+            {selectedVersion === 'v3' && (
+              <div className="absolute top-4 right-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold text-[11px]">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Active Default</span>
+              </div>
+            )}
+
+            <div className="space-y-3.5">
+              <div className="flex items-center gap-2 flex-wrap pr-24">
+                <span className="text-base font-extrabold text-white">
+                  Prompt v3 (Dual-Fold Lagna + Moon)
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Recommended
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Tag: V3
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-300">
+                  <span className="text-amber-400 font-bold">Astrological Stance: </span>
+                  {PROMPT_VERSIONS.v3.astrologicalStance}
+                </div>
+                <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 leading-relaxed font-sans">
+                  <span className="font-bold text-amber-300 block mb-1">Refinement Remark:</span>
+                  {PROMPT_VERSIONS.v3.refinementRemark}
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Dual-Fold Rules Enforced:
+                </div>
+                <ul className="space-y-1 text-xs text-slate-300">
+                  {PROMPT_VERSIONS.v3.keyPrinciples.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-emerald-400 font-bold">✓</span>
+                      <span className="leading-tight">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectVersion('v3');
+                  }}
+                  className={`w-full py-2 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedVersion === 'v3'
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                      : 'bg-slate-800 hover:bg-slate-700 text-white'
+                  }`}
+                >
+                  {selectedVersion === 'v3' ? (
+                    <>
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Active Engine Prompt</span>
+                    </>
+                  ) : (
+                    <span>Switch to Prompt v3 (Dual-Fold)</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Version 2 Card */}
           <div
             onClick={() => handleSelectVersion('v2')}
             className={`rounded-2xl p-5 border-2 transition-all cursor-pointer relative ${
@@ -298,20 +382,20 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
             {selectedVersion === 'v2' && (
               <div className="absolute top-4 right-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold text-[11px]">
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Active Default</span>
+                <span>Active</span>
               </div>
             )}
 
             <div className="space-y-3.5">
               <div className="flex items-center gap-2 flex-wrap pr-24">
                 <span className="text-base font-extrabold text-white">
-                  Prompt v2 (Classical Parashara)
+                  Prompt v2 (Moon-Only Gochara)
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Recommended
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
                   Pure Moon Gochara
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                  Tag: V2
                 </span>
               </div>
 
@@ -362,7 +446,7 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
                       <span>Active Engine Prompt</span>
                     </>
                   ) : (
-                    <span>Switch to Prompt v2 (Classical Parashara)</span>
+                    <span>Switch to Prompt v2 (Moon-Only)</span>
                   )}
                 </button>
               </div>
@@ -488,6 +572,17 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
             {/* Version preview switcher tabs */}
             <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-1">
               <button
+                onClick={() => setInspectVersion('v3')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  inspectVersion === 'v3'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>v3 (Dual-Fold)</span>
+                {selectedVersion === 'v3' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+              </button>
+              <button
                 onClick={() => setInspectVersion('v2')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                   inspectVersion === 'v2'
@@ -495,7 +590,7 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <span>v2 (Classical)</span>
+                <span>v2 (Moon-Only)</span>
                 {selectedVersion === 'v2' && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
               </button>
               <button
@@ -576,11 +671,11 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-amber-400" />
           <h3 className="text-base sm:text-lg font-bold text-white">
-            Architectural Refinement Matrix: v1 vs v2
+            Architectural Refinement Matrix: v1 vs v2 vs v3
           </h3>
         </div>
         <p className="text-xs text-slate-400">
-          Detailed technical breakdown of why Prompt v2 enforces the classical Vedic standard over the legacy hybrid stance.
+          Comparison of how transit events, Lagna D1 house strength, Moon mental synthesis, and compact payload tags operate across prompt versions.
         </p>
 
         <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -589,60 +684,63 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
               <tr>
                 <th className="py-3 px-4">Dimension</th>
                 <th className="py-3 px-4 text-rose-400">Prompt v1 (Legacy Hybrid)</th>
-                <th className="py-3 px-4 text-emerald-400">Prompt v2 (Classical Parashara)</th>
+                <th className="py-3 px-4 text-cyan-400">Prompt v2 (Moon-Only)</th>
+                <th className="py-3 px-4 text-emerald-400">Prompt v3 (Dual-Fold)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/60 font-sans">
               <tr>
                 <td className="py-3 px-4 font-bold text-slate-200">Transit Reference Frame</td>
                 <td className="py-3 px-4 text-slate-400">
-                  Conflated: Evaluated relative to both Lagna and Moon (e.g. &ldquo;Saturn in 4th from Lagna&rdquo;).
+                  Mixed Lagna and Moon houses without clear event vs psychological distinction.
                 </td>
-                <td className="py-3 px-4 text-emerald-300 font-semibold">
+                <td className="py-3 px-4 text-cyan-300">
                   Strictly Janma Rashi (Moon Sign). Zero Lagna transit calculation.
                 </td>
-              </tr>
-              <tr>
-                <td className="py-3 px-4 font-bold text-slate-200">Natal Promise Separation</td>
-                <td className="py-3 px-4 text-slate-400">
-                  Leaked transit conditions into Lagna house strengths and natal capacity.
-                </td>
                 <td className="py-3 px-4 text-emerald-300 font-semibold">
-                  Absolute boundary: D1 &amp; D9 from Lagna define static capacity (chapati batter); Moon Gochara defines timing weather (dosa batter).
+                  Dual-Fold: BOTH Lagna (L#) and Janma Rashi Moon (M#) evaluated simultaneously.
                 </td>
               </tr>
               <tr>
-                <td className="py-3 px-4 font-bold text-slate-200">Purpose of Gochara</td>
+                <td className="py-3 px-4 font-bold text-slate-200">Lived Event vs Mental Synthesis</td>
                 <td className="py-3 px-4 text-slate-400">
-                  Judged house conditions directly as if transiting planets ruled the Lagna houses.
+                  Conflated real-world house effects with internal reaction.
+                </td>
+                <td className="py-3 px-4 text-cyan-300">
+                  Moon-centric timing only; forbade estimating Lagna D1 house strength from transits.
                 </td>
                 <td className="py-3 px-4 text-emerald-300 font-semibold">
-                  Evaluates whether the cosmic sky is fruitful and applicable for performing karmas.
+                  Lagna (L#) gives objective lived event &amp; modulates D1 house strength; Moon (M#) gives mental synthesis &amp; feeling (e.g. Saturn Pisces = L4 event felt via M5 mind).
                 </td>
               </tr>
               <tr>
-                <td className="py-3 px-4 font-bold text-slate-200">Planetary Karakatwas in Transit</td>
+                <td className="py-3 px-4 font-bold text-slate-200">Payload Jargon &amp; Compactness</td>
                 <td className="py-3 px-4 text-slate-400">
-                  Secondary focus; relied heavily on Western-style house cusps from Ascendant.
+                  Verbose headers &amp; explicit internal version banner inside prompt text.
+                </td>
+                <td className="py-3 px-4 text-cyan-300">
+                  Compact pipe/line payload with Moon Gochara focus.
                 </td>
                 <td className="py-3 px-4 text-emerald-300 font-semibold">
-                  Primary vehicle: Transiting planets manifest through their natural Karakatwas and house position from the Moon (e.g., Jupiter in 9th from Moon).
+                  Compacted D1/D9/Gochara + manifestation superset with ZERO internal version names or decorative text sent to LLMs.
                 </td>
               </tr>
               <tr>
-                <td className="py-3 px-4 font-bold text-slate-200">Dasha Lord Bridge</td>
-                <td className="py-3 px-4 text-slate-400">
-                  Unclear linkage between MD/AD and transit sky.
-                </td>
-                <td className="py-3 px-4 text-emerald-300 font-semibold">
-                  Dasha represents WHO is authorized to release fruits; Gochara from Moon dictates HOW fruitfully they manifest.
-                </td>
+                <td className="py-3 px-4 font-bold text-slate-200">Response Differentiator Tag</td>
+                <td className="py-3 px-4 font-mono text-rose-300">V1</td>
+                <td className="py-3 px-4 font-mono text-cyan-300">V2</td>
+                <td className="py-3 px-4 font-mono text-emerald-300 font-bold">V3</td>
               </tr>
               <tr>
                 <td className="py-3 px-4 font-bold text-slate-200">System Status</td>
                 <td className="py-3 px-4">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
                     Deprecated (Benchmarking Only)
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                    Available (Comparison)
                   </span>
                 </td>
                 <td className="py-3 px-4">

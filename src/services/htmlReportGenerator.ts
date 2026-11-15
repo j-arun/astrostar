@@ -693,7 +693,7 @@ export function buildVedicHtmlContent(
         <div class="meta-card">
           <span class="meta-label">Generated Engine</span>
           <span class="meta-val-primary" style="color: #b45309;">${escapeHtml(engineDisplayName)}</span>
-          <span class="meta-val-sub">Model: ${escapeHtml(modelName)}</span>
+          <span class="meta-val-sub">Model: ${escapeHtml(modelName)} &bull; Prompt: ${escapeHtml((narrative.promptVersionTag || narrative.promptVersion || context.promptVersion || 'v3').toUpperCase())}</span>
         </div>
 
         <div class="meta-card">

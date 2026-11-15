@@ -19,7 +19,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { VedicHouseContext } from '../services/llm/types';
-import { buildVedicPrompt } from '../services/llm/adapters';
+import { buildVedicPrompt, getActivePromptVersion } from '../services/llm/adapters';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -70,8 +70,9 @@ interface LocalBatchSchedulerModalProps {
 }
 
 function sanitizeFolderPreview(raw: string): string {
-  const clean = String(raw || 'vedic-qwen2.5-14b-GGUF:Q4_K_M')
-    .trim()
+  const trimmed = String(raw || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+  const tail = trimmed.split('/').pop() || trimmed;
+  const clean = tail
     .replace(/[:/\\?*|"<>]/g, '_')
     .replace(/\s+/g, '_');
   return clean || 'vedic_local_batch';
@@ -97,9 +98,13 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
 }) => {
   const [modelTag, setModelTag] = useState<string>(() => {
     try {
-      return localStorage.getItem('astro_batch_14b_model') || 'vedic-qwen2.5-14b-GGUF:Q4_K_M';
+      const saved = localStorage.getItem('astro_batch_14b_model');
+      if (!saved || saved === 'vedic-qwen2.5-14b-GGUF:Q4_K_M') {
+        return 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
+      }
+      return saved;
     } catch {
-      return 'vedic-qwen2.5-14b-GGUF:Q4_K_M';
+      return 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
     }
   });
   const [delaySeconds, setDelaySeconds] = useState<number>(120);
@@ -179,15 +184,17 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     return () => clearInterval(timer);
   }, [isOpen]);
 
+  const activePromptVer = useMemo(() => (isOpen ? getActivePromptVersion() : 'v3'), [isOpen]);
+
   const unifiedPromptPreview = useMemo(() => {
     if (!isOpen) return '';
     try {
       const ctx = buildContextForSelectedMonth();
-      return buildVedicPrompt({ ...ctx, promptVersion: 'v2' }, modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M', 'v2');
+      return buildVedicPrompt({ ...ctx, promptVersion: activePromptVer }, modelTag || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M', activePromptVer);
     } catch {
       return '';
     }
-  }, [isOpen, selectedMonth, selectedYear, modelTag]);
+  }, [isOpen, selectedMonth, selectedYear, modelTag, activePromptVer]);
 
   if (!isOpen) return null;
 
@@ -206,13 +213,13 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     setUiError(null);
     setSubmitting(true);
     try {
-      const trimmedModel = modelTag.trim() || 'vedic-qwen2.5-14b-GGUF:Q4_K_M';
+      const trimmedModel = modelTag.trim() || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
       try {
         localStorage.setItem('astro_batch_14b_model', trimmedModel);
         localStorage.setItem('astro_ollama_endpoint', ollamaEndpoint.trim());
       } catch {}
 
-      const context = { ...buildContextForSelectedMonth(), promptVersion: 'v2' as const };
+      const context = { ...buildContextForSelectedMonth(), promptVersion: activePromptVer };
       const res = await fetch('/api/batch/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -296,7 +303,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 Offline Local 14B Batch Scheduler (Single Month)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Runs full V2 Unified Prompt (1-Month Prediction + Manifestation Events) inside npm prompt
+                Runs {activePromptVer.toUpperCase()} Unified Prompt (1-Month Prediction + Manifestation Events) inside npm prompt
               </p>
             </div>
           </div>
@@ -368,7 +375,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 onChange={e => setModelTag(e.target.value)}
                 disabled={isBusy}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"
-                placeholder="vedic-qwen2.5-14b-GGUF:Q4_K_M"
+                placeholder="hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M"
               />
             </div>
           </div>
@@ -466,7 +473,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="font-bold text-indigo-300">V2 Full Unified Prompt:</span>
+                <span className="font-bold text-indigo-300">{activePromptVer.toUpperCase()} Unified Prompt:</span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
                   1-Month Prediction
                 </span>

@@ -6,7 +6,7 @@ import type { VedicWindowAnalysis } from '../vedicEventsEngine';
 
 export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'claude_haiku' | 'claude_fable' | 'claude';
 
-export type AstroPromptVersion = 'v1' | 'v2';
+export type AstroPromptVersion = 'v1' | 'v2' | 'v3';
 
 export interface PromptVersionDefinition {
   id: AstroPromptVersion;
@@ -499,6 +499,8 @@ export interface LLMThreePartNarrative {
   peakDateRange: string;
   rawMarkdown: string;
   providerUsed: LLMProviderId;
+  promptVersion?: AstroPromptVersion;
+  promptVersionTag?: string;
   executionTimeMs: number;
 
   // Natal Promise vs. Transit Strength Dual Evaluation

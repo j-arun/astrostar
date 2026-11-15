@@ -410,19 +410,38 @@ export function cleanEnglishSentence(sentence?: string): string {
   return res.replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim();
 }
 
-// Storage key for active prompt version (defaults to 'v2')
+// Storage key for active prompt version (defaults to 'v3')
 export const PROMPT_VERSION_STORAGE_KEY = 'astro_prompt_version';
 
 export const PROMPT_VERSIONS: Record<AstroPromptVersion, PromptVersionDefinition> = {
-  v2: {
-    id: 'v2',
-    name: 'Prompt v2 (Classical Parashara)',
-    shortTitle: 'Prompt v2',
-    badge: 'Recommended • Classical Parashara',
+  v3: {
+    id: 'v3',
+    name: 'Prompt v3 (Dual-Fold Lagna + Moon)',
+    shortTitle: 'Prompt v3',
+    badge: 'Recommended • Dual-Fold Lagna + Moon',
     status: 'active',
     isDefault: true,
     refinementRemark:
-      'Strict Vedic separation. Transits (Gochara) evaluated exclusively from Janma Rashi (Moon) to judge timing and karmic fruitfulness of the sky for doing karmas. Natal promise is fixed in D1/D9 from Lagna. Zero Lagna transit conflation.',
+      'Restores Lagna-house transit & D1 house strength estimation alongside Janma Rashi (Moon). Every transit evaluates BOTH folds: Lagna (L#) determines the objective lived event in D1 life, while Moon (M#) determines how the mind synthesizes and feels that event.',
+    astrologicalStance: 'Two-Fold Gochara: Lagna (Objective Lived Event) + Moon (Mental Synthesis)',
+    transitReferenceFrame: 'Dual-Axis: Both Lagna (L#) and Janma Rashi Moon (M#)',
+    keyPrinciples: [
+      'Lagna Fold (L# from Ascendant): Determines what concrete real-life event happens and dynamically modulates D1 Lagna house strength via transits, Drishti & SAV.',
+      'Moon Fold (M# from Janma Rashi): Determines how the mind, emotions & psyche synthesize and feel that event via Chandra/Tara Bala & Gochara.',
+      'Example: Saturn in Pisces for Sagittarius Lagna (L4) + Scorpio Moon (M5) triggers real 4th-house domestic/property events felt mentally through 5th-house deliberation/concern.',
+      'Both folds are mandatory for every major transit, station, Parivartana & Neecha Bhanga — zero omission of either axis.',
+      'No internal version names or decorative text sent to LLM; response carries clean V3 metadata tag.'
+    ]
+  },
+  v2: {
+    id: 'v2',
+    name: 'Prompt v2 (Moon-Only Gochara)',
+    shortTitle: 'Prompt v2',
+    badge: 'Classical Moon-Only',
+    status: 'active',
+    isDefault: false,
+    refinementRemark:
+      'Evaluated transits (Gochara) exclusively from Janma Rashi (Moon) while forbidding Lagna transit house-strength estimation. Retained for side-by-side comparison against v3.',
     astrologicalStance: 'Pure Moon-Based Gochara (Janma Rashi Reference Frame)',
     transitReferenceFrame: 'Strictly from Janma Rashi (Moon Sign)',
     keyPrinciples: [
@@ -441,29 +460,36 @@ export const PROMPT_VERSIONS: Record<AstroPromptVersion, PromptVersionDefinition
     status: 'deprecated',
     isDefault: false,
     refinementRemark:
-      'Legacy hybrid version that mixed transit positions relative to Lagna with natal predictions (Western astrological denotation). Deprecated due to un-Vedic Lagna-transit leakage.',
+      'Legacy verbose hybrid version that mixed Lagna and Moon transit positions without compact formatting or explicit Lagna-event vs Moon-mind role separation.',
     astrologicalStance: 'Hybrid (Mixed Lagna & Moon Transits)',
     transitReferenceFrame: 'Conflated (Lagna House + Moon House)',
     keyPrinciples: [
       'Included transit house positions relative to Natal Lagna (e.g. "Saturn in 4th from Lagna").',
-      'Conflated transit impact with natal Lagna bhava condition (Western astrology influence).',
+      'Conflated transit impact with natal Lagna bhava condition without separating physical event vs mental synthesis.',
       'Retained solely for historical benchmarking, comparison, and rollback audits.'
     ]
   }
 };
 
 /**
- * Retrieves the currently active prompt version from localStorage ('v2' by default).
+ * Retrieves the currently active prompt version from localStorage ('v3' by default).
  */
 export function getActivePromptVersion(): AstroPromptVersion {
-  if (typeof window === 'undefined') return 'v2';
+  if (typeof window === 'undefined') return 'v3';
   try {
     const saved = localStorage.getItem(PROMPT_VERSION_STORAGE_KEY);
-    if (saved === 'v1' || saved === 'v2') return saved;
+    if (saved === 'v1' || saved === 'v2' || saved === 'v3') return saved;
   } catch {
     // fallback
   }
-  return 'v2';
+  return 'v3';
+}
+
+export function resolveEffectivePromptVersion(
+  context?: VedicHouseContext,
+  versionOverride?: AstroPromptVersion
+): AstroPromptVersion {
+  return versionOverride || context?.promptVersion || getActivePromptVersion();
 }
 
 /**
@@ -499,7 +525,13 @@ const formatNakshatraCompact = (nak?: string, pada?: number): string => {
  * - Gochara: Evaluated EXCLUSIVELY from Janma Rashi (Moon) to judge timing and cosmic fruitfulness for doing karmas.
  * - Zero Lagna transit conflation.
  */
-export function buildVedicPromptV2(context: VedicHouseContext, _providerName: string): string {
+function buildVedicPromptCompact(
+  context: VedicHouseContext,
+  _providerName: string,
+  mode: 'v2' | 'v3'
+): string {
+  const isDualFold = mode === 'v3';
+  const verTag = isDualFold ? 'V3' : 'V2';
   const bhavaInfo = context.houseNumber ? (BHAVA_NAMES[context.houseNumber] || {
     title: `House ${context.houseNumber}`,
     karakas: 'Planetary lords',
@@ -511,7 +543,6 @@ export function buildVedicPromptV2(context: VedicHouseContext, _providerName: st
   const periodLabel = context.isMultiYearPrediction
     ? `${context.timelineStartDate}..${context.timelineEndDate}`
     : `${monthName} ${context.selectedYear}`;
-  const moonSignDisplay = context.natalMoonSignName || (context.natalJanmaStar?.rashi_name ? toCleanEnglishSign(context.natalJanmaStar.rashi_name) : 'Moon Sign');
 
   // 1. Natal D1 & D9 (Compact single-line pipe-delimited, zero data loss)
   const natalD1Table = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
@@ -526,22 +557,24 @@ export function buildVedicPromptV2(context: VedicHouseContext, _providerName: st
     ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)}:${toCleanEnglishSign(p.rashi_name)} ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
     : 'Standard D9 alignments align with natal grid';
 
-  // 2. All-Graha Gochara Transits (Strictly from Moon / Janma Rashi)
+  // 2. All-Graha Gochara Transits
   const allTransits = context.allTransitPlacements || [];
   const allTransitsTable = allTransits.length > 0
     ? allTransits.map(t => {
+        const hLagna = t.house_from_lagna;
         const hMoon = t.house_from_moon || t.house_from_lagna;
+        const houseCoord = isDualFold ? `L${hLagna} M${hMoon}` : `M${hMoon}`;
         const motionLabel = t.motion_type === 'Vakra'
           ? `VAKRA(${t.motion_description || 'Retrograde'})`
           : t.motion_type === 'Adisara'
             ? `ADISARA(${t.motion_description || 'Accelerated'})`
             : 'Direct';
         const savBindus = t.sav_points ? ` SAV${t.sav_points}` : '';
-        return `- ${toCleanEnglishPlanet(t.graha_key)}:${toCleanEnglishSign(t.transit_rashi_name)} M${hMoon}${savBindus} ${motionLabel} ${formatDegreeCompact(t.degree_sputa)} ${formatNakshatraCompact(t.nakshatra_name, t.pada)}${t.is_custom ? '[Override]' : ''}`;
+        return `- ${toCleanEnglishPlanet(t.graha_key)}:${toCleanEnglishSign(t.transit_rashi_name)} ${houseCoord}${savBindus} ${motionLabel} ${formatDegreeCompact(t.degree_sputa)} ${formatNakshatraCompact(t.nakshatra_name, t.pada)}${t.is_custom ? '[Override]' : ''}`;
       }).join('\n')
     : (context.transitOccupants.length > 0
         ? context.transitOccupants.map(t => `- ${toCleanEnglishPlanet(t.graha_key)}:${cleanTargetSign} ${formatDegreeCompact(t.degree_sputa)} ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
-        : 'Computed per ephemeris from Janma Rashi.');
+        : 'Computed per ephemeris.');
 
   // 3. Fast Planet Ingress & Intra-Month Motion Events
   const ingressTable = (context.monthlyIngressEvents && context.monthlyIngressEvents.length > 0)
@@ -556,9 +589,12 @@ export function buildVedicPromptV2(context: VedicHouseContext, _providerName: st
 
   const multiYearMajorTransitsSection = (context.isMultiYearPrediction && context.multiYearMajorTransits && context.multiYearMajorTransits.length > 0)
     ? `\n## MAJOR TRANSITS & MOTION (${periodLabel})\n` +
-      context.multiYearMajorTransits.map(t =>
-        `- ${toCleanEnglishPlanet(t.grahaKey)}:${toCleanEnglishSign(t.signName)} M${t.houseFromMoon || '?'} ${t.startDate}..${t.endDate}[${t.isRetrograde ? 'VAKRA' : 'DIRECT'}]`
-      ).join('\n')
+      context.multiYearMajorTransits.map(t => {
+        const houseCoord = isDualFold && t.houseFromLagna
+          ? `L${t.houseFromLagna} M${t.houseFromMoon || '?'}`
+          : `M${t.houseFromMoon || '?'}`;
+        return `- ${toCleanEnglishPlanet(t.grahaKey)}:${toCleanEnglishSign(t.signName)} ${houseCoord} ${t.startDate}..${t.endDate}[${t.isRetrograde ? 'VAKRA' : 'DIRECT'}]`;
+      }).join('\n')
     : '';
 
   const cleanLagnaDisplay = toCleanEnglishSign(context.natalLagnaSignName) || 'Ascendant';
@@ -647,18 +683,46 @@ export function buildVedicPromptV2(context: VedicHouseContext, _providerName: st
 
   const shortMon = monthName.slice(0, 3);
 
-  return `Role: Vedic Astrologer & Parashara/Jaimini Reasoning Engine (${context.isMultiYearPrediction ? 'multi-period timeline' : 'monthly transit'} synthesis).
-CRITICAL ASTROLOGICAL LAW:
+  const criticalLawBlock = isDualFold
+    ? `CRITICAL ASTROLOGICAL LAW:
+1. TWO-FOLD GOCHARA LAW: Every transit Graha acts simultaneously across BOTH Lagna (L#) and Janma Rashi / Moon (M#):
+   - LAGNA FOLD (L# from Ascendant): Determines the OBJECTIVE LIVED EVENT & D1 BHAVA EXECUTION (which concrete life house, lordship & physical reality occurs) and modulates active D1 Lagna house strength via transits, aspects, lord placement & SAV.
+   - MOON FOLD (M# from Janma Rashi): Determines PSYCHOLOGICAL SYNTHESIS & MENTAL FRUITION (how the mind feels, perceives & handles that event via Chandra/Tara Bala & Moon-house distance).
+2. DUAL SYNTHESIS REQUIRED: Bind BOTH folds for every major transit, station, Parivartana & Neecha Bhanga ([Lagna lived event] + [Moon mental experience]). E.g., Saturn in Pisces for Sagittarius Lagna (L4) & Scorpio Moon (M5) triggers real 4th-house domestic/property/foundation events felt mentally through 5th-house deliberation, focus or worry.
+3. NATAL PROMISE & STRENGTH: D1/D9 from Lagna set baseline natal capacity; transits + SAV actively strengthen or pressure D1 Lagna houses and judge how fruitful the sky is for doing karmas.
+4. DASHA SANCTION: Vimshottari MD/AD/PD lords commission delivery; evaluate D1 house lordships plus both L# and M# transit states.`
+    : `CRITICAL ASTROLOGICAL LAW:
 1. GOCHARA (TRANSIT) IS RECKONED EXCLUSIVELY FROM JANMA RASHI (MOON SIGN).
 2. NEVER ESTIMATE LAGNA OR LAGNA HOUSE D1 CHART STRENGTH USING TRANSITS.
 3. TRANSITS JUDGE WHAT IS CURRENTLY POSSIBLE AGAINST NATAL PROMISE (HOW FRUITFUL THE SKY IS FOR DOING KARMAS).
-4. NATAL PROMISE IS FIXED IN D1 AND D9 FROM LAGNA. DASHA TELLS WHO IS COMMISSIONED TO DELIVER.
+4. NATAL PROMISE IS FIXED IN D1 AND D9 FROM LAGNA. DASHA TELLS WHO IS COMMISSIONED TO DELIVER.`;
+
+  const gocharaHeader = isDualFold
+    ? `## GOCHARA (Lagna L# + Moon M#: ${cleanLagnaDisplay}/${cleanMoonDisplay}) — ${periodLabel}`
+    : `## GOCHARA FROM JANMA RASHI (${cleanMoonDisplay}) — ${periodLabel}`;
+
+  const natalHeader = isDualFold
+    ? `## NATAL CHART (D1/D9 Capacity & House Strength Baseline)`
+    : `## NATAL CHART (Lagna Frame — Promise & Capacity Only)`;
+
+  const directives1To4 = isDualFold
+    ? `1. DUAL-FOLD GOCHARA (MANDATORY): Evaluate every transit across BOTH Lagna (L#=objective lived event & D1 house strength modulation) AND Janma Rashi ${cleanMoonDisplay} (M#=how the mind feels & synthesizes the event); never omit either fold.
+2. NATAL PROMISE & D1 STRENGTH MODULATION: D1/D9 from Lagna set inherent capacity & yogas; current transits, Bhava-lord transits & SAV actively strengthen or pressure D1 Lagna houses while Moon Gochara measures mental/situational fruitfulness.
+3. KARAKATWAS IN DUAL TRANSIT: Planets act via natural Karakatwas across BOTH L# (concrete outer arena) and M# (emotional/mental reception).
+4. DASHA AUTHORIZATION: MD/AD/PD lords define who delivers; evaluate their D1 house portfolio + current L# and M# Gochara.`
+    : `1. MOON-ONLY GOCHARA: Judge all transits exclusively from Janma Rashi (${cleanMoonDisplay}); never reckon transits from Lagna (e.g., never write "Saturn in 4th from Lagna").
+2. NATAL PROMISE VS TRANSIT: D1/D9 from Lagna define capacity, yogas & lordships; Gochara from Moon judges what is fruitfully possible now.
+3. KARAKATWAS IN TRANSIT: Planets act via natural Karakatwas + Moon-house distance (e.g., strong Jupiter in 9th from Moon grants Guru Bala boosting Jupiter karakatwas & its D1 ruled houses).
+4. DASHA AUTHORIZATION: MD/AD/PD lords define who delivers; evaluate their D1 house portfolio + current Moon-relative Gochara.`;
+
+  return `Role: Vedic Astrologer & Parashara/Jaimini Reasoning Engine (${context.isMultiYearPrediction ? 'multi-period timeline' : 'monthly transit'} synthesis).
+${criticalLawBlock}
 ${horizonSection}${livedExperienceSection}
-## NATAL CHART (Lagna Frame — Promise & Capacity Only)
+${natalHeader}
 Lagna:${cleanLagnaDisplay} | JanmaRashi:${cleanMoonDisplay} | JanmaStar:${cleanJanmaStarName} P${janmaPada}
 D1: ${natalD1Table}
 D9: ${natalD9Table}
-## GOCHARA FROM JANMA RASHI (${cleanMoonDisplay}) — ${periodLabel}
+${gocharaHeader}
 ${allTransitsTable}
 ## TARA BALA (from ${cleanJanmaStarName} P${janmaPada})
 ${taraBalaTable}
@@ -677,22 +741,27 @@ Task: ${taskInstruction}
 LANGUAGE: English only (signs Aries..Pisces; planets Sun..Ketu; NO Tamil/Sanskrit names or Drishti).
 PROSE RULE: part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow MUST be plain-text multi-paragraph English strings (zero nested JSON/code blocks).
 REASONING DIRECTIVES:
-1. MOON-ONLY GOCHARA: Judge all transits exclusively from Janma Rashi (${cleanMoonDisplay}); never reckon transits from Lagna (e.g., never write "Saturn in 4th from Lagna").
-2. NATAL PROMISE VS TRANSIT: D1/D9 from Lagna define capacity, yogas & lordships; Gochara from Moon judges what is fruitfully possible now.
-3. KARAKATWAS IN TRANSIT: Planets act via natural Karakatwas + Moon-house distance (e.g., strong Jupiter in 9th from Moon grants Guru Bala boosting Jupiter karakatwas & its D1 ruled houses).
-4. DASHA AUTHORIZATION: MD/AD/PD lords define who delivers; evaluate their D1 house portfolio + current Moon-relative Gochara.
+${directives1To4}
 5. SAV & MOTION: SAV >=28=effortless fruition, <25=resistance; Vakra=unconventional/non-linear karmic settling; Adisara=urgent/accelerated execution.
 6. TARA & CHANDRA BALA: Weigh favorable (Sampat,Kshema,Sadhana,Mitra,Parama Mitra) vs friction (Vipat,Pratyak,Naidhana) taras; flag Chandrashtama (8th Moon) with cautions.
-7. STATIONS, PARIVARTANA & NEECHA BHANGA (MANDATORY): For same-sign Retrograde<->Direct stations contrast BEFORE (stalled/internal/audit) vs AFTER (external release) using exact dates; for Parivartana analyze BOTH Sign-Lord exchange AND Bhava exchange from Moon with exact dates & concrete events (authority/career/property/contracts); for Debilitation/Neecha Bhanga (incl. Neecha-Vakra->Direct) explain initial test vs cancellation reversal; end "summarySentence" with a crisp 1-line summary naming active Parivartana/Neecha Bhanga/station triggers & likely events, and detail their timing in Parts 1 & 3.
+7. STATIONS, PARIVARTANA & NEECHA BHANGA (MANDATORY): For same-sign Retrograde<->Direct stations contrast BEFORE (stalled/internal/audit) vs AFTER (external release) using exact dates; for Parivartana analyze BOTH Sign-Lord exchange AND Bhava exchange with exact dates & concrete events (authority/career/property/contracts); for Debilitation/Neecha Bhanga (incl. Neecha-Vakra->Direct) explain initial test vs cancellation reversal; end "summarySentence" with a crisp 1-line summary naming active Parivartana/Neecha Bhanga/station triggers & likely events, and detail their timing in Parts 1 & 3.
 8. SUPERSET HOUSE-GATE CORRELATION, MANIFESTATION EVENTS & STRICT CHRONOLOGICAL MOON-WINDOW LAW (MANDATORY): Correlate major Houses/Bhava Lordships in Parts 1-2 & "supplementaryScenarios" with AD Chamber & 3 Nakshatra Gates; populate "supersetSynthesisNote" (2-4 sentences) and generate an exhaustive "correlatedGateEvents" inventory (10-18+ specific manifestation events spanning ALL 7 portfolios Work,Money,Love,Health,Life,Friends,Trip—covering 3 Nakshatra Gate manifestations, AD Pressure Chamber somatic/mental manifestations, and Parivartana/Neecha Bhanga/Same-Sign Stations). STRICT MOON TIMING: Mark "hasMoonSupport":true and cite "moonWindowDates" ONLY if Moon transits OR casts a 7th direct aspect onto the involved sign(s) INSIDE that event/Parivartana/station's active date window (never cite pre-activation or post-window Moon passages as active triggers—distinguish prior/later passages vs in-window fruition). CARD ORDER: Place ALL Moon-supported/aspected in-window cards ("hasMoonSupport":true, sorted descending by "probabilityScore") AT THE TOP of "correlatedGateEvents", followed in the SAME list by active events lacking an in-window Moon transit/7th-aspect ("hasMoonSupport":false,"latencyStatus":"dormant_latent","moonWindowDates":null) whose narrative explicitly states that effort/momentum runs in the background without an in-window Moon transit or aspect.
 Return ONLY raw valid JSON (no markdown fences or commentary):
-{"summarySentence":"Plain English synthesis ending with 1-liner of active Parivartana/Neecha Bhanga/station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(Moon Gochara,Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/9th/11th analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"${monthName} DD - DD, ${context.selectedYear}","overallConfidence":0.85,"supplementaryScenarios":[
+{"promptVer":"${verTag}","summarySentence":"Plain English synthesis ending with 1-liner of active Parivartana/Neecha Bhanga/station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(${isDualFold ? 'Lagna L# + Moon M# Gochara' : 'Moon Gochara'},Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/9th/11th analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"${monthName} DD - DD, ${context.selectedYear}","overallConfidence":0.85,"supplementaryScenarios":[
 {"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"string","confidenceScore":0.85,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"10th/6th/Dasha","practicalGuidance":"string","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"string","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha"},"jobSearchAnalysis":{"momentum":"string","pastStruggleVsCurrentPhase":"string","timingAuspiciousness":"string"},"newJobAcquisition":{"jobTypeAndMood":"string","workplaceAtmosphere":"string","comparisonWithCurrentRole":"string"},"existingJobPhase":{"currentPhaseNature":"string","retentionVsExitAdvice":"string"},"detailedParagraphs":["p1","p2","p3"]},
 {"id":"love_romance","title":"Love, Romance, Relationship & Interpersonal Horizon","verdict":"string","confidenceScore":0.78,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"5th/7th/Venus/Dasha","practicalGuidance":"string","crushStatusInference":{"existingCrushTrajectory":"string","newCrushProbability":"High|Moderate|Low","newCrushDetails":"string"},"romanceAtmosphere":{"emotionalWeather":"string","chemistryRating":82},"manifestationPath":{"outcomeType":"classical_traditional_marriage|living_together_modern|exploratory_flutter|platonic_delayed","outcomeLabel":"string","manifestationLikelihood":"string","astrologicalPathReasoning":"string"},"detailedParagraphs":["p1","p2","p3"]},
 {"id":"health_vitality","title":"Health & Physical Vitality","verdict":"string","confidenceScore":0.76,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"6th/8th/Saturn/Mars","practicalGuidance":"string","healthDetails":{"vulnerableZones":["z1","z2"],"mentalTranquilityAndStress":"string","holisticRemedies":"string"},"detailedParagraphs":["p1","p2"]},
 {"id":"finance_wealth","title":"Wealth, Cashflow & Assets","verdict":"string","confidenceScore":0.84,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"2nd/4th/11th","practicalGuidance":"string","financeDetails":{"liquidityVsOutflow":"string","windfallAndSpeculation":"string","debtAndAssetFinancing":"string"},"detailedParagraphs":["p1","p2"]},
 {"id":"family_home","title":"Domestic Peace & Family Harmony","verdict":"string","confidenceScore":0.88,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"4th/Moon/Dasha","practicalGuidance":"string","familyDetails":{"domesticAmbiance":"string","maternalWellbeing":"string","propertyAndRelocation":"string"},"detailedParagraphs":["p1","p2"]}
-],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"string","eventTitle":"string","likelihood":"string","likelihoodScore":0.82,"projectedWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalTrigger":"Moon Gochara & Dasha","concreteImplication":"string","preventiveRemedy":"string"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"string","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"${shortMon} DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"house lordship + AD chamber + gate + timing"}]}`;
+],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"string","eventTitle":"string","likelihood":"string","likelihoodScore":0.82,"projectedWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalTrigger":"${isDualFold ? 'Lagna L# + Moon M# Gochara & Dasha' : 'Moon Gochara & Dasha'}","concreteImplication":"string","preventiveRemedy":"string"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"string","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"${shortMon} DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"house lordship + AD chamber + gate + timing"}]}`;
+}
+
+export function buildVedicPromptV3(context: VedicHouseContext, providerName: string): string {
+  return buildVedicPromptCompact(context, providerName, 'v3');
+}
+
+export function buildVedicPromptV2(context: VedicHouseContext, providerName: string): string {
+  return buildVedicPromptCompact(context, providerName, 'v2');
 }
 
 /**
@@ -776,12 +845,12 @@ ${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEve
 ### User Inquiry
 "${context.userQuery || `Provide an astrological evaluation for ${monthName} ${context.selectedYear}`}"
 
-Synthesize analysis in plain English and return a raw JSON object with: summarySentence, natalPromiseVsTransitDelivery, part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow, peakDateRange, overallConfidence, supplementaryScenarios, supersetSynthesisNote, correlatedGateEvents.`;
+Synthesize analysis in plain English and return a raw JSON object with: promptVer ("V1"), summarySentence, natalPromiseVsTransitDelivery, part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow, peakDateRange, overallConfidence, supplementaryScenarios, supersetSynthesisNote, correlatedGateEvents.`;
 }
 
 /**
  * Builds the canonical Vedic reasoning prompt based on the native's chart and active transit context.
- * Automatically selects the active prompt version (v2 Classical Parashara by default), unless overridden.
+ * Automatically selects the active prompt version (v3 Dual-Fold by default), unless overridden.
  */
 export function buildVedicPrompt(
   context: VedicHouseContext,
@@ -793,11 +862,14 @@ export function buildVedicPrompt(
     return context.customPromptOverride;
   }
 
-  const activeVer = versionOverride || context.promptVersion || getActivePromptVersion();
+  const activeVer = resolveEffectivePromptVersion(context, versionOverride);
   if (activeVer === 'v1') {
     return buildVedicPromptV1(context, providerName);
   }
-  return buildVedicPromptV2(context, providerName);
+  if (activeVer === 'v2') {
+    return buildVedicPromptV2(context, providerName);
+  }
+  return buildVedicPromptV3(context, providerName);
 }
 
 /**
@@ -1242,6 +1314,8 @@ ${part3}
     peakDateRange,
     rawMarkdown,
     providerUsed: provider,
+    promptVersion: resolveEffectivePromptVersion(context),
+    promptVersionTag: resolveEffectivePromptVersion(context).toUpperCase(),
     executionTimeMs: Date.now() - startMs,
     endpointUsed: provider === 'local_qwen' ? 'http://localhost:11434/api/generate' : provider === 'gemini_pro' ? 'Google GenAI Cloud API' : 'Anthropic Claude Messages API',
     connectionStatus: 'simulated',
@@ -1870,6 +1944,8 @@ export class QwenLocalAdapter implements ILLMAdapter {
           correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
           rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
           providerUsed: 'local_qwen',
+          promptVersion: resolveEffectivePromptVersion(context),
+          promptVersionTag: String((parsed as any).promptVer || resolveEffectivePromptVersion(context).toUpperCase()).toUpperCase(),
           executionTimeMs: Date.now() - startMs,
           timeoutEnforced: enableTimeout,
           configuredTimeoutSeconds: enableTimeout ? configuredTimeoutSec : undefined,
@@ -1993,6 +2069,8 @@ export function buildBatchNarrativeFromRawResponse(
     correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
     rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
     providerUsed: 'local_qwen',
+    promptVersion: resolveEffectivePromptVersion(context),
+    promptVersionTag: String((parsed as any).promptVer || resolveEffectivePromptVersion(context).toUpperCase()).toUpperCase(),
     executionTimeMs: meta.executionTimeMs,
     timeoutEnforced: false,
     endpointUsed: meta.endpointUsed,
@@ -2084,6 +2162,8 @@ ${parsed.part3_microTimingWindow}
           correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
           rawMarkdown,
           providerUsed: 'gemini_pro',
+          promptVersion: resolveEffectivePromptVersion(context),
+          promptVersionTag: String((parsed as any).promptVer || resolveEffectivePromptVersion(context).toUpperCase()).toUpperCase(),
           executionTimeMs: Date.now() - startMs,
           endpointUsed: `Google Gemini Cloud API (${json.model || geminiModel})`,
           connectionStatus: 'connected_live',
@@ -2239,6 +2319,8 @@ ${parsed.part3_microTimingWindow}
         correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
         rawMarkdown,
         providerUsed: providerId,
+        promptVersion: resolveEffectivePromptVersion(context),
+        promptVersionTag: String((parsed as any).promptVer || resolveEffectivePromptVersion(context).toUpperCase()).toUpperCase(),
         executionTimeMs: Date.now() - startMs,
         endpointUsed: `Anthropic Claude Cloud API (${json.model || customModel})`,
         connectionStatus: 'connected_live',

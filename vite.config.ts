@@ -1838,7 +1838,7 @@ function localBatchPlugin(): Plugin {
   let state: BatchJobState = {
     jobId: 'none',
     status: 'idle',
-    modelTag: 'vedic-qwen2.5-14b-GGUF:Q4_K_M',
+    modelTag: 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M',
     engineKey: 'vedic-qwen2.5-14b-GGUF_Q4_K_M',
     monthName: 'November',
     monthIndex: 10,
@@ -1859,8 +1859,9 @@ function localBatchPlugin(): Plugin {
   let activeContextPayload: any = null;
 
   const sanitizeFolderKey = (raw: string): string => {
-    const clean = String(raw || 'vedic-qwen2.5-14b-GGUF_Q4_K_M')
-      .trim()
+    const trimmed = String(raw || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+    const tail = trimmed.split('/').pop() || trimmed;
+    const clean = tail
       .replace(/[:/\\?*|"<>]/g, '_')
       .replace(/\s+/g, '_');
     return clean || 'vedic_local_batch';
@@ -2112,10 +2113,16 @@ function localBatchPlugin(): Plugin {
           const adaptersMod: any = await server.ssrLoadModule('/src/services/llm/adapters.ts');
           const htmlMod: any = await server.ssrLoadModule('/src/services/htmlReportGenerator.ts');
 
-          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, 'v2');
+          const activePromptVer =
+            activeContextPayload.promptVersion === 'v1' ||
+            activeContextPayload.promptVersion === 'v2' ||
+            activeContextPayload.promptVersion === 'v3'
+              ? activeContextPayload.promptVersion
+              : 'v3';
+          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, activePromptVer);
           state.promptChars = prompt.length;
           state.promptTokensEst = Math.round(prompt.length / 4);
-          pushLog(`[BATCH PROMPT] Built V2 unified prompt (Monthly Prediction + Manifestation Events): ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
+          pushLog(`[BATCH PROMPT] Built ${activePromptVer.toUpperCase()} unified prompt (Monthly Prediction + Manifestation Events): ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
 
           const requestBody = {
             model: state.modelTag,
@@ -2285,8 +2292,13 @@ function localBatchPlugin(): Plugin {
 
           fs.writeFileSync(path.join(docsDir, htmlFilename), htmlContent, 'utf-8');
 
+          const resolvedVer = narrative.promptVersion || activePromptVer;
+          const resolvedVerTag = (narrative.promptVersionTag || resolvedVer.toUpperCase()).toUpperCase();
+
           const reportData = {
             schemaVersion: 'vedic_brain_v1',
+            promptVersion: resolvedVer,
+            promptVersionTag: resolvedVerTag,
             year: state.year,
             month: state.monthName,
             monthIndex: state.monthIndex,
@@ -2310,7 +2322,8 @@ function localBatchPlugin(): Plugin {
               usagePaisa: 0
             },
             promptArtifact: {
-              promptVersion: 'v2',
+              promptVersion: resolvedVer,
+              promptVersionTag: resolvedVerTag,
               charLength: prompt.length,
               fullPromptText: prompt
             },
@@ -2353,8 +2366,10 @@ function localBatchPlugin(): Plugin {
             engineKey,
             engineName: engineDisplayName,
             categoryLabel: 'Local 14B Batch',
-            badge: '🖥️ Vedic Qwen 14B',
+            badge: `🖥️ Vedic Qwen 14B [${resolvedVerTag}]`,
             providerId: 'local_qwen',
+            promptVersion: resolvedVer,
+            promptVersionTag: resolvedVerTag,
             htmlUrl,
             pdfUrl: '',
             docUrl: '',
@@ -2480,7 +2495,7 @@ function localBatchPlugin(): Plugin {
                 return;
               }
 
-              const requestedTag = String(payload.modelTag || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+              const requestedTag = String(payload.modelTag || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
               const delaySeconds = Math.max(0, Math.min(300, Number(payload.delaySeconds ?? 120)));
               const ollamaEndpoint = String(payload.ollamaEndpoint || 'http://localhost:11434/api/generate').trim();
 
@@ -2523,7 +2538,11 @@ function localBatchPlugin(): Plugin {
               const monthName = BATCH_MONTH_NAMES[monthIndex] || `Month${monthIndex + 1}`;
               const year = Number(ctx.selectedYear);
 
-              activeContextPayload = { ...ctx, promptVersion: 'v2' };
+              const requestedVer =
+                ctx.promptVersion === 'v1' || ctx.promptVersion === 'v2' || ctx.promptVersion === 'v3'
+                  ? ctx.promptVersion
+                  : 'v3';
+              activeContextPayload = { ...ctx, promptVersion: requestedVer };
               state = {
                 jobId: `batch_${year}_${monthName.toLowerCase()}_${Date.now()}`,
                 status: delaySeconds === 0 ? 'running' : 'scheduled',

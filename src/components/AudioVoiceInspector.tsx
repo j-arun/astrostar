@@ -741,14 +741,23 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
 
   const handleDownloadReport = () => {
     if (!narrative || !context) return;
-    const blob = new Blob([JSON.stringify({ context, narrative }, null, 2)], {
+    const effectiveVer = narrative.promptVersion || context.promptVersion || getActivePromptVersion();
+    const effectiveTag = (narrative.promptVersionTag || effectiveVer.toUpperCase()).toUpperCase();
+    const blob = new Blob([
+      JSON.stringify({
+        promptVersion: effectiveVer,
+        promptVersionTag: effectiveTag,
+        context,
+        narrative
+      }, null, 2)
+    ], {
       type: 'application/json'
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.download = context.isComprehensiveMonthly
-      ? `Vedic_Report_Monthly_${MONTH_NAMES[context.selectedMonth]}_${context.selectedYear}.json`
-      : `Vedic_Report_H${context.houseNumber || 'Bhava'}_${context.rashiName || 'Transit'}.json`;
+      ? `Vedic_Report_Monthly_${MONTH_NAMES[context.selectedMonth]}_${context.selectedYear}_${effectiveTag}.json`
+      : `Vedic_Report_H${context.houseNumber || 'Bhava'}_${context.rashiName || 'Transit'}_${effectiveTag}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1350,6 +1359,13 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                 VRAM Purged
               </span>
             )}
+
+            <span
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/35 text-[11px] font-mono font-extrabold"
+              title="Prompt version tag returned by the reasoning engine"
+            >
+              Prompt: {narrative?.promptVersionTag || (narrative?.promptVersion || getActivePromptVersion()).toUpperCase()}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1993,7 +2009,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                 <Code className="w-4 h-4 text-amber-400" />
                 <span>Vedic Prompt &amp; Reasoning Studio</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                  {PROMPT_VERSIONS[getActivePromptVersion()]?.shortTitle || 'Prompt v2'}
+                  {PROMPT_VERSIONS[getActivePromptVersion()]?.shortTitle || 'Prompt v3'}
                 </span>
                 {isPromptCustomized ? (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">

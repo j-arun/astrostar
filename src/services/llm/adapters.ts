@@ -1400,33 +1400,182 @@ ${part3}
   };
 }
 
+export const PREFERRED_VEDIC_14B_MODEL = 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
+
+export function pickPreferredLocalOllamaModel(models: string[], current?: string): string {
+  if (current && models.includes(current)) return current;
+  const preferredOrder = [
+    (m: string) => m.toLowerCase().includes('vedic') && m.toLowerCase().includes('14b'),
+    (m: string) => m.toLowerCase().includes('vedic'),
+    (m: string) => m.toLowerCase().includes('14b'),
+    (m: string) => m.toLowerCase().includes('17b'),
+    (m: string) => m.toLowerCase().includes('qwen3'),
+    (m: string) => m.toLowerCase().includes('qwen2.5'),
+    (m: string) => m.toLowerCase().includes('qwen'),
+    (m: string) => m.toLowerCase().includes('8b') || m.toLowerCase().includes('7b')
+  ];
+  for (const matcher of preferredOrder) {
+    const hit = models.find(matcher);
+    if (hit) return hit;
+  }
+  return models[0] || current || PREFERRED_VEDIC_14B_MODEL;
+}
+
+export function formatLocalModelDisplayName(tag: string): string {
+  const clean = (tag || '').trim();
+  if (!clean) return 'Vedic Qwen 2.5 14B';
+  if (clean.toLowerCase().includes('vedic-qwen2.5-14b')) {
+    const quant = clean.includes(':') ? clean.split(':').pop() : '14B';
+    return `Vedic Qwen 2.5 14B (${quant})`;
+  }
+  const tail = clean.split('/').pop() || clean;
+  return tail;
+}
+
 /**
- * Health check helper for local Ollama instance
+ * Health check helper for local Ollama instance (uses direct /api/tags with Vite /api/batch/ollama-models CORS-free fallback)
  */
 export async function checkOllamaHealth(endpoint = 'http://localhost:11434'): Promise<{
   isOnline: boolean;
   version?: string;
   models: string[];
+  viaProxy?: boolean;
   error?: string;
 }> {
+  const cleanEndpoint = endpoint.trim().replace(/\/+$/, '').replace(/\/api\/(generate|tags|chat)$/i, '') || 'http://localhost:11434';
   try {
-    const res = await fetch(`${endpoint}/api/tags`, {
-      method: 'GET'
+    const res = await fetch(`${cleanEndpoint}/api/tags`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
     });
 
     if (res.ok) {
       const data = await res.json();
-      const models = Array.isArray(data.models) ? data.models.map((m: any) => m.name) : [];
-      return { isOnline: true, models };
+      const models = Array.isArray(data.models) ? data.models.map((m: any) => String(m.name || m.model || '')).filter(Boolean) : [];
+      return { isOnline: true, models, viaProxy: false };
     }
-    return { isOnline: false, models: [], error: `HTTP ${res.status}: ${res.statusText}` };
+  } catch {
+    // Fall through to CORS-free Vite server proxy check
+  }
+
+  try {
+    const proxyRes = await fetch(`/api/batch/ollama-models?endpoint=${encodeURIComponent(`${cleanEndpoint}/api/generate`)}`);
+    if (proxyRes.ok) {
+      const pData = await proxyRes.json();
+      if (pData?.reachable) {
+        const models = Array.isArray(pData.models)
+          ? pData.models.map((m: any) => typeof m === 'string' ? m : String(m?.name || '')).filter(Boolean)
+          : [];
+        return { isOnline: true, models, viaProxy: true };
+      }
+      return {
+        isOnline: false,
+        models: [],
+        error: pData?.error || 'Connection refused (Is Ollama running?)'
+      };
+    }
   } catch (err: any) {
     return {
       isOnline: false,
       models: [],
-      error: err.message || 'Connection refused (Is Ollama running?)'
+      error: err?.message || 'Connection refused (Is Ollama running?)'
     };
   }
+
+  return {
+    isOnline: false,
+    models: [],
+    error: 'Connection refused (Is Ollama running on port 11434?)'
+  };
+}
+
+/**
+ * Invokes local Ollama /api/generate via CORS-free Vite server proxy first (unlimited 14B timeout),
+ * falling back to direct browser fetch if proxy endpoint is absent.
+ */
+export async function callLocalOllamaGenerate(params: {
+  endpoint?: string;
+  model: string;
+  prompt: string;
+  options?: Record<string, any>;
+  format?: string;
+  keep_alive?: string | number;
+}): Promise<{
+  response: string;
+  model?: string;
+  eval_count?: number;
+  prompt_eval_count?: number;
+  total_duration?: number;
+}> {
+  const cleanEndpoint = (params.endpoint || 'http://localhost:11434')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/api\/(generate|tags|chat)$/i, '') || 'http://localhost:11434';
+
+  const payload = {
+    endpoint: cleanEndpoint,
+    model: params.model,
+    prompt: params.prompt,
+    stream: false,
+    ...(params.format ? { format: params.format } : {}),
+    ...(params.keep_alive !== undefined ? { keep_alive: params.keep_alive } : {}),
+    options: params.options || { temperature: 0.3, num_predict: 2000, num_ctx: 16384 }
+  };
+
+  try {
+    const proxyRes = await fetch('/api/llm/ollama-generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (proxyRes.status !== 404) {
+      if (!proxyRes.ok) {
+        const errText = await proxyRes.text().catch(() => '');
+        throw new Error(`HTTP ${proxyRes.status} (${params.model}): ${errText || proxyRes.statusText}`);
+      }
+      const data = await proxyRes.json();
+      return {
+        response: String(data?.response || data?.text || ''),
+        model: data?.model,
+        eval_count: data?.eval_count,
+        prompt_eval_count: data?.prompt_eval_count,
+        total_duration: data?.total_duration
+      };
+    }
+  } catch (err: any) {
+    // If the proxy explicitly returned an HTTP error from Ollama, propagate it cleanly
+    if (err?.message && err.message.startsWith('HTTP ')) {
+      throw err;
+    }
+  }
+
+  // Fallback to direct localhost call if Vite proxy route isn't mounted
+  const directRes = await fetch(`${cleanEndpoint}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: params.model,
+      prompt: params.prompt,
+      stream: false,
+      ...(params.format ? { format: params.format } : {}),
+      ...(params.keep_alive !== undefined ? { keep_alive: params.keep_alive } : {}),
+      options: payload.options
+    })
+  });
+
+  if (!directRes.ok) {
+    const errText = await directRes.text().catch(() => '');
+    throw new Error(`HTTP ${directRes.status} (${params.model}): ${errText || directRes.statusText}`);
+  }
+  const data = await directRes.json();
+  return {
+    response: String(data?.response || data?.text || ''),
+    model: data?.model,
+    eval_count: data?.eval_count,
+    prompt_eval_count: data?.prompt_eval_count,
+    total_duration: data?.total_duration
+  };
 }
 
 /**

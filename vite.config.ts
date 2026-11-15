@@ -2420,6 +2420,100 @@ function localBatchPlugin(): Plugin {
 
       server.middlewares.use(async (req, res, next) => {
         const rawUrl = req.url || '';
+
+        // Direct CORS-free Local Ollama Generate Proxy (used by Local Q&A / Report Copilot)
+        if (rawUrl.split('?')[0] === '/api/llm/ollama-generate') {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204;
+            res.end();
+            return;
+          }
+          if (req.method !== 'POST') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+          }
+
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const payload = JSON.parse(body || '{}');
+              const baseEndpoint = String(payload.endpoint || 'http://localhost:11434').trim().replace(/\/+$/, '');
+              const generateUrl = baseEndpoint.endsWith('/api/generate')
+                ? baseEndpoint
+                : `${baseEndpoint}/api/generate`;
+
+              let requestedModel = String(payload.model || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+              const tagsCheck = await fetchInstalledOllamaModels(generateUrl);
+              if (tagsCheck.reachable && tagsCheck.models.length > 0) {
+                const resolution = resolveOllamaModelTag(requestedModel, tagsCheck.models.map(m => m.name));
+                if (resolution.matchType !== 'not_found') {
+                  requestedModel = resolution.resolved;
+                }
+              }
+
+              const forwardBody = JSON.stringify({
+                model: requestedModel,
+                prompt: payload.prompt || '',
+                stream: false,
+                ...(payload.format ? { format: payload.format } : {}),
+                ...(payload.keep_alive !== undefined ? { keep_alive: payload.keep_alive } : {}),
+                options: payload.options || { temperature: 0.3, num_predict: 2000, num_ctx: 16384 }
+              });
+
+              const parsed = new URL(generateUrl);
+              const client = parsed.protocol === 'https:' ? https : http;
+
+              const proxyRes: { status: number; bodyText: string } = await new Promise((resolve, reject) => {
+                const outReq = client.request(
+                  {
+                    hostname: parsed.hostname,
+                    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+                    path: parsed.pathname + parsed.search,
+                    method: 'POST',
+                    timeout: 0,
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Content-Length': Buffer.byteLength(forwardBody)
+                    }
+                  },
+                  inRes => {
+                    inRes.setTimeout(0);
+                    let respData = '';
+                    inRes.on('data', c => { respData += c.toString('utf-8'); });
+                    inRes.on('end', () => resolve({ status: inRes.statusCode || 200, bodyText: respData }));
+                    inRes.on('error', err => reject(err));
+                  }
+                );
+                outReq.setTimeout(0);
+                outReq.on('socket', sock => {
+                  sock.setTimeout(0);
+                  sock.setKeepAlive(true, 15000);
+                });
+                outReq.on('error', err => reject(err));
+                outReq.write(forwardBody);
+                outReq.end();
+              });
+
+              res.statusCode = proxyRes.status;
+              res.end(proxyRes.bodyText);
+            } catch (err: any) {
+              res.statusCode = 502;
+              res.end(JSON.stringify({
+                error: err?.message || 'Local Ollama proxy connection failed (Is Ollama running on port 11434?)'
+              }));
+            }
+          });
+          return;
+        }
+
         if (!rawUrl.startsWith('/api/batch/')) return next();
 
         const pathname = rawUrl.split('?')[0];

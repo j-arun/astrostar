@@ -18,10 +18,17 @@ import {
   AlertCircle,
   MessageSquare,
   Sliders,
-  Compass
+  Compass,
+  Globe
 } from 'lucide-react';
 import { VedicHouseContext, LLMThreePartNarrative } from '../services/llm/types';
-import { checkOllamaHealth } from '../services/llm/adapters';
+import {
+  checkOllamaHealth,
+  PREFERRED_VEDIC_14B_MODEL,
+  pickPreferredLocalOllamaModel,
+  formatLocalModelDisplayName,
+  callLocalOllamaGenerate
+} from '../services/llm/adapters';
 import {
   CachedPredictionSummary,
   CachedPredictionEntry,
@@ -62,20 +69,7 @@ const MODEL_STORAGE_KEY = 'astro_copilot_ollama_model';
 const CTX_STORAGE_KEY = 'astro_copilot_ollama_num_ctx';
 
 function pickPreferredInstalledModel(models: string[], current: string): string {
-  if (current && models.includes(current)) return current;
-  const preferredOrder = [
-    (m: string) => m.toLowerCase().includes('17b'),
-    (m: string) => m.toLowerCase().includes('qwen3'),
-    (m: string) => m.toLowerCase().includes('14b'),
-    (m: string) => m.toLowerCase().includes('qwen2.5'),
-    (m: string) => m.toLowerCase().includes('qwen'),
-    (m: string) => m.toLowerCase().includes('7b')
-  ];
-  for (const matcher of preferredOrder) {
-    const hit = models.find(matcher);
-    if (hit) return hit;
-  }
-  return models[0] || current || 'qwen3:17b';
+  return pickPreferredLocalOllamaModel(models, current);
 }
 
 function buildOfflineDeterministicFallback(
@@ -161,10 +155,14 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
   });
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'qwen3:17b';
-    return localStorage.getItem(MODEL_STORAGE_KEY) || localStorage.getItem('astro_ollama_model') || 'qwen3:17b';
+    if (typeof window === 'undefined') return PREFERRED_VEDIC_14B_MODEL;
+    return localStorage.getItem(MODEL_STORAGE_KEY) || localStorage.getItem('astro_ollama_model') || PREFERRED_VEDIC_14B_MODEL;
   });
 
+  const [responseLanguage, setResponseLanguage] = useState<'en' | 'ta'>(() => {
+    if (typeof window === 'undefined') return 'en';
+    return localStorage.getItem('astro_qa_language') === 'ta' ? 'ta' : 'en';
+  });
   const [customModelOverride, setCustomModelOverride] = useState<string>('');
   const [numCtx, setNumCtx] = useState<number>(() => {
     if (typeof window === 'undefined') return 16384;
@@ -195,7 +193,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
     return buildDynamicQuestionCards(activeContext, activeNarrative);
   }, [activeContext, activeNarrative]);
 
-  const effectiveModel = (customModelOverride.trim() || selectedModel.trim() || 'qwen3:17b');
+  const effectiveModel = (customModelOverride.trim() || selectedModel.trim() || PREFERRED_VEDIC_14B_MODEL);
 
   const scanOllama = async (endpointOverride?: string) => {
     const ep = (endpointOverride || ollamaEndpoint).trim().replace(/\/+$/, '');
@@ -278,14 +276,20 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
         .map(m => `${m.role === 'user' ? 'USER QUESTION' : 'PRIVATE ASTROLOGER'}: ${m.text}`)
         .join('\n\n');
 
+      const languageDirective =
+        responseLanguage === 'ta'
+          ? `5. LANGUAGE: Respond in clear Tamil (தமிழ்) script.`
+          : `5. LANGUAGE: Strictly respond in clear, fluent English. Use English zodiac signs (Aries..Pisces) and English planet names (Sun..Ketu); do not use Tamil script or regional Tamil sign names.`;
+
       const systemPrompt = [
         `You are a private, on-premise Classical Parashara Vedic Astrologer & Personal Decision Advisor.`,
         `You are answering directly from a cached Vedic Prediction Synthesis Report (JSON + Prompt + Ephemeris Transits).`,
         `CRITICAL RULES:`,
         `1. Stay strictly grounded in the provided REPORT DATA, DASHA TRIAD, SPECIAL VEDIC EVENTS (Parivartana, Neecha Bhanga, Retrograde↔Direct stations), and GOCHARA TRANSITS. Never invent dates, planetary signs, or yogas not present in the context.`,
         `2. Address the user's specific personal life scenario (such as unresolved past relationships, reconciliation vs closure, career promotions, visa/financial steps) honestly and compassionately—if transits show clearing up, say when and why; if mixed or requiring closure/caution, explain clearly without false flattery.`,
-        `3. Explicitly cite exact planetary placements, houses, Dasha lords, date ranges, and any Parivartana/Neecha Bhanga/Direct station backing your verdict.`,
-        `4. Structure your reply cleanly with scannable headings (###), bullet points, concrete timing windows, and actionable takeaways.`
+        `3. Explicitly cite exact planetary placements, houses (both from Lagna for lived reality and from Moon for mental/emotional experience), Dasha lords, date ranges, and any Parivartana/Neecha Bhanga/Direct station backing your verdict.`,
+        `4. Structure your reply cleanly with scannable headings (###), bullet points, concrete timing windows, and actionable takeaways.`,
+        languageDirective
       ].join('\n');
 
       const fullPrompt = [
@@ -295,27 +299,18 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
         `\n[USER'S SPECIFIC PRIVATE QUESTION]\n${trimmed}\n\nRespond clearly in structured Markdown:`
       ].filter(Boolean).join('\n');
 
-      const res = await fetch(`${cleanEndpoint}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: effectiveModel,
-          prompt: fullPrompt,
-          stream: false,
-          options: {
-            num_ctx: numCtx,
-            temperature,
-            num_predict: 1400
-          }
-        })
+      const data = await callLocalOllamaGenerate({
+        endpoint: cleanEndpoint,
+        model: effectiveModel,
+        prompt: fullPrompt,
+        keep_alive: '5m',
+        options: {
+          num_ctx: numCtx,
+          temperature,
+          num_predict: 1600
+        }
       });
 
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status} (${effectiveModel}): ${errBody || res.statusText}`);
-      }
-
-      const data = await res.json();
       const elapsed = Math.round(performance.now() - startMs);
       const replyText = (data?.response || '').trim();
 
@@ -330,7 +325,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
           role: 'assistant',
           text: replyText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          modelUsed: data?.model || effectiveModel,
+          modelUsed: `${formatLocalModelDisplayName(data?.model || effectiveModel)} [${responseLanguage === 'ta' ? 'TA' : 'EN'}]`,
           durationMs: elapsed,
           evalCount: data?.eval_count,
           promptEvalCount: data?.prompt_eval_count
@@ -508,10 +503,42 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
                   localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
                 } catch {}
               }}
-              placeholder="e.g. qwen3:17b"
-              className="bg-slate-950 border border-purple-500/40 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 w-44 focus:outline-none"
+              placeholder={PREFERRED_VEDIC_14B_MODEL}
+              className="bg-slate-950 border border-purple-500/40 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 w-64 focus:outline-none"
             />
           )}
+
+          <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setResponseLanguage('en');
+                try {
+                  localStorage.setItem('astro_qa_language', 'en');
+                } catch {}
+              }}
+              className={`px-2 py-0.5 rounded text-[10.5px] font-bold cursor-pointer transition flex items-center gap-1 ${
+                responseLanguage === 'en' ? 'bg-cyan-500 text-slate-950' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3 h-3" />
+              <span>English</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setResponseLanguage('ta');
+                try {
+                  localStorage.setItem('astro_qa_language', 'ta');
+                } catch {}
+              }}
+              className={`px-2 py-0.5 rounded text-[10.5px] font-bold cursor-pointer transition ${
+                responseLanguage === 'ta' ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              தமிழ்
+            </button>
+          </div>
 
           <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-400">
             ctx: {numCtx.toLocaleString()}

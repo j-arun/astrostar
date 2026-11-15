@@ -24,11 +24,21 @@ import {
   FileDown,
   FileText,
   Printer,
-  Trash2
+  Trash2,
+  Sliders,
+  Globe
 } from 'lucide-react';
 import { NakshatraGateInfo, ManufacturedEventItem } from './EventManufacturingEngine';
 import { RASHI_LIST_META } from '../data/transitEphemeris';
-import { toCleanEnglishPlanet, toCleanEnglishSign } from '../services/llm/adapters';
+import {
+  toCleanEnglishPlanet,
+  toCleanEnglishSign,
+  PREFERRED_VEDIC_14B_MODEL,
+  pickPreferredLocalOllamaModel,
+  formatLocalModelDisplayName,
+  checkOllamaHealth as pingOllamaHealth,
+  callLocalOllamaGenerate
+} from '../services/llm/adapters';
 import { ADChamberDynamics } from '../services/dashaChamberEngine';
 import type { VedicWindowAnalysis } from '../services/vedicEventsEngine';
 
@@ -277,9 +287,15 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') || 'http://localhost:11434';
   });
   const [localModelName, setLocalModelName] = useState<string>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'qwen2.5:14b';
+    return (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || PREFERRED_VEDIC_14B_MODEL;
   });
-  const [ollamaStatus, setOllamaStatus] = useState<{ isOnline: boolean; availableModels: string[]; checking: boolean }>({
+  const [responseLanguage, setResponseLanguage] = useState<'en' | 'ta'>(() => {
+    if (typeof window === 'undefined') return 'en';
+    return localStorage.getItem('astro_qa_language') === 'ta' ? 'ta' : 'en';
+  });
+  const [numCtx, setNumCtx] = useState<number>(16384);
+  const [showEngineSettings, setShowEngineSettings] = useState<boolean>(false);
+  const [ollamaStatus, setOllamaStatus] = useState<{ isOnline: boolean; availableModels: string[]; checking: boolean; error?: string }>({
     isOnline: false,
     availableModels: [],
     checking: false
@@ -291,50 +307,38 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   const initialWelcomeMessage: ChatMessage = {
     id: 'msg-welcome',
     sender: 'assistant',
-    text: `Hello! I am your 100% Air-Gapped Private Astrological Prediction Assistant (Local Q&A).
+    text: `Hello! I am your 100% Air-Gapped Private Astrological Prediction Assistant (**Ask Local Q&A — English Ready**).
 I have absorbed all screen data for **${monthName} ${selectedYear}** under **${toCleanEnglishPlanet(activeDashaHierarchy.mahadasha)} MD → ${toCleanEnglishPlanet(activeDashaHierarchy.antardasha)} AD → ${toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha)} PD**.
 
-🔒 **Privacy Guarantee**: All queries run strictly through your local Private LLM (Ollama). Zero PII or career queries ever leave your machine.
+🔒 **Privacy Guarantee**: All queries run strictly on your local machine via **${formatLocalModelDisplayName(localModelName)}** (English by default; zero external cloud transmission).
 
 Ask me specific questions comparing personal situations, like:
 • *"Is this month indicating high income? I have on-site travel vs a new role assignment—which one matches?"*
 • *"Where were Ketu and Venus in transit when this event triggered?"*
-• *"Which gate is receiving the strongest transiting Graha support this month?"*`,
+• *"Which gate is receiving the strongest transiting planet support this month?"*`,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     modelUsed: 'Screen-Aware Memory Grounding'
   };
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => [initialWelcomeMessage]);
 
-  // Check Ollama Local Connection
+  // Check Ollama Local Connection (direct + Vite CORS-free proxy fallback)
   const checkOllamaHealth = async () => {
     setOllamaStatus(prev => ({ ...prev, checking: true }));
-    try {
-      const cleanEndpoint = ollamaEndpoint.replace(/\/+$/, '');
-      const res = await fetch(`${cleanEndpoint}/api/tags`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const models = (data.models || []).map((m: any) => m.name || m.model);
-        setOllamaStatus({
-          isOnline: true,
-          availableModels: models,
-          checking: false
-        });
-        if (models.length > 0 && !models.includes(localModelName)) {
-          const foundQwen = models.find((m: string) => m.toLowerCase().includes('qwen'));
-          if (foundQwen) {
-            setLocalModelName(foundQwen);
-          } else {
-            setLocalModelName(models[0]);
-          }
-        }
-        return;
-      }
-    } catch {}
-    setOllamaStatus(prev => ({ ...prev, isOnline: false, checking: false }));
+    const res = await pingOllamaHealth(ollamaEndpoint);
+    setOllamaStatus({
+      isOnline: res.isOnline,
+      availableModels: res.models || [],
+      checking: false,
+      error: res.error
+    });
+    if (res.isOnline && res.models.length > 0 && !res.models.includes(localModelName)) {
+      const preferred = pickPreferredLocalOllamaModel(res.models, localModelName);
+      setLocalModelName(preferred);
+      try {
+        localStorage.setItem('astro_ollama_model', preferred);
+      } catch {}
+    }
   };
 
   useEffect(() => {
@@ -348,37 +352,37 @@ Ask me specific questions comparing personal situations, like:
     }
   }, [messages, isGenerating]);
 
-  // Build the complete Grounded Screen Context Snapshot
+  // Build the complete Grounded Screen Context Snapshot (Clean English signs & planets)
   const screenContextSnapshot = useMemo(() => {
     const lagnaMeta = RASHI_LIST_META.find(r => r.index === natalLagnaIdx) || RASHI_LIST_META[8];
     const moonMeta = RASHI_LIST_META.find(r => r.index === natalRashiIdx) || RASHI_LIST_META[7];
 
     const transitGrahasList = transitPlacements.map((p: any) => {
-      const gName = p.graha_name || p.planet || 'Graha';
-      const rName = p.transit_rashi_name || p.sign || '';
+      const gName = toCleanEnglishPlanet(p.graha_name || p.planet || 'Planet');
+      const rName = toCleanEnglishSign(p.transit_rashi_name || p.sign || '');
       const nakName = p.graha_pada_chara?.nakshatra_name || p.nakshatra || '';
       const pada = p.graha_pada_chara?.pada || p.pada || 1;
       const deg = p.degree_sputa || p.degree || '';
       const hLagna = p.relative_to_natal_lagna?.house_number || p.houseFromLagna || '?';
       const hMoon = p.relative_to_natal_rashi?.house_number || p.houseFromMoon || '?';
-      const isVakra = p.is_retrograde ? ' [VAKRA/RETROGRADE]' : '';
-      return `${gName}: ${deg} in ${rName} (${nakName} Pada ${pada})${isVakra} -> H${hLagna} from Lagna, H${hMoon} from Moon`;
+      const isVakra = p.is_retrograde ? ' [RETROGRADE]' : '';
+      return `${gName}: ${deg} in ${rName} (${nakName} Pada ${pada})${isVakra} -> L${hLagna} (Lagna House ${hLagna}) | M${hMoon} (Moon House ${hMoon})`;
     });
 
     const gatesList = gateDetails.map((g, idx) => {
-      const active = g.activeGrahasInGate.map(a => a.name).join(', ') || 'None';
-      return `Gate ${idx + 1} (${g.nakshatraName} in ${g.rashiName}): H${g.houseFromLagna} from Lagna, H${g.houseFromRashi} from Moon. Anatomical Seat: ${g.anatomicalSeat}. Transits in Gate: ${active}. Moon Ingress Window: ${g.moonIngressWindow || 'N/A'}`;
+      const active = g.activeGrahasInGate.map(a => toCleanEnglishPlanet(a.name)).join(', ') || 'None';
+      return `Gate ${idx + 1} (${g.nakshatraName} in ${toCleanEnglishSign(g.rashiName)}): L${g.houseFromLagna} (Lagna) / M${g.houseFromRashi} (Moon). Anatomical Seat: ${g.anatomicalSeat}. Transits in Gate: ${active}. Moon Ingress Window: ${g.moonIngressWindow || 'N/A'}`;
     });
 
     const eventsList = manifestedEvents.map((ev, i) => {
-      return `Event ${i + 1} [${ev.portfolio || 'General'}] (${ev.probabilityScore}% Probable, ${ev.latencyStatus === 'acute_moon_triggered' ? '⚡ ACUTE MOON IGNITED' : '💤 Dormant'}): "${ev.title}" - ${ev.narrative}. Trigger: ${ev.gateTrigger || 'N/A'}`;
+      return `Event ${i + 1} [${ev.portfolio || 'General'}] (${ev.probabilityScore}% Probable, ${ev.latencyStatus === 'acute_moon_triggered' ? 'MOON IGNITED' : 'Background'}): "${ev.title}" - ${ev.narrative}. Trigger: ${ev.gateTrigger || 'N/A'}`;
     });
 
     const adChamberText = adChamberDynamics ? {
-      adLord: adChamberDynamics.adCleanName,
-      seat: `${adChamberDynamics.adNatalRashiName} (House ${adChamberDynamics.adNatalHouseFromLagna})`,
-      conjunctions: adChamberDynamics.directOccupants.map(o => `${o.cleanName}${o.dignity === 'exalted' ? ' [EXALTED (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts)`),
-      aspects: adChamberDynamics.incomingAspects.map(a => `${a.cleanName} (${a.aspectLabel} from H${a.sourceHouseFromLagna}) [${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts]`),
+      adLord: toCleanEnglishPlanet(adChamberDynamics.adCleanName),
+      seat: `${toCleanEnglishSign(adChamberDynamics.adNatalRashiName)} (House ${adChamberDynamics.adNatalHouseFromLagna})`,
+      conjunctions: adChamberDynamics.directOccupants.map(o => `${toCleanEnglishPlanet(o.cleanName)}${o.dignity === 'exalted' ? ' [EXALTED (+45 pts)]' : ''} (${o.pressurePoints > 0 ? `+${o.pressurePoints}` : o.pressurePoints} pts)`),
+      aspects: adChamberDynamics.incomingAspects.map(a => `${toCleanEnglishPlanet(a.cleanName)} (${a.aspectLabel} from H${a.sourceHouseFromLagna}) [${a.pressurePoints > 0 ? `+${a.pressurePoints}` : a.pressurePoints} pts]`),
       polarity: adChamberDynamics.polarityLabel,
       netScore: adChamberDynamics.netScore,
       summary: adChamberDynamics.chamberAtmosphereNarrative
@@ -389,12 +393,12 @@ Ask me specific questions comparing personal situations, like:
       nativeAge,
       monthName,
       selectedYear,
-      natalLagna: `${lagnaMeta.eng} (${lagnaMeta.tamil}) - House 1`,
-      natalMoon: `${moonMeta.eng} (${moonMeta.tamil})`,
+      natalLagna: `${toCleanEnglishSign(lagnaMeta.eng)} - House 1`,
+      natalMoon: `${toCleanEnglishSign(moonMeta.eng)}`,
       dasha: {
-        md: activeDashaHierarchy.mahadasha,
-        ad: activeDashaHierarchy.antardasha,
-        pd: activeDashaHierarchy.pratyantardasha,
+        md: toCleanEnglishPlanet(activeDashaHierarchy.mahadasha),
+        ad: toCleanEnglishPlanet(activeDashaHierarchy.antardasha),
+        pd: toCleanEnglishPlanet(activeDashaHierarchy.pratyantardasha),
         window: `${activeDashaHierarchy.startDate} to ${activeDashaHierarchy.endDate}`
       },
       adChamber: adChamberText,
@@ -514,7 +518,7 @@ Ask me specific questions comparing personal situations, like:
       `You can ask me to compare specific job opportunities, interview outcomes, income brackets, or where any planet was transiting during this cycle!`;
   };
 
-  // Submit User Message to Local Ollama (or deterministic fallback)
+  // Submit User Message to Local Ollama (via CORS-free proxy or direct) with deterministic fallback
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || userInput).trim();
     if (!query || isGenerating) return;
@@ -532,12 +536,19 @@ Ask me specific questions comparing personal situations, like:
 
     const assistantMsgId = `ast-${Date.now()}`;
     const startTime = Date.now();
+    let fallbackReason = '';
 
-    // 1. Check if Local Ollama is available
-    if (ollamaStatus.isOnline) {
+    // 1. Check / attempt Local Ollama when online (or auto-probe once if not scanned)
+    const canTryOllama = ollamaStatus.isOnline || (await pingOllamaHealth(ollamaEndpoint)).isOnline;
+    if (canTryOllama) {
       try {
-        const systemPrompt = `You are an expert Vedic Astrological Prediction Analyst and Local Q&A Engine running in a 100% PRIVATE, AIR-GAPPED environment.
-The user is viewing their active astrological prediction screen in the application.
+        const languageDirective =
+          responseLanguage === 'ta'
+            ? `LANGUAGE RULE: Respond in clear, respectful Tamil (தமிழ்) script with clean technical clarity.`
+            : `LANGUAGE RULE: Respond strictly in clear, fluent English. Use standard English zodiac signs (Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces) and English planet names (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu). Do not output Tamil script or regional Tamil transliterations.`;
+
+        const systemPrompt = `You are a classical Parashara Vedic Astrological Prediction Analyst running privately on the user's local machine.
+The user is viewing their active monthly/timeline prediction screen and asking a personal follow-up question.
 
 === COMPLETE SCREEN DATA SNAPSHOT (GROUND TRUTH) ===
 Native: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})
@@ -550,8 +561,8 @@ Active Dasha Hierarchy:
 - Antardasha (AD): ${screenContextSnapshot.dasha.ad}
 - Pratyantardasha (PD): ${screenContextSnapshot.dasha.pd}
 - Date Horizon: ${screenContextSnapshot.dasha.window}
-
-Transiting Grahas in the Sky (Gochara Ephemeris):
+${screenContextSnapshot.adChamber ? `\nAD Pressure Chamber:\n- Host: ${screenContextSnapshot.adChamber.adLord} at ${screenContextSnapshot.adChamber.seat} (${screenContextSnapshot.adChamber.polarity}, Net Score: ${screenContextSnapshot.adChamber.netScore})\n- Conjunctions: ${screenContextSnapshot.adChamber.conjunctions.join(', ') || 'None'}\n- Incoming Aspects: ${screenContextSnapshot.adChamber.aspects.join('; ') || 'None'}\n` : ''}
+Transiting Planets in the Sky (Gochara Ephemeris):
 ${screenContextSnapshot.transits.join('\n')}
 
 The 3 Delivering Nakshatra Gates:
@@ -566,52 +577,54 @@ USER QUESTION:
 "${query}"
 
 INSTRUCTIONS:
-1. Answer strictly using the provided screen ground truth.
-2. If the user asks about specific scenarios (e.g. On-site foreign travel vs. New role assignment, or high income), compare both scenarios objectively:
+1. ${languageDirective}
+2. Answer strictly from the provided screen ground truth.
+3. Apply dual-fold transit reasoning cleanly: explain BOTH what happens in outer lived reality (House from Lagna) AND how it feels internally/mentally (House from Moon).
+4. If the user compares specific scenarios (e.g., on-site travel vs. new role assignment, high income, relationship outcomes):
    - Provide an alignment probability percentage for each scenario.
    - Format comparison tables with Markdown pipes (| Scenario | Alignment Probability | Key Transit Mechanisms |).
-   - Explain the exact planetary transit houses (e.g., 10th house career vs 11th house gains vs 9th/12th house foreign travel).
-   - Show which transiting Grahas and delivering Nakshatra gates support which outcome.
-   - Give a decisive, clear verdict on which scenario matches the screen data better and why.
-3. If the user asks where planets like Ketu or Venus were in transit, pull the EXACT degrees, sign, Nakshatra, pada, and house positions from the transits section.
-4. Keep the output clean, highly structured, with section headers (###, ####), bullet points, and clean bold tags.`;
+   - Explain exact Lagna & Moon transit houses, transiting planets, and delivering Nakshatra gates supporting each outcome.
+   - Give a clear, decisive verdict grounded in the active screen data.
+5. If the user asks where planets are in transit, cite exact degrees, sign, Nakshatra, pada, and both Lagna and Moon house numbers from the transits list.
+6. Format cleanly with Markdown headings (###, ####), bullet points, and bold text.`;
 
-        const cleanEndpoint = ollamaEndpoint.replace(/\/+$/, '');
-        const res = await fetch(`${cleanEndpoint}/api/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: localModelName,
-            prompt: systemPrompt,
-            stream: false,
-            options: {
-              temperature: 0.3,
-              num_predict: 2000,
-              num_ctx: 8192
-            }
-          })
+        const data = await callLocalOllamaGenerate({
+          endpoint: ollamaEndpoint,
+          model: localModelName,
+          prompt: systemPrompt,
+          keep_alive: '5m',
+          options: {
+            temperature: 0.3,
+            num_predict: 2000,
+            num_ctx: numCtx
+          }
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          const responseText = data.response || data.text || '';
-          if (responseText.trim()) {
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-            setMessages(prev => [
-              ...prev,
-              {
-                id: assistantMsgId,
-                sender: 'assistant',
-                text: responseText,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                modelUsed: `Local Qwen (${localModelName.split(':')[0]}) • ${elapsed}s`
-              }
-            ]);
-            setIsGenerating(false);
-            return;
+        const responseText = (data.response || '').trim();
+        if (responseText) {
+          const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+          const tokInfo = data.eval_count ? ` • ${data.eval_count} tok` : '';
+          const langTag = responseLanguage === 'ta' ? 'TA' : 'EN';
+          const displayModel = formatLocalModelDisplayName(data.model || localModelName);
+          if (!ollamaStatus.isOnline) {
+            void checkOllamaHealth();
           }
+          setMessages(prev => [
+            ...prev,
+            {
+              id: assistantMsgId,
+              sender: 'assistant',
+              text: responseText,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              modelUsed: `${displayModel} [${langTag}] • ${elapsedSec}s${tokInfo}`
+            }
+          ]);
+          setIsGenerating(false);
+          return;
         }
+        fallbackReason = 'Empty response from Ollama';
       } catch (err: any) {
+        fallbackReason = err?.message || 'Ollama request failed';
         console.warn('Ollama query failed, falling back to deterministic screen analyzer:', err);
       }
     }
@@ -619,6 +632,7 @@ INSTRUCTIONS:
     // 2. Deterministic Astrological Engine Fallback (Instant, 100% offline, guaranteed)
     setTimeout(() => {
       const answer = generateDeterministicAnswer(query);
+      const fallbackNote = fallbackReason ? `Fallback (${fallbackReason.slice(0, 70)})` : 'Screen Ground Truth Analyzer (Ollama Offline)';
       setMessages(prev => [
         ...prev,
         {
@@ -626,13 +640,11 @@ INSTRUCTIONS:
           sender: 'assistant',
           text: answer,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          modelUsed: ollamaStatus.isOnline
-            ? `Private Fallback Synthesizer`
-            : `Screen Ground Truth Analyzer (Ollama Offline)`
+          modelUsed: fallbackNote
         }
       ]);
       setIsGenerating(false);
-    }, 400);
+    }, 300);
   };
 
   const handleCopyMessage = async (text: string, id: string) => {
@@ -955,7 +967,7 @@ INSTRUCTIONS:
             <Bot className="w-5 h-5 text-purple-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm sm:text-base font-black text-white tracking-wide flex items-center gap-1.5">
                 <span>Private Local Q&A</span>
               </h3>
@@ -963,9 +975,12 @@ INSTRUCTIONS:
                 <Lock className="w-3 h-3 text-emerald-400" />
                 <span>100% Air-Gapped Local LLM</span>
               </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40">
+                {responseLanguage === 'ta' ? 'தமிழ் Output' : 'English Output'}
+              </span>
             </div>
             <p className="text-xs text-slate-300">
-              Absorbs live upper transits, bottom natal/dasha coordinates, and Section 3 manifested events into private memory.
+              Runs in <strong>{responseLanguage === 'ta' ? 'Tamil' : 'English'}</strong> on <strong>{formatLocalModelDisplayName(localModelName)}</strong> — absorbs live transits, gates, Lagna &amp; Moon coordinates, and events locally.
             </p>
           </div>
         </div>
@@ -983,18 +998,33 @@ INSTRUCTIONS:
             <Cpu className={`w-3.5 h-3.5 ${ollamaStatus.isOnline ? 'text-emerald-400' : 'text-amber-400'}`} />
             <span>
               {ollamaStatus.isOnline
-                ? `Ollama Online (${localModelName.split(':')[0]})`
+                ? `Ollama Online (${formatLocalModelDisplayName(localModelName)})`
                 : 'Ollama Offline (Using Astrological Engine)'}
             </span>
             <button
               type="button"
               onClick={checkOllamaHealth}
-              title="Ping Ollama on port 11434"
+              title="Scan local Ollama models on port 11434"
               className="hover:text-white cursor-pointer ml-1"
             >
               <RefreshCw className={`w-3 h-3 ${ollamaStatus.checking ? 'animate-spin' : ''}`} />
             </button>
           </div>
+
+          {/* Model & Endpoint Config Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowEngineSettings(prev => !prev)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+              showEngineSettings
+                ? 'bg-purple-500/20 border-purple-400 text-purple-200'
+                : 'bg-slate-950 hover:bg-slate-800 border-slate-700 text-slate-300'
+            }`}
+            title="Configure Ollama URL & context window"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Settings</span>
+          </button>
 
           {/* Download HTML Transcript */}
           <button
@@ -1042,12 +1072,151 @@ INSTRUCTIONS:
 
       {isExpanded && (
         <div className="p-4 sm:p-5 space-y-4">
+          {/* LOCAL MODEL SELECTOR & LANGUAGE BAR */}
+          <div className="p-3 rounded-xl bg-slate-950/90 border border-purple-500/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                <span>Local Model:</span>
+              </span>
+              {ollamaStatus.availableModels.length > 0 ? (
+                <select
+                  value={localModelName}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setLocalModelName(val);
+                    try {
+                      localStorage.setItem('astro_ollama_model', val);
+                    } catch {}
+                  }}
+                  className="bg-slate-900 border border-purple-500/40 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none cursor-pointer max-w-xs sm:max-w-sm"
+                >
+                  {ollamaStatus.availableModels.map(m => (
+                    <option key={m} value={m} className="bg-slate-950 text-white">
+                      {m}
+                    </option>
+                  ))}
+                  {!ollamaStatus.availableModels.includes(localModelName) && (
+                    <option value={localModelName} className="bg-slate-950 text-amber-300">
+                      {localModelName} (configured)
+                    </option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={localModelName}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setLocalModelName(val);
+                    try {
+                      localStorage.setItem('astro_ollama_model', val);
+                    } catch {}
+                  }}
+                  className="bg-slate-900 border border-purple-500/40 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 w-72 focus:outline-none"
+                  placeholder={PREFERRED_VEDIC_14B_MODEL}
+                />
+              )}
+
+              {localModelName !== PREFERRED_VEDIC_14B_MODEL && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const match = ollamaStatus.availableModels.find(m => m.toLowerCase().includes('vedic')) || PREFERRED_VEDIC_14B_MODEL;
+                    setLocalModelName(match);
+                    try {
+                      localStorage.setItem('astro_ollama_model', match);
+                    } catch {}
+                  }}
+                  className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold cursor-pointer transition"
+                  title="Switch to hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M"
+                >
+                  Use Vedic 14B (English)
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Q&amp;A Language:</span>
+              </span>
+              <div className="inline-flex rounded-lg bg-slate-900 border border-slate-700 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResponseLanguage('en');
+                    try {
+                      localStorage.setItem('astro_qa_language', 'en');
+                    } catch {}
+                  }}
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition ${
+                    responseLanguage === 'en'
+                      ? 'bg-cyan-500 text-slate-950'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResponseLanguage('ta');
+                    try {
+                      localStorage.setItem('astro_qa_language', 'ta');
+                    } catch {}
+                  }}
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition ${
+                    responseLanguage === 'ta'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  தமிழ்
+                </button>
+              </div>
+              <span className="text-[10.5px] font-mono text-slate-500">ctx: {numCtx.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {showEngineSettings && (
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">Ollama Base URL</label>
+                <input
+                  type="text"
+                  value={ollamaEndpoint}
+                  onChange={e => {
+                    setOllamaEndpoint(e.target.value);
+                    try {
+                      localStorage.setItem('astro_ollama_endpoint', e.target.value);
+                    } catch {}
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-amber-200 focus:outline-none"
+                  placeholder="http://localhost:11434"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">Context Window (num_ctx)</label>
+                <select
+                  value={numCtx}
+                  onChange={e => setNumCtx(parseInt(e.target.value, 10))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-emerald-300 focus:outline-none cursor-pointer"
+                >
+                  <option value={8192}>8,192 tokens (Faster)</option>
+                  <option value={16384}>16,384 tokens (Recommended for 14B)</option>
+                  <option value={32768}>32,768 tokens (Deep Context)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* PRIVACY & MEMORY PILL BANNER */}
           <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-slate-300 font-mono text-[11px]">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                <strong>Zero PII Transmission</strong>: All role comparisons, income queries, and ground-truth notes stay strictly on your local device.
+                <strong>Zero PII Transmission</strong>: Runs locally via Ollama ({formatLocalModelDisplayName(localModelName)}) in {responseLanguage === 'ta' ? 'Tamil' : 'English'} — all queries stay on your machine.
               </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] font-mono text-purple-300">
@@ -1202,10 +1371,10 @@ INSTRUCTIONS:
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <span className="font-bold text-amber-300 block">
-                  To power Local Q&A directly with local Qwen 14B / 8B (zero external network):
+                  To power Local Q&amp;A directly in English with {formatLocalModelDisplayName(localModelName)} (zero external network):
                 </span>
                 <p className="text-[11px] text-amber-100 leading-relaxed">
-                  Open terminal and start Ollama with CORS origins enabled: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">OLLAMA_ORIGINS=&quot;*&quot; ollama run qwen2.5:14b</code>. Local Q&A will automatically connect to <code className="text-amber-300">{ollamaEndpoint}</code>. In the meantime, the built-in Astrological Ground Truth Analyzer is answering your questions instantly!
+                  Ensure Ollama is running on <code className="text-amber-300">{ollamaEndpoint}</code> (for example: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">ollama serve</code> or <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">ollama run {PREFERRED_VEDIC_14B_MODEL}</code>), then click Refresh above. Until connected, the built-in Astrological Ground Truth Analyzer answers instantly!
                 </p>
               </div>
             </div>

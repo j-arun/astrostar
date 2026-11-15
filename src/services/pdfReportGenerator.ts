@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
 import { getStructuredPayloadReportSections } from './structuredPayloadReport';
 import { createReportFilenameTimestamp } from './reportFilename';
+import { extractReportTokenTelemetry } from './reportTelemetry';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -9,8 +10,9 @@ const MONTH_NAMES = [
 ];
 
 function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const sec = ms / 1000;
+  const safeMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+  if (safeMs < 1000) return `${safeMs}ms`;
+  const sec = safeMs / 1000;
   if (sec < 60) return `${sec.toFixed(1)}s`;
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
@@ -52,13 +54,16 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
     return 'Google Gemini Pro';
   }
   if (providerId === 'local_qwen') {
+    if (modelName && modelName !== 'qwen2.5:7b-instruct' && modelName !== 'custom') {
+      return `Ollama (${modelName.split('/').pop() || modelName})`;
+    }
     return 'Ollama (Qwen 2.5 7B)';
   }
   if (modelName) {
     if (modelName.toLowerCase().includes('sonnet')) return 'Claude Sonnet 5.5';
     if (modelName.toLowerCase().includes('haiku')) return 'Claude Haiku 5.5';
     if (modelName.toLowerCase().includes('gemini')) return 'Google Gemini Pro';
-    if (modelName.toLowerCase().includes('qwen') || modelName.toLowerCase().includes('ollama')) return 'Ollama (Qwen 2.5 7B)';
+    if (modelName.toLowerCase().includes('qwen') || modelName.toLowerCase().includes('ollama')) return `Ollama (${modelName.split('/').pop() || modelName})`;
     return modelName;
   }
   return providerId;
@@ -93,8 +98,9 @@ export function buildVedicPdfDoc(
     model: 'custom'
   };
 
-  const modelName = narrative.ollamaStats?.model || providerMeta.model || (narrative.isPrivateLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash');
+  const modelName = narrative.ollamaStats?.model || narrative.rawResponseBody?.model || providerMeta.model || (narrative.isPrivateLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash');
   const engineDisplayName = getReadableEngineName(narrative.providerUsed, modelName);
+  const telemetry = extractReportTokenTelemetry(context, narrative);
 
   // Formatted Timestamp
   const now = new Date();
@@ -148,80 +154,112 @@ export function buildVedicPdfDoc(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139); // Slate 500
-  doc.text('Parashara & Jaimini Classical Transit Synthesis & Predictive Analysis', margin, currentY + 8.5);
+  doc.text(`Parashara & Jaimini Classical Transit Synthesis & Predictive Analysis  •  Version: ${telemetry.promptVersion}`, margin, currentY + 8.5);
 
   currentY += 11;
 
-  // Metadata Card at Top
-  const metaBoxHeight = 22;
+  // Metadata Card at Top (3x2 grid covering all 6 header metrics + prompt version)
+  const metaBoxHeight = 36;
   doc.setFillColor(248, 250, 252); // Slate 50
   doc.setDrawColor(226, 232, 240); // Slate 200
   doc.setLineWidth(0.4);
   doc.roundedRect(margin, currentY, contentWidth, metaBoxHeight, 1.5, 1.5, 'FD');
 
-  const colWidth = (contentWidth - 6) / 4;
+  // Horizontal divider separating Row 1 and Row 2
+  const row2Y = currentY + 18;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.25);
+  doc.line(margin + 2, row2Y, pageWidth - margin - 2, row2Y);
 
-  // Col 1: Scope & Month
+  const colWidth = (contentWidth - 6) / 3;
+  const col1X = margin + 3;
+  const col2X = margin + 3 + colWidth;
+  const col3X = margin + 3 + colWidth * 2;
+  const fitLine = (text: string, maxW = colWidth - 4): string => {
+    const lines = doc.splitTextToSize(text, maxW);
+    return Array.isArray(lines) && lines.length > 0 ? String(lines[0]) : text;
+  };
+
+  // Row 1 Col 1: Generated For Month
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('GENERATED FOR MONTH', margin + 3, currentY + 4.8);
+  doc.text('GENERATED FOR MONTH', col1X, currentY + 4.5);
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(timePeriodText, margin + 3, currentY + 9.5);
+  doc.text(fitLine(timePeriodText), col1X, currentY + 9.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(71, 85, 105);
   const scopeLabel = context.isComprehensiveMonthly || !context.houseNumber
     ? 'Full-Month 12-Bhava'
     : `House ${context.houseNumber} (${context.rashiName || ''})`;
-  doc.text(scopeLabel, margin + 3, currentY + 14.5);
-  doc.text(context.isEventActive ? '● Transit Active' : '○ Baseline Window', margin + 3, currentY + 18.5);
+  doc.text(fitLine(`${scopeLabel}  •  ${context.isEventActive ? 'Transit Active' : 'Baseline Window'}`), col1X, currentY + 14.0);
 
-  // Col 2: Engine / Model
-  const col2X = margin + 2 + colWidth;
+  // Row 1 Col 2: Generated Engine
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('GENERATED ENGINE', col2X, currentY + 4.8);
+  doc.text('GENERATED ENGINE', col2X, currentY + 4.5);
   doc.setFontSize(8.5);
   doc.setTextColor(146, 64, 14); // Amber 800
-  doc.text(engineDisplayName, col2X, currentY + 9.5);
+  doc.text(fitLine(engineDisplayName), col2X, currentY + 9.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(71, 85, 105);
-  doc.text(`Model: ${modelName}`, col2X, currentY + 14.5);
-  doc.text(`Engine: Tamil Om Vedic`, col2X, currentY + 18.5);
+  doc.text(fitLine(`Model: ${modelName.split('/').pop() || modelName}  •  Version: ${telemetry.promptVersion}`), col2X, currentY + 14.0);
 
-  // Col 3: Generated Timestamp & Timing
-  const col3X = margin + 4 + colWidth * 2;
+  // Row 1 Col 3: Generated Timestamp
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('GENERATED TIMESTAMP', col3X, currentY + 4.8);
-  doc.setFontSize(8);
+  doc.text('GENERATED TIMESTAMP', col3X, currentY + 4.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(15, 23, 42);
-  doc.text(formattedTimestamp, col3X, currentY + 9.5);
+  doc.text(fitLine(formattedTimestamp), col3X, currentY + 9.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(71, 85, 105);
-  doc.text('Vedic Ephemeris Sync', col3X, currentY + 14.5);
-  doc.text(`Deterministic Sputa`, col3X, currentY + 18.5);
+  doc.text(fitLine('Tamil Om Vedic Ephemeris Sync'), col3X, currentY + 14.0);
 
-  // Col 4: Time Taken & Confidence
-  const col4X = margin + 6 + colWidth * 3;
+  // Row 2 Col 1: Time Taken
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('TIME TAKEN', col4X, currentY + 4.8);
-  doc.setFontSize(9);
+  doc.text('TIME TAKEN', col1X, row2Y + 4.5);
+  doc.setFontSize(8.8);
   doc.setTextColor(21, 128, 61); // Emerald 700
-  doc.text(formatDuration(narrative.executionTimeMs), col4X, currentY + 9.5);
+  doc.text(fitLine(formatDuration(narrative.executionTimeMs)), col1X, row2Y + 9.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(71, 85, 105);
-  doc.text(`Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%`, col4X, currentY + 14.5);
-  doc.text(`Activation: ${(context.activationScore ?? 0).toFixed(2)}`, col4X, currentY + 18.5);
+  doc.text(fitLine(`Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%  •  Act: ${(context.activationScore ?? 0).toFixed(2)}`), col1X, row2Y + 14.0);
+
+  // Row 2 Col 2: Number of Tokens
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('NUMBER OF TOKENS', col2X, row2Y + 4.5);
+  doc.setFontSize(8.8);
+  doc.setTextColor(79, 70, 229); // Indigo 600
+  doc.text(fitLine(telemetry.totalTokensDisplay), col2X, row2Y + 9.2);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(fitLine(`Input: ${telemetry.inputTokensDisplay}  •  ${telemetry.isEstimatedTokens ? 'Est.' : 'API Reported'}`), col2X, row2Y + 14.0);
+
+  // Row 2 Col 3: Output Tokens
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('OUTPUT TOKENS', col3X, row2Y + 4.5);
+  doc.setFontSize(8.8);
+  doc.setTextColor(2, 132, 199); // Sky 600
+  doc.text(fitLine(telemetry.outputTokensDisplay), col3X, row2Y + 9.2);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(fitLine(`Prompt Version: ${telemetry.promptVersion}`), col3X, row2Y + 14.0);
 
   currentY += metaBoxHeight + 5;
 
@@ -832,7 +870,7 @@ export function buildVedicPdfDoc(
     doc.setFontSize(7.2);
     doc.setTextColor(148, 163, 184); // Slate 400
     doc.text(
-      'Tamil Om Vedic Horoscope Engine',
+      `Tamil Om Vedic Horoscope Engine  •  Version: ${telemetry.promptVersion}`,
       margin,
       pageHeight - 6.5
     );
@@ -865,7 +903,8 @@ export function generateVedicPdfReport(
 
   let providerTag = 'Gemini';
   if (narrative.providerUsed === 'local_qwen') {
-    providerTag = 'Ollama-7B';
+    const rawM = narrative.ollamaStats?.model || '';
+    providerTag = rawM ? `Ollama-${rawM.split('/').pop()!.replace(/[:/\\?*|"<>]/g, '_')}` : 'Ollama-Local';
   } else if (narrative.providerUsed === 'claude_sonnet' || narrative.providerUsed === 'claude') {
     providerTag = 'Claude-Sonnet';
   } else if (narrative.providerUsed === 'claude_haiku') {

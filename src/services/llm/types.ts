@@ -535,6 +535,12 @@ export interface LLMThreePartNarrative {
     promptEvalCount?: number;
     evalCount?: number;
   };
+  tokenTelemetry?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    source?: 'api_reported' | 'char_estimated';
+  };
   thinkingContent?: string;
   stopReason?: string;
   logId?: string;

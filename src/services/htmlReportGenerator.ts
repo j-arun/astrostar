@@ -1,6 +1,7 @@
 import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/types';
 import { getStructuredPayloadReportSections } from './structuredPayloadReport';
 import { createReportFilenameTimestamp } from './reportFilename';
+import { extractReportTokenTelemetry } from './reportTelemetry';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -8,8 +9,9 @@ const MONTH_NAMES = [
 ];
 
 function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const sec = ms / 1000;
+  const safeMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+  if (safeMs < 1000) return `${safeMs}ms`;
+  const sec = safeMs / 1000;
   if (sec < 60) return `${sec.toFixed(1)}s`;
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
@@ -91,8 +93,9 @@ export function buildVedicHtmlContent(
     model: 'custom'
   };
 
-  const modelName = narrative.ollamaStats?.model || providerMeta.model || (narrative.isPrivateLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash');
+  const modelName = narrative.ollamaStats?.model || narrative.rawResponseBody?.model || providerMeta.model || (narrative.isPrivateLocal ? 'qwen2.5:7b-instruct' : 'gemini-3.8-flash');
   const engineDisplayName = getReadableEngineName(narrative.providerUsed, modelName);
+  const telemetry = extractReportTokenTelemetry(context, narrative);
 
   const now = new Date();
   const formattedTimestamp = now.toLocaleString('en-US', {
@@ -277,13 +280,25 @@ export function buildVedicHtmlContent(
     /* Metadata Grid */
     .meta-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 14px;
       background: var(--slate-50);
       border: 1px solid var(--slate-200);
       border-radius: 10px;
       padding: 16px;
       margin-top: 18px;
+    }
+
+    @media (max-width: 720px) {
+      .meta-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media print {
+      .meta-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+      }
     }
 
     .meta-card {
@@ -681,7 +696,7 @@ export function buildVedicHtmlContent(
     <!-- Header Section -->
     <header class="header">
       <h1 class="header-title">TAMIL OM VEDIC HOROSCOPE ENGINE</h1>
-      <p class="header-subtitle">Parashara &amp; Jaimini Classical Transit Synthesis &amp; Predictive Analysis</p>
+      <p class="header-subtitle">Parashara &amp; Jaimini Classical Transit Synthesis &amp; Predictive Analysis &bull; Version: <strong>${escapeHtml(telemetry.promptVersion)}</strong></p>
 
       <div class="meta-grid">
         <div class="meta-card">
@@ -693,7 +708,7 @@ export function buildVedicHtmlContent(
         <div class="meta-card">
           <span class="meta-label">Generated Engine</span>
           <span class="meta-val-primary" style="color: #b45309;">${escapeHtml(engineDisplayName)}</span>
-          <span class="meta-val-sub">Model: ${escapeHtml(modelName)} &bull; Prompt: ${escapeHtml((narrative.promptVersionTag || narrative.promptVersion || context.promptVersion || 'v3').toUpperCase())}</span>
+          <span class="meta-val-sub">Model: ${escapeHtml(modelName)} &bull; Version: ${escapeHtml(telemetry.promptVersion)}</span>
         </div>
 
         <div class="meta-card">
@@ -706,6 +721,18 @@ export function buildVedicHtmlContent(
           <span class="meta-label">Time Taken</span>
           <span class="meta-val-primary" style="color: var(--emerald-600);">${escapeHtml(formatDuration(narrative.executionTimeMs))}</span>
           <span class="meta-val-sub">Confidence: ${(narrative.overallConfidence * 100).toFixed(0)}%</span>
+        </div>
+
+        <div class="meta-card">
+          <span class="meta-label">Number of Tokens</span>
+          <span class="meta-val-primary" style="color: var(--indigo-600);">${escapeHtml(telemetry.totalTokensDisplay)}</span>
+          <span class="meta-val-sub">Input: ${escapeHtml(telemetry.inputTokensDisplay)} &bull; ${escapeHtml(telemetry.sourceLabel)}</span>
+        </div>
+
+        <div class="meta-card">
+          <span class="meta-label">Output Tokens</span>
+          <span class="meta-val-primary" style="color: var(--sky-600);">${escapeHtml(telemetry.outputTokensDisplay)}</span>
+          <span class="meta-val-sub">Prompt Version: ${escapeHtml(telemetry.promptVersion)}</span>
         </div>
       </div>
     </header>
@@ -1071,8 +1098,8 @@ export function buildVedicHtmlContent(
 
     <!-- Footer -->
     <footer class="report-footer">
-      <div>Tamil Om Vedic Horoscope Engine • Deterministic Sputa &amp; Parashara Ingress Synthesis</div>
-      <div>${escapeHtml(timePeriodText)}</div>
+      <div>Tamil Om Vedic Horoscope Engine &bull; Deterministic Sputa &amp; Parashara Ingress Synthesis &bull; Version: ${escapeHtml(telemetry.promptVersion)}</div>
+      <div>${escapeHtml(timePeriodText)} &bull; Tokens: ${escapeHtml(telemetry.totalTokensDisplay)} (Out: ${escapeHtml(telemetry.outputTokensDisplay)})</div>
     </footer>
   </div>
 

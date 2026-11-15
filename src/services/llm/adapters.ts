@@ -1963,7 +1963,20 @@ export class QwenLocalAdapter implements ILLMAdapter {
             loadDurationMs: json.load_duration ? Math.round(json.load_duration / 1e6) : undefined,
             promptEvalCount: json.prompt_eval_count,
             evalCount: json.eval_count
-          }
+          },
+          tokenTelemetry: (typeof json.prompt_eval_count === 'number' || typeof json.eval_count === 'number')
+            ? {
+                inputTokens: json.prompt_eval_count ?? Math.round(prompt.length / 4),
+                outputTokens: json.eval_count ?? Math.round((json.response || '').length / 4),
+                totalTokens: (json.prompt_eval_count ?? Math.round(prompt.length / 4)) + (json.eval_count ?? Math.round((json.response || '').length / 4)),
+                source: 'api_reported'
+              }
+            : {
+                inputTokens: Math.round(prompt.length / 4),
+                outputTokens: Math.round((json.response || '').length / 4),
+                totalTokens: Math.round(prompt.length / 4) + Math.round((json.response || '').length / 4),
+                source: 'char_estimated'
+              }
         };
       } else {
         const errJson = await res.json().catch(() => null);
@@ -2081,7 +2094,20 @@ export function buildBatchNarrativeFromRawResponse(
     rawResponseBody: meta.rawResponseBody,
     httpStatus: 200,
     memoryPurged: true,
-    ollamaStats: meta.ollamaStats || { model: meta.modelTag }
+    ollamaStats: meta.ollamaStats || { model: meta.modelTag },
+    tokenTelemetry: (typeof meta.ollamaStats?.promptEvalCount === 'number' || typeof meta.ollamaStats?.evalCount === 'number')
+      ? {
+          inputTokens: meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4),
+          outputTokens: meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4),
+          totalTokens: (meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4)) + (meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4)),
+          source: 'api_reported'
+        }
+      : {
+          inputTokens: Math.round(meta.promptSent.length / 4),
+          outputTokens: Math.round((rawResponseText || '').length / 4),
+          totalTokens: Math.round(meta.promptSent.length / 4) + Math.round((rawResponseText || '').length / 4),
+          source: 'char_estimated'
+        }
   };
 }
 
@@ -2171,7 +2197,28 @@ ${parsed.part3_microTimingWindow}
           promptSent: prompt,
           rawRequestBody: requestBody,
           rawResponseBody: json,
-          httpStatus: res.status
+          httpStatus: res.status,
+          tokenTelemetry: json.usageMetadata
+            ? {
+                inputTokens: Number(json.usageMetadata.promptTokenCount ?? Math.round(prompt.length / 4)),
+                outputTokens: Number(
+                  (json.usageMetadata.candidatesTokenCount ?? 0) + (json.usageMetadata.thoughtsTokenCount ?? 0) ||
+                    Math.round((json.text || '').length / 4)
+                ),
+                totalTokens: Number(
+                  json.usageMetadata.totalTokenCount ??
+                    (Number(json.usageMetadata.promptTokenCount ?? Math.round(prompt.length / 4)) +
+                      Number(json.usageMetadata.candidatesTokenCount ?? Math.round((json.text || '').length / 4)) +
+                      Number(json.usageMetadata.thoughtsTokenCount ?? 0))
+                ),
+                source: 'api_reported'
+              }
+            : {
+                inputTokens: Math.round(prompt.length / 4),
+                outputTokens: Math.round((json.text || '').length / 4),
+                totalTokens: Math.round(prompt.length / 4) + Math.round((json.text || '').length / 4),
+                source: 'char_estimated'
+              }
         };
       } else {
         const errJson = await res.json().catch(() => ({}));
@@ -2330,7 +2377,27 @@ ${parsed.part3_microTimingWindow}
         rawResponseBody: json,
         httpStatus: res.status,
         thinkingContent: json.thinking,
-        stopReason: json.stop_reason
+        stopReason: json.stop_reason,
+        tokenTelemetry: json.usage
+          ? {
+              inputTokens:
+                Number(json.usage.input_tokens ?? 0) +
+                Number(json.usage.cache_creation_input_tokens ?? 0) +
+                Number(json.usage.cache_read_input_tokens ?? 0),
+              outputTokens: Number(json.usage.output_tokens ?? Math.round(rawText.length / 4)),
+              totalTokens:
+                Number(json.usage.input_tokens ?? 0) +
+                Number(json.usage.cache_creation_input_tokens ?? 0) +
+                Number(json.usage.cache_read_input_tokens ?? 0) +
+                Number(json.usage.output_tokens ?? Math.round(rawText.length / 4)),
+              source: 'api_reported'
+            }
+          : {
+              inputTokens: Math.round(prompt.length / 4),
+              outputTokens: Math.round(rawText.length / 4),
+              totalTokens: Math.round(prompt.length / 4) + Math.round(rawText.length / 4),
+              source: 'char_estimated'
+            }
       };
     } else {
       const errJson = await res.json().catch(() => ({}));

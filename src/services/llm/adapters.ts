@@ -91,6 +91,9 @@ function buildEventManufacturingSupersetSection(
 
   const eventsLines = eventsToShow
     .map((ev, i) => {
+      const moonTag = ev.hasMoonSupport && ev.moonWindowDates
+        ? `MoonInWindow:${ev.moonWindowDates}`
+        : `MoonInWindow:None(no Moon transit/7th-aspect in active window; background effort)`;
       const isSpecialDup =
         !compact &&
         hasSpecialSection &&
@@ -98,14 +101,14 @@ function buildEventManufacturingSupersetSection(
       if (isSpecialDup) {
         return cleanEnglishMultiline(
           `${i + 1}.[${ev.portfolio}] ${ev.title} (${ev.probabilityScore}%,${
-            ev.latencyStatus === 'acute_moon_triggered' ? 'Acute' : 'Latent'
-          }${ev.moonWindowDates ? `,Moon:${ev.moonWindowDates}` : ''}) | Gate:${ad.peakVentingGate} | See SPECIAL TRANSIT PHENOMENA`
+            ev.hasMoonSupport ? 'Acute' : 'Latent'
+          },${moonTag}) | Gate:${ad.peakVentingGate} | See SPECIAL TRANSIT PHENOMENA`
         );
       }
       return cleanEnglishMultiline(
         `${i + 1}.[${ev.portfolio}] ${ev.title} (${ev.probabilityScore}%,${
-          ev.latencyStatus === 'acute_moon_triggered' ? 'Acute' : 'Latent'
-        }${ev.moonWindowDates ? `,Moon:${ev.moonWindowDates}` : ''}) | Lords:${ev.correlatedHousesAndLordships} | Gate:${ev.nakshatraGateTrigger} | Sig:${ev.narrative}`
+          ev.hasMoonSupport ? 'Acute' : 'Latent'
+        },${moonTag}) | Lords:${ev.correlatedHousesAndLordships} | Gate:${ev.nakshatraGateTrigger} | Sig:${ev.narrative}`
       );
     })
     .join('\n');
@@ -681,7 +684,7 @@ REASONING DIRECTIVES:
 5. SAV & MOTION: SAV >=28=effortless fruition, <25=resistance; Vakra=unconventional/non-linear karmic settling; Adisara=urgent/accelerated execution.
 6. TARA & CHANDRA BALA: Weigh favorable (Sampat,Kshema,Sadhana,Mitra,Parama Mitra) vs friction (Vipat,Pratyak,Naidhana) taras; flag Chandrashtama (8th Moon) with cautions.
 7. STATIONS, PARIVARTANA & NEECHA BHANGA (MANDATORY): For same-sign Retrograde<->Direct stations contrast BEFORE (stalled/internal/audit) vs AFTER (external release) using exact dates; for Parivartana analyze BOTH Sign-Lord exchange AND Bhava exchange from Moon with exact dates & concrete events (authority/career/property/contracts); for Debilitation/Neecha Bhanga (incl. Neecha-Vakra->Direct) explain initial test vs cancellation reversal; end "summarySentence" with a crisp 1-line summary naming active Parivartana/Neecha Bhanga/station triggers & likely events, and detail their timing in Parts 1 & 3.
-8. SUPERSET HOUSE-GATE CORRELATION (MANDATORY): Correlate major Houses/Bhava Lordships in Parts 1-2 & "supplementaryScenarios" with AD Chamber, 3 Nakshatra Gates & Moon 2.5-day ignition dates; populate "supersetSynthesisNote" (2-4 sentences) and "correlatedGateEvents" (8-16 events spanning ALL 7 portfolios Work,Money,Love,Health,Life,Friends,Trip, sorted descending by "probabilityScore" 0-100, citing Houses/Lordships & Nakshatra Gate).
+8. SUPERSET HOUSE-GATE CORRELATION & STRICT CHRONOLOGICAL MOON-WINDOW LAW (MANDATORY): Correlate major Houses/Bhava Lordships in Parts 1-2 & "supplementaryScenarios" with AD Chamber & 3 Nakshatra Gates; populate "supersetSynthesisNote" (2-4 sentences) and "correlatedGateEvents" (8-16 events spanning ALL 7 portfolios Work,Money,Love,Health,Life,Friends,Trip). STRICT MOON TIMING: Mark "hasMoonSupport":true and cite "moonWindowDates" ONLY if Moon transits OR casts a 7th direct aspect onto the involved sign(s) INSIDE that event/Parivartana/station's active date window (never cite pre-activation or post-window Moon passages as active triggers—distinguish prior/later passages vs in-window fruition). CARD ORDER: Place ALL Moon-supported/aspected in-window cards ("hasMoonSupport":true, sorted descending by "probabilityScore") AT THE TOP of "correlatedGateEvents", followed in the SAME list by active events lacking an in-window Moon transit/7th-aspect ("hasMoonSupport":false,"latencyStatus":"dormant_latent","moonWindowDates":null) whose narrative explicitly states that effort/momentum runs in the background without an in-window Moon transit or aspect.
 Return ONLY raw valid JSON (no markdown fences or commentary):
 {"summarySentence":"Plain English synthesis ending with 1-liner of active Parivartana/Neecha Bhanga/station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(Moon Gochara,Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/9th/11th analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"${monthName} DD - DD, ${context.selectedYear}","overallConfidence":0.85,"supplementaryScenarios":[
 {"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"string","confidenceScore":0.85,"timingWindow":"${monthName} DD - DD, ${context.selectedYear}","astrologicalReasoning":"10th/6th/Dasha","practicalGuidance":"string","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"string","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha"},"jobSearchAnalysis":{"momentum":"string","pastStruggleVsCurrentPhase":"string","timingAuspiciousness":"string"},"newJobAcquisition":{"jobTypeAndMood":"string","workplaceAtmosphere":"string","comparisonWithCurrentRole":"string"},"existingJobPhase":{"currentPhaseNature":"string","retentionVsExitAdvice":"string"},"detailedParagraphs":["p1","p2","p3"]},
@@ -1646,12 +1649,17 @@ function normalizeCorrelatedGateEvents(
         5,
         Math.min(99, Math.round(rawScore <= 1 && rawScore > 0 ? rawScore * 100 : isNaN(rawScore) ? 65 : rawScore))
       );
+      const rawMoonDates = item.moonWindowDates ? String(item.moonWindowDates).trim() : '';
+      const hasValidMoonDates =
+        rawMoonDates.length > 0 &&
+        !/^(none|null|n\/a|-)$/i.test(rawMoonDates) &&
+        !/^none\b/i.test(rawMoonDates);
       const hasMoon =
         typeof item.hasMoonSupport === 'boolean'
           ? item.hasMoonSupport
-          : Boolean(item.moonWindowDates && String(item.moonWindowDates).trim().length > 0);
+          : hasValidMoonDates;
       const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' =
-        item.latencyStatus === 'dormant_latent' || !hasMoon ? 'dormant_latent' : 'acute_moon_triggered';
+        !hasMoon || item.latencyStatus === 'dormant_latent' ? 'dormant_latent' : 'acute_moon_triggered';
       return {
         id: String(item.id || `superset-evt-${idx + 1}`),
         title: String(item.title || `Correlated Event ${idx + 1}`),
@@ -1660,14 +1668,19 @@ function normalizeCorrelatedGateEvents(
         isHighProbability: typeof item.isHighProbability === 'boolean' ? item.isHighProbability : prob >= 60,
         latencyStatus,
         hasMoonSupport: hasMoon,
-        moonWindowDates: item.moonWindowDates ? String(item.moonWindowDates) : undefined,
+        moonWindowDates: hasMoon && hasValidMoonDates ? rawMoonDates : undefined,
         correlatedHousesAndLordships: String(item.correlatedHousesAndLordships || item.housesAndLordships || 'Correlated Bhava Lordship'),
         nakshatraGateTrigger: String(item.nakshatraGateTrigger || item.gateTrigger || 'Active Nakshatra Entry Gate'),
         narrative: String(item.narrative || item.description || ''),
         source: 'superset_major_llm' as const
       };
     })
-    .sort((a, b) => b.probabilityScore - a.probabilityScore);
+    .sort((a, b) => {
+      if (a.hasMoonSupport !== b.hasMoonSupport) {
+        return a.hasMoonSupport ? -1 : 1;
+      }
+      return b.probabilityScore - a.probabilityScore;
+    });
 
   return normalized.length > 0 ? normalized : fallbackList;
 }

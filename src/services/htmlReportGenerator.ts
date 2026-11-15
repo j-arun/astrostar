@@ -971,9 +971,15 @@ export function buildVedicHtmlContent(
 
     ${(context.eventManufacturingSuperset || (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)) ? (() => {
       const ss = context.eventManufacturingSuperset;
-      const corrEvents = (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)
+      const rawCorrEvents = (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)
         ? narrative.correlatedGateEvents
         : (ss?.candidateOrSynthesizedEvents || []);
+      const corrEvents = [...rawCorrEvents].sort((a, b) => {
+        const aMoon = Boolean(a.hasMoonSupport ?? a.latencyStatus === 'acute_moon_triggered');
+        const bMoon = Boolean(b.hasMoonSupport ?? b.latencyStatus === 'acute_moon_triggered');
+        if (aMoon !== bMoon) return aMoon ? -1 : 1;
+        return b.probabilityScore - a.probabilityScore;
+      });
       return `
       <!-- UNIFIED SUPERSET: HOUSES, LORDSHIPS, NAKSHATRA GATES & ALL 7-PORTFOLIO EVENTS -->
       <section class="section">
@@ -1019,7 +1025,9 @@ export function buildVedicHtmlContent(
               </div>
               <strong style="font-size: 13px; color: ${ev.probabilityScore >= 75 ? '#15803d' : '#b45309'}; white-space: nowrap;">${ev.probabilityScore}%</strong>
             </div>
-            ${ev.moonWindowDates ? `<div style="font-size: 11px; color: #0369a1; font-weight: 600; margin-bottom: 4px;">Moon Window: ${escapeHtml(ev.moonWindowDates)}</div>` : ''}
+            ${(ev.hasMoonSupport && ev.moonWindowDates)
+              ? `<div style="font-size: 11px; color: #0369a1; font-weight: 600; margin-bottom: 4px;">Moon Window (In Active Range): ${escapeHtml(ev.moonWindowDates)}</div>`
+              : `<div style="font-size: 11px; color: #64748b; font-weight: 500; margin-bottom: 4px;">Moon Status: No Moon transit or 7th aspect in active window (background effort — less felt)</div>`}
             <div style="font-size: 11px; color: #475569; margin-bottom: 3px;"><strong>Houses &amp; Lordships:</strong> ${escapeHtml(ev.correlatedHousesAndLordships)}</div>
             <div style="font-size: 11px; color: #4338ca; margin-bottom: 6px;"><strong>Nakshatra Gate:</strong> ${escapeHtml(ev.nakshatraGateTrigger)}</div>
             <p style="font-size: 12px; color: var(--slate-800); line-height: 1.5;">${escapeHtml(ev.narrative)}</p>

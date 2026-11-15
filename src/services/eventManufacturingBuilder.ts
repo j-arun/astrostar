@@ -336,6 +336,129 @@ export function buildHouseLordshipToGateLinks(params: {
   return links;
 }
 
+interface InWindowMoonMatch {
+  hasMoonSupport: boolean;
+  moonWindowDates?: string;
+  timingExplanation: string;
+}
+
+function parseIsoDay(isoOrText?: string, fallback: number = 1): number {
+  if (!isoOrText) return fallback;
+  const isoMatch = isoOrText.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return Math.max(1, Math.min(31, parseInt(isoMatch[3], 10)));
+  const numMatch = isoOrText.match(/(\d{1,2})/);
+  return numMatch ? Math.max(1, Math.min(31, parseInt(numMatch[1], 10))) : fallback;
+}
+
+function parseRangeDays(rangeStr?: string, defaultStart: number = 1, defaultEnd: number = 30): [number, number] {
+  if (!rangeStr) return [defaultStart, defaultEnd];
+  const isoMatches = rangeStr.match(/\d{4}-\d{2}-\d{2}/g);
+  if (isoMatches && isoMatches.length >= 2) {
+    return [parseIsoDay(isoMatches[0], defaultStart), parseIsoDay(isoMatches[1], defaultEnd)];
+  }
+  if (isoMatches && isoMatches.length === 1) {
+    const d = parseIsoDay(isoMatches[0], defaultStart);
+    return [d, d];
+  }
+  return [defaultStart, defaultEnd];
+}
+
+function formatMonthDays(monthShort: string, s: number, e: number): string {
+  return s === e ? `${monthShort} ${s}` : `${monthShort} ${s}–${e}`;
+}
+
+function evaluateInWindowMoonTrigger(params: {
+  targetSignIndices: number[];
+  windowStartDay: number;
+  windowEndDay: number;
+  monthlyMoonSpans: any[];
+  monthShort: string;
+  activeLabel: string;
+}): InWindowMoonMatch {
+  const { targetSignIndices, windowStartDay, windowEndDay, monthlyMoonSpans, monthShort, activeLabel } = params;
+  const uniqueSigns = Array.from(new Set(targetSignIndices.filter(s => s >= 1 && s <= 12)));
+  const getSignShort = (idx: number) => {
+    const meta = RASHI_LIST_META.find(r => r.index === idx);
+    if (!meta) return `Sign ${idx}`;
+    const m = meta.eng.match(/\(([^)]+)\)/);
+    return m ? m[1] : meta.eng;
+  };
+
+  interface Hit {
+    startDay: number;
+    endDay: number;
+    label: string;
+  }
+  const hits: Hit[] = [];
+  const outOfWindowPre: string[] = [];
+  const outOfWindowPost: string[] = [];
+
+  for (const sIdx of uniqueSigns) {
+    const signLabel = getSignShort(sIdx);
+    const oppSignIdx = ((sIdx + 5) % 12) + 1;
+
+    for (const m of monthlyMoonSpans || []) {
+      const mStart = Number(m.startDay);
+      const mEnd = Number(m.endDay);
+      if (isNaN(mStart) || isNaN(mEnd)) continue;
+
+      if (m.signIndex === sIdx) {
+        const oStart = Math.max(mStart, windowStartDay);
+        const oEnd = Math.min(mEnd, windowEndDay);
+        if (oStart <= oEnd) {
+          hits.push({
+            startDay: oStart,
+            endDay: oEnd,
+            label: `${formatMonthDays(monthShort, oStart, oEnd)} (Moon in ${signLabel})`
+          });
+        } else if (mEnd < windowStartDay) {
+          outOfWindowPre.push(`${formatMonthDays(monthShort, mStart, mEnd)} (${signLabel})`);
+        } else if (mStart > windowEndDay) {
+          outOfWindowPost.push(`${formatMonthDays(monthShort, mStart, mEnd)} (${signLabel})`);
+        }
+      } else if (m.signIndex === oppSignIdx) {
+        const oStart = Math.max(mStart, windowStartDay);
+        const oEnd = Math.min(mEnd, windowEndDay);
+        if (oStart <= oEnd) {
+          const moonSignLabel = getSignShort(m.signIndex);
+          hits.push({
+            startDay: oStart,
+            endDay: oEnd,
+            label: `${formatMonthDays(monthShort, oStart, oEnd)} (Moon in ${moonSignLabel} 7th-Aspect to ${signLabel})`
+          });
+        }
+      }
+    }
+  }
+
+  hits.sort((a, b) => a.startDay - b.startDay);
+  const dedupLabels = Array.from(new Set(hits.map(h => h.label)));
+
+  const preNote =
+    outOfWindowPre.length > 0
+      ? ` Prior Moon passage (${outOfWindowPre.join(', ')}) occurred BEFORE ${activeLabel} started.`
+      : '';
+  const postNote =
+    outOfWindowPost.length > 0
+      ? ` Later Moon passage (${outOfWindowPost.join(', ')}) falls AFTER ${activeLabel} ends.`
+      : '';
+
+  if (dedupLabels.length > 0) {
+    const moonWindowDates = dedupLabels.join('; ');
+    return {
+      hasMoonSupport: true,
+      moonWindowDates,
+      timingExplanation: `Effort runs across ${activeLabel}, with tangible Moon activation during ${moonWindowDates}.${preNote}${postNote}`
+    };
+  }
+
+  return {
+    hasMoonSupport: false,
+    moonWindowDates: undefined,
+    timingExplanation: `Background effort/momentum runs during ${activeLabel}, but Moon neither transits nor casts a 7th aspect onto these signs during this active window (no acute Moon spike).${preNote}${postNote}`
+  };
+}
+
 function buildDeterministicPortfolioCandidates(params: {
   selectedMonth: number;
   selectedYear: number;
@@ -344,25 +467,26 @@ function buildDeterministicPortfolioCandidates(params: {
   adChamberDynamics: ADChamberDynamics;
   houseLinks: HouseLordshipToGateLink[];
   vedicSpecialEvents: VedicWindowAnalysis;
+  monthlyMoonSpans: any[];
+  monthlyGrahaSpans?: any[];
 }): CorrelatedManufacturedEvent[] {
   const {
     selectedMonth,
+    selectedYear,
     gateDetails,
     gatePerspectives,
     adChamberDynamics,
     houseLinks,
-    vedicSpecialEvents
+    vedicSpecialEvents,
+    monthlyMoonSpans,
+    monthlyGrahaSpans
   } = params;
 
   const monthShort = (MONTH_NAMES[selectedMonth] || 'Month').slice(0, 3);
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
   const events: CorrelatedManufacturedEvent[] = [];
 
-  const getMoonWindowForLagnaHouse = (lagnaHouse: number): string | undefined => {
-    const link = houseLinks.find(l => l.houseFromLagna === lagnaHouse);
-    return link?.moonIgnitionDates;
-  };
-
-  // 1. Direct Nakshatra Gate Events (1-to-3) correlated with Houses & Lordships
+  // 1. Direct Nakshatra Gate Events (1-to-3) correlated with Houses & Lordships & in-window Moon overlaps
   gateDetails.forEach((gate, idx) => {
     const link = houseLinks.find(l => l.houseFromLagna === gate.houseFromLagna);
     const persp = gatePerspectives[idx] || 'combined';
@@ -373,9 +497,29 @@ function buildDeterministicPortfolioCandidates(params: {
         ? 'From Janma Rashi (Psychological/Fortune)'
         : 'Combined Lagna+Moon';
     const transitingGrahas = gate.activeGrahasInGate.filter(g => g.type !== 'natal');
+    const gateGrahaSpans = (monthlyGrahaSpans || []).filter(
+      s => s.sign_index === gate.rashiIndex && cleanEnglishPlanetName(s.graha_key) !== 'Moon'
+    );
+    const wStart = gateGrahaSpans.length > 0 ? Math.min(...gateGrahaSpans.map(s => Number(s.start_day) || 1)) : 1;
+    const wEnd = gateGrahaSpans.length > 0 ? Math.max(...gateGrahaSpans.map(s => Number(s.end_day) || daysInMonth)) : daysInMonth;
+
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: [gate.rashiIndex],
+      windowStartDay: wStart,
+      windowEndDay: wEnd,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel: gateGrahaSpans.length > 0 ? `${monthShort} ${wStart}–${wEnd} transit` : `${monthShort} 1–${daysInMonth}`
+    });
+
     const hasTransit = transitingGrahas.length > 0;
-    const hasMoon = !!gate.moonIngressWindow;
-    const baseProb = hasTransit && hasMoon ? 82 - idx * 4 : hasMoon ? 64 - idx * 3 : 38;
+    const hasMoon = gateGrahaSpans.length > 0
+      ? moonMatch.hasMoonSupport
+      : (moonMatch.hasMoonSupport || Boolean(gate.moonIngressWindow));
+    const effectiveMoonDates = gateGrahaSpans.length > 0
+      ? moonMatch.moonWindowDates
+      : (moonMatch.moonWindowDates || gate.moonIngressWindow);
+    const baseProb = hasTransit && hasMoon ? 84 - idx * 4 : hasMoon ? 66 - idx * 3 : 38;
     const domainMeta = HOUSE_PORTFOLIO_LABELS[gate.houseFromLagna] || { portfolio: 'Life', label: `House ${gate.houseFromLagna}` };
 
     const grahaDesc =
@@ -393,22 +537,32 @@ function buildDeterministicPortfolioCandidates(params: {
       portfolio: domainMeta.portfolio,
       probabilityScore: Math.max(25, Math.min(92, baseProb)),
       isHighProbability: baseProb >= 60,
-      latencyStatus: hasTransit && hasMoon ? 'acute_moon_triggered' : hasMoon ? 'acute_moon_triggered' : 'dormant_latent',
+      latencyStatus: hasMoon ? 'acute_moon_triggered' : 'dormant_latent',
       hasMoonSupport: hasMoon,
-      moonWindowDates: gate.moonIngressWindow,
+      moonWindowDates: hasMoon ? effectiveMoonDates : undefined,
       correlatedHousesAndLordships: `Lagna H${gate.houseFromLagna} / Moon H${gate.houseFromRashi} (${cleanEnglishSignName(gate.rashiName)}, Lord: ${link?.rashiLord || 'Lord'})${chamberAdNote}`,
       nakshatraGateTrigger: `Gate ${idx + 1}: ${gate.nakshatraName} [${perspLabel}] • Grahas: ${grahaDesc}`,
       narrative: hasTransit
-        ? `${adChamberDynamics.pdCleanName} Delivering Hand channels ${adChamberDynamics.adCleanName} AD chamber pressure (${adChamberDynamics.polarityLabel}) through ${gate.nakshatraName}. Expect felt developments around ${gate.significations.toLowerCase()} and ${gate.anatomicalSeat.toLowerCase()}, peaking during Moon window ${gate.moonIngressWindow || monthShort}.`
-        : `${gate.nakshatraName} holds latent receptivity in Lagna H${gate.houseFromLagna} / Moon H${gate.houseFromRashi}. Brief awareness arises mainly during Moon transit (${gate.moonIngressWindow || 'approx 2.5 days'}).`,
+        ? `${adChamberDynamics.pdCleanName} Delivering Hand channels ${adChamberDynamics.adCleanName} AD chamber pressure (${adChamberDynamics.polarityLabel}) through ${gate.nakshatraName} around ${gate.significations.toLowerCase()} and ${gate.anatomicalSeat.toLowerCase()}. ${moonMatch.timingExplanation}`
+        : `${gate.nakshatraName} holds latent receptivity in Lagna H${gate.houseFromLagna} / Moon H${gate.houseFromRashi}. ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
 
-  // 2. Parivartana / Neecha Bhanga / Station Events correlated to Houses & Gates
+  // 2. Parivartana / Station / Neecha Bhanga Events with STRICT in-window Moon transit & 7th-aspect intersection
   vedicSpecialEvents.parivartanaYogas.forEach((p, idx) => {
-    const linkA = houseLinks.find(l => l.houseFromLagna === p.lagnaHouseA);
-    const linkB = houseLinks.find(l => l.houseFromLagna === p.lagnaHouseB);
+    const pStartDay = parseIsoDay(p.startDate, 1);
+    const pEndDay = parseIsoDay(p.endDate, daysInMonth);
+    const activeLabel = `${formatMonthDays(monthShort, pStartDay, pEndDay)} (${p.startDate} to ${p.endDate})`;
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: [p.signAIndex, p.signBIndex],
+      windowStartDay: pStartDay,
+      windowEndDay: pEndDay,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel
+    });
+
     const portfolio =
       p.lagnaHouseA === 10 || p.lagnaHouseB === 10 || p.lagnaHouseA === 6 || p.lagnaHouseB === 6
         ? 'Work'
@@ -417,19 +571,21 @@ function buildDeterministicPortfolioCandidates(params: {
         : p.lagnaHouseA === 5 || p.lagnaHouseB === 5 || p.lagnaHouseA === 7 || p.lagnaHouseB === 7
         ? 'Love'
         : 'Life';
-    const moonWin = linkA?.moonIgnitionDates || linkB?.moonIgnitionDates || gateDetails[0]?.moonIngressWindow;
+
+    const prob = moonMatch.hasMoonSupport ? 88 : 56;
+
     events.push({
       id: `det-parivartana-${idx + 1}`,
       title: `Parivartana Exchange: ${cleanEnglishPlanetName(p.grahaA)} <-> ${cleanEnglishPlanetName(p.grahaB)} (${p.yogaClass})`,
       portfolio,
-      probabilityScore: 86,
-      isHighProbability: true,
-      latencyStatus: 'acute_moon_triggered',
-      hasMoonSupport: !!moonWin,
-      moonWindowDates: moonWin || `${p.startDate.slice(5)} to ${p.endDate.slice(5)}`,
+      probabilityScore: prob,
+      isHighProbability: prob >= 60,
+      latencyStatus: moonMatch.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent',
+      hasMoonSupport: moonMatch.hasMoonSupport,
+      moonWindowDates: moonMatch.moonWindowDates,
       correlatedHousesAndLordships: `Lagna H${p.lagnaHouseA} (${p.signAName}) <-> H${p.lagnaHouseB} (${p.signBName}) | ${p.bhavaExchangeSummary} | ${p.lordshipSummary}`,
-      nakshatraGateTrigger: `Parivartana Sign & Bhava Exchange (${p.startDate} to ${p.endDate}) vented via ${adChamberDynamics.peakVentingGate}`,
-      narrative: `${p.predictedEvents || 'Mutual house & lordship exchange binds actions and outcomes between these two houses.'} Active from ${p.startDate} to ${p.endDate}.`,
+      nakshatraGateTrigger: `Parivartana (${p.startDate} to ${p.endDate}) vented via ${adChamberDynamics.peakVentingGate}`,
+      narrative: `${p.predictedEvents || 'Mutual house & lordship exchange binds actions and outcomes between these two houses.'} ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
@@ -437,19 +593,32 @@ function buildDeterministicPortfolioCandidates(params: {
   vedicSpecialEvents.sameSignStations.forEach((s, idx) => {
     const link = houseLinks.find(l => l.houseFromLagna === s.houseFromLagna);
     const portfolio = HOUSE_PORTFOLIO_LABELS[s.houseFromLagna]?.portfolio || 'Life';
-    const moonWin = link?.moonIgnitionDates || gateDetails[0]?.moonIngressWindow;
+    const [afterStart, afterEnd] = parseRangeDays(s.afterRange, parseIsoDay(s.stationDate, 14), daysInMonth);
+    const activeLabel = `Direct/Post-Station phase ${formatMonthDays(monthShort, afterStart, afterEnd)} (Station ${s.stationDate})`;
+
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: [s.signIndex],
+      windowStartDay: afterStart,
+      windowEndDay: afterEnd,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel
+    });
+
+    const prob = moonMatch.hasMoonSupport ? 81 : 54;
+
     events.push({
       id: `det-station-${idx + 1}`,
       title: `${cleanEnglishPlanetName(s.grahaKey)} Turns ${s.turnType} in Same House (${s.signName})`,
       portfolio,
-      probabilityScore: 79,
-      isHighProbability: true,
-      latencyStatus: 'acute_moon_triggered',
-      hasMoonSupport: !!moonWin,
-      moonWindowDates: moonWin || s.stationDate,
+      probabilityScore: prob,
+      isHighProbability: prob >= 60,
+      latencyStatus: moonMatch.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent',
+      hasMoonSupport: moonMatch.hasMoonSupport,
+      moonWindowDates: moonMatch.moonWindowDates,
       correlatedHousesAndLordships: `Lagna H${s.houseFromLagna} / Moon H${s.houseFromMoon} (${s.signName}, Lord: ${link?.rashiLord || 'Lord'})`,
       nakshatraGateTrigger: `Station Date ${s.stationDate} (Before ${s.beforeRange} -> After ${s.afterRange})`,
-      narrative: `${s.summary} ${s.eventImpact}`,
+      narrative: `${s.summary} ${s.eventImpact} ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
@@ -457,18 +626,34 @@ function buildDeterministicPortfolioCandidates(params: {
   vedicSpecialEvents.debilitationEvents.forEach((d, idx) => {
     const link = houseLinks.find(l => l.houseFromLagna === d.houseFromLagna);
     const portfolio = HOUSE_PORTFOLIO_LABELS[d.houseFromLagna]?.portfolio || 'Work';
+    const dStartDay = parseIsoDay(d.startDate, 1);
+    const dEndDay = parseIsoDay(d.endDate, daysInMonth);
+    const activeLabel = `${formatMonthDays(monthShort, dStartDay, dEndDay)} (${d.startDate} to ${d.endDate})`;
+
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: [d.signIndex],
+      windowStartDay: dStartDay,
+      windowEndDay: dEndDay,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel
+    });
+
+    const baseScore = d.neechaBhangaStatus.includes('BHANGA') ? 78 : 66;
+    const prob = moonMatch.hasMoonSupport ? baseScore : Math.min(55, baseScore - 20);
+
     events.push({
       id: `det-neecha-${idx + 1}`,
       title: `${cleanEnglishPlanetName(d.grahaKey)} in ${d.signName}: ${d.neechaBhangaStatus}`,
       portfolio,
-      probabilityScore: d.neechaBhangaStatus.includes('BHANGA') ? 76 : 64,
-      isHighProbability: true,
-      latencyStatus: 'acute_moon_triggered',
-      hasMoonSupport: !!(link?.moonIgnitionDates),
-      moonWindowDates: link?.moonIgnitionDates || `${d.startDate.slice(5)} to ${d.endDate.slice(5)}`,
+      probabilityScore: prob,
+      isHighProbability: prob >= 60,
+      latencyStatus: moonMatch.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent',
+      hasMoonSupport: moonMatch.hasMoonSupport,
+      moonWindowDates: moonMatch.moonWindowDates,
       correlatedHousesAndLordships: `Lagna H${d.houseFromLagna} / Moon H${d.houseFromMoon} (${d.signName}, Lord: ${link?.rashiLord || 'Lord'})`,
       nakshatraGateTrigger: `${d.neechaBhangaStatus} (${d.cancellationReasons.join('; ') || d.motionState})`,
-      narrative: `${d.summary} ${d.predictedEvents}`,
+      narrative: `${d.summary} ${d.predictedEvents} ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
@@ -540,13 +725,32 @@ function buildDeterministicPortfolioCandidates(params: {
     const hasTransit = matchedLinks.some(l => l.transitOccupants.length > 0);
     const hasGate = matchedLinks.some(l => l.isActivatedByDeliveringHandGate);
     const hasAdLord = matchedLinks.some(l => l.isActivatedByAdLordship);
-    const score = alreadyHas
+
+    // Intersect Moon transit & 7th aspect strictly with active planetary span in the primary houses
+    const targetSigns = matchedLinks.map(l => {
+      const meta = RASHI_LIST_META.find(r => cleanEnglishSignName(r.eng).toLowerCase() === l.rashiName.toLowerCase());
+      return meta ? meta.index : 0;
+    }).filter(x => x > 0);
+    const activeSpans = (monthlyGrahaSpans || []).filter(
+      s => targetSigns.includes(s.sign_index) && cleanEnglishPlanetName(s.graha_key) !== 'Moon'
+    );
+    const wStart = activeSpans.length > 0 ? Math.min(...activeSpans.map(s => Number(s.start_day) || 1)) : 1;
+    const wEnd = activeSpans.length > 0 ? Math.max(...activeSpans.map(s => Number(s.end_day) || daysInMonth)) : daysInMonth;
+
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: targetSigns.slice(0, 1), // Primary portfolio house sign + its 7th aspect
+      windowStartDay: wStart,
+      windowEndDay: wEnd,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel: `${monthShort} ${wStart}–${wEnd}`
+    });
+
+    const rawScore = alreadyHas
       ? Math.max(40, (hasTransit ? 62 : 44) + (hasAdLord ? 10 : 0))
       : Math.min(84, (hasGate ? 66 : 48) + (hasTransit ? 14 : 0) + (hasAdLord ? 8 : 0));
-
-    const moonWin =
-      matchedLinks.find(l => l.moonIgnitionDates)?.moonIgnitionDates ||
-      getMoonWindowForLagnaHouse(tpl.houses[0]);
+    const hasMoon = moonMatch.hasMoonSupport;
+    const score = hasMoon ? rawScore : Math.min(54, rawScore);
 
     const housesDesc = matchedLinks
       .map(
@@ -567,17 +771,17 @@ function buildDeterministicPortfolioCandidates(params: {
       portfolio: tpl.portfolio,
       probabilityScore: score,
       isHighProbability: score >= 60,
-      latencyStatus: score >= 60 && moonWin ? 'acute_moon_triggered' : 'dormant_latent',
-      hasMoonSupport: !!moonWin && (hasGate || hasTransit),
-      moonWindowDates: moonWin,
+      latencyStatus: hasMoon ? 'acute_moon_triggered' : 'dormant_latent',
+      hasMoonSupport: hasMoon,
+      moonWindowDates: moonMatch.moonWindowDates,
       correlatedHousesAndLordships: housesDesc,
       nakshatraGateTrigger: `AD Chamber (${adChamberDynamics.adCleanName}) -> Gate: ${gateNote}`,
-      narrative: tpl.narrativeBuilder(matchedLinks),
+      narrative: `${tpl.narrativeBuilder(matchedLinks)} ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
 
-  // Deduplicate by title and sort highest probability first
+  // Deduplicate by title and sort: Moon-supported/aspected events at top, then highest probability
   const seen = new Set<string>();
   return events
     .filter(ev => {
@@ -586,7 +790,12 @@ function buildDeterministicPortfolioCandidates(params: {
       seen.add(k);
       return true;
     })
-    .sort((a, b) => b.probabilityScore - a.probabilityScore);
+    .sort((a, b) => {
+      if (a.hasMoonSupport !== b.hasMoonSupport) {
+        return a.hasMoonSupport ? -1 : 1;
+      }
+      return b.probabilityScore - a.probabilityScore;
+    });
 }
 
 export function buildEventManufacturingSnapshot(params: {
@@ -677,7 +886,9 @@ export function buildEventManufacturingSnapshot(params: {
     gatePerspectives,
     adChamberDynamics,
     houseLinks,
-    vedicSpecialEvents
+    vedicSpecialEvents,
+    monthlyMoonSpans: params.monthlyMoonSpans || [],
+    monthlyGrahaSpans: params.monthlyGrahaSpans || []
   });
 
   const liveRaw = params.preSynthesizedEvents || [];
@@ -700,9 +911,9 @@ export function buildEventManufacturingSnapshot(params: {
       isHighProbability: Boolean(item.isHighProbability ?? (item.probabilityScore ?? 65) >= 60),
       latencyStatus:
         item.latencyStatus ||
-        (item.hasMoonSupport || (item.probabilityScore ?? 65) >= 60 ? 'acute_moon_triggered' : 'dormant_latent'),
+        (item.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent'),
       hasMoonSupport: Boolean(item.hasMoonSupport),
-      moonWindowDates: item.moonWindowDates,
+      moonWindowDates: item.hasMoonSupport ? item.moonWindowDates : undefined,
       correlatedHousesAndLordships: item.correlatedHousesAndLordships || fallbackHouseDesc,
       nakshatraGateTrigger: item.nakshatraGateTrigger || item.gateTrigger || adChamberDynamics.peakVentingGate,
       narrative: item.narrative,
@@ -710,7 +921,7 @@ export function buildEventManufacturingSnapshot(params: {
     };
   });
 
-  // Combine live events (if any) with deterministic gate/portfolio events, keeping top coverage across portfolios
+  // Combine live events (if any) with deterministic gate/portfolio events, always placing Moon-supported events at the top
   const combinedMap = new Map<string, CorrelatedManufacturedEvent>();
   for (const ev of [...liveConverted, ...deterministicCandidates]) {
     const key = `${ev.portfolio.toLowerCase()}::${ev.title.toLowerCase().slice(0, 32)}`;
@@ -719,8 +930,13 @@ export function buildEventManufacturingSnapshot(params: {
     }
   }
   const combinedEvents = Array.from(combinedMap.values())
-    .sort((a, b) => b.probabilityScore - a.probabilityScore)
-    .slice(0, 16);
+    .sort((a, b) => {
+      if (a.hasMoonSupport !== b.hasMoonSupport) {
+        return a.hasMoonSupport ? -1 : 1;
+      }
+      return b.probabilityScore - a.probabilityScore;
+    })
+    .slice(0, 24);
 
   const gates: SupersetNakshatraGateSummary[] = gateDetails.map((g, idx) => ({
     gateIndex: idx + 1,

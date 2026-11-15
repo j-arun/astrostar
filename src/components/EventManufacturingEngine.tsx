@@ -160,17 +160,25 @@ function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
     const probNum = typeof rawProb === 'number' ? rawProb : parseInt(String(rawProb).replace(/\D/g, '') || '60', 10);
     const clampedProb = Math.max(10, Math.min(95, isNaN(probNum) ? 60 : probNum));
 
+    const rawMoonWindow = item.moonWindowDates || item.moonWindow || item.windowDates;
+    const rawMoonStr = rawMoonWindow ? String(rawMoonWindow).trim() : '';
+    const hasValidMoonStr =
+      rawMoonStr.length > 0 &&
+      !/^(none|null|n\/a|-)$/i.test(rawMoonStr) &&
+      !/^none\b/i.test(rawMoonStr);
+
     const hasMoonSupport = Boolean(
       item.hasMoonSupport ??
       item.hasMoonTrigger ??
       item.moonSupport ??
       (item.latencyStatus ? item.latencyStatus === 'acute_moon_triggered' : undefined) ??
-      (clampedProb >= 65)
+      hasValidMoonStr
     );
-    const moonWindowDates = item.moonWindowDates || item.moonWindow || item.windowDates || undefined;
-    const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' = (
-      item.latencyStatus === 'dormant_latent' || (!hasMoonSupport && clampedProb < 60)
-    ) ? 'dormant_latent' : 'acute_moon_triggered';
+    const moonWindowDates = hasMoonSupport && hasValidMoonStr ? rawMoonStr : undefined;
+    const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' =
+      !hasMoonSupport || item.latencyStatus === 'dormant_latent'
+        ? 'dormant_latent'
+        : 'acute_moon_triggered';
 
     return {
       id: item.id || `evt-${Date.now()}-${idx + 1}`,
@@ -184,7 +192,12 @@ function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
       moonWindowDates,
       latencyStatus
     };
-  }).sort((a, b) => b.probabilityScore - a.probabilityScore);
+  }).sort((a, b) => {
+    const aMoon = Boolean(a.hasMoonSupport);
+    const bMoon = Boolean(b.hasMoonSupport);
+    if (aMoon !== bMoon) return aMoon ? -1 : 1;
+    return b.probabilityScore - a.probabilityScore;
+  });
 }
 
 export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> = ({
@@ -627,27 +640,24 @@ ${vedicSpecialEvents.promptMarkdownBlock}
 [CRITICAL PARASHARA REASONING LAWS FOR EVENT MANUFACTURING & MOON TIMING]
 1. The Delivering Hand (${cleanHand}) acts as the executive delivery hand. Its 3 Nakshatras (${gateDetails.map(g => g.nakshatraName).join(', ')}) are the physical gates into the chart.
 2. Transiting Grahas in an entry gate establish the structural potential.
-3. [THE CRITICAL CHANDRA (MOON) 2.5-DAY IGNITION & LATENCY LAW]:
-   - DORMANT POTENTIAL (WITHOUT MOON SUPPORT): Without the Moon (Chandra) traversing that Rashi/Nakshatra on that day, the planetary combination remains DORMANT, LATENT, and LESS FELT. The native experiences minimal active discomfort or awareness (e.g. transiting planets create simmering internal pressure or background potential without acute externalization). Assign LOWER probability: 25% to 45%. Set "hasMoonSupport": false, "latencyStatus": "dormant_latent".
-   - ACUTE TRIGGER (WITH MOON SUPPORT): The Moon passes through each sign for approximately 2.5 days. During this ~2.5-day window, the Moon acts as the sensory catalyst and acute ignition trigger. It awakens the dormant combination! The native FEELS the event acutely (e.g. the transiting planets in the active gate ignite into an acute physical symptom, decisive financial breakthrough, or urgent structural event). During this Moon window, the event TRIGGERS FOR SURE! Assign HIGH probability: 70% to 95%. Set "hasMoonSupport": true, "latencyStatus": "acute_moon_triggered", "moonWindowDates": "exact dates".
+3. [STRICT CHRONOLOGICAL IN-WINDOW CHANDRA (MOON) TRANSIT & 7TH-ASPECT LAW]:
+   - INTERSECTION & 7TH-ASPECT RULE: Mark an event or Special Yoga (Parivartana / Station / Neecha Bhanga) as having Moon support ("hasMoonSupport": true, "latencyStatus": "acute_moon_triggered") ONLY when the Moon transits through OR casts a 7th direct aspect onto the involved sign(s) INSIDE that event's active date window!
+   - NEVER CITE PRE-ACTIVATION OR POST-WINDOW MOON DATES AS ACTIVE TRIGGERS: If a Parivartana or Station begins later in the month (e.g., Nov 17–30) and the Moon crossed that sign earlier (e.g., Nov 10–11 before activation), DO NOT list the pre-activation dates in "moonWindowDates". List only Moon conjunctions or 7th-aspects occurring inside the active window! You may briefly note in narrative that earlier Moon passage was preparatory effort before activation.
+   - NO IN-WINDOW MOON TRANSIT OR 7TH ASPECT ("hasMoonSupport": false, "latencyStatus": "dormant_latent", "moonWindowDates": null): Keep these cards in the SAME "events" list, assign lower-to-moderate probability (25%–55%), and EXPLICITLY state inside "narrative" that Moon neither transits nor casts a 7th aspect onto these signs during the active window—representing ongoing background effort/momentum that is less acutely felt externally.
 4. Every gate has its chosen evaluation perspective (From Lagna = physical body & anatomy; From Janma = psychological fruition & fortune; Combined = dual synthesis).
-5. EVALUATE SAME-SIGN MOTION STATIONS, PARIVARTANA & NEECHA BHANGA: Explicitly manufacture concrete event cards for any active Parivartana (Sign-Lord & Bhava mutual exchange), Debilitation / Neecha Bhanga reversal, and Retrograde ↔ Direct same-sign motion shift listed above!
+5. EVALUATE SAME-SIGN MOTION STATIONS, PARIVARTANA & NEECHA BHANGA: Explicitly manufacture concrete event cards for any active Parivartana (Sign-Lord & Bhava mutual exchange), Debilitation / Neecha Bhanga reversal, and Retrograde <-> Direct same-sign motion shift listed above! Distinguish continuous effort across the window vs tangible fruition during in-window Moon transit/7th-aspect dates.
 6. MANUFACTURE ALL POSSIBLE EVENTS (COMPREHENSIVE FULL INVENTORY):
    Do NOT restrict yourself to only 6 events! Generate an exhaustive, granular inventory of ALL possible events (generate 10 to 18+ specific events) that can manifest across all 7 life portfolios: Health, Work, Money, Life, Love, Friends, Trip. Include every possible physical, contractual, financial, anatomical, and relational consequence under the 3 Nakshatra entry gates, Special Yogas (Parivartana/Neecha Bhanga/Stations), and the AD Pressure Chamber.
-7. MANDATORY ORDER BY LIKELIHOOD (HIGHLY LIKELY FIRST):
-   The "events" array MUST BE STRICTLY ORDERED from highest probability to lowest probability:
-   - High Likelihood / Acute Triggers first (probabilityScore: 95, 90, 85, 80, 75, 70)
-   - Followed by Moderate / Latent Potentials (probabilityScore: 65, 60, 55, 50)
-   - Followed by Low / Dormant Potentials (probabilityScore: 45, 40, 35, 25)
-   The most probable events must always appear at the top of the array!
+7. MANDATORY ORDERING (ALL MOON-SUPPORTED IN-WINDOW CARDS FIRST, THEN NON-MOON CARDS):
+   The "events" array MUST place ALL in-window Moon-supported/aspected cards ("hasMoonSupport": true, sorted descending by "probabilityScore" 95->60) AT THE TOP of the array, followed in the SAME list by active background-effort cards lacking an in-window Moon transit or 7th aspect ("hasMoonSupport": false, sorted descending by "probabilityScore" 55->25).
 8. For each event, provide:
    - title: Direct headline of the event
-   - narrative: Crisp 1-to-2 line description of the exact physical, financial, or relational manifestation
-   - probabilityScore: Realistic integer probability (e.g. 75, 80, 85 for acute Moon triggers; 30, 35, 40 for dormant potentials)
+   - narrative: Crisp 1-to-2 line description distinguishing active effort vs in-window Moon/7th-aspect fruition (or explicitly stating no Moon transit/aspect in window if hasMoonSupport is false)
+   - probabilityScore: Integer probability (e.g. 70–95 for in-window Moon transit/7th-aspect triggers; 25–55 when no Moon transit/aspect overlaps the active window)
    - portfolio: Assign to one portfolio category from: Work, Life, Health, Money, Friends, Love, Trip
    - gateTrigger: The specific Nakshatra gate, chosen perspective, and planetary transit passage
-   - hasMoonSupport: boolean (true if occurring during the Moon's 2.5-day transit through that gate)
-   - moonWindowDates: string (e.g. "${gateDetails[0]?.moonIngressWindow || 'Oct 6–8'}") if hasMoonSupport is true, or null
+   - hasMoonSupport: boolean (true ONLY if Moon transits or 7th-aspects the sign(s) INSIDE the active event date window)
+   - moonWindowDates: string (only in-window Moon transit / 7th-aspect dates) if hasMoonSupport is true, or null
    - latencyStatus: "acute_moon_triggered" | "dormant_latent"
 
 OUTPUT FORMAT REQUIREMENT:
@@ -1723,17 +1733,17 @@ Return ONLY a valid JSON object matching this schema:
                 </div>
 
                 {/* MOON TRIGGER & LATENCY STATUS BADGE */}
-                {(event.hasMoonSupport || event.latencyStatus === 'acute_moon_triggered' || event.isHighProbability) ? (
+                {(event.hasMoonSupport || event.latencyStatus === 'acute_moon_triggered') ? (
                   <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/15 to-purple-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold">
                     <Zap className="w-3.5 h-3.5 text-amber-400 fill-current animate-pulse" />
-                    <span><strong>⚡ Chandra (Moon) Ignition Active</strong> {event.moonWindowDates ? `(${event.moonWindowDates})` : ''} &bull; High Felt Manifestation</span>
-                    <span className="text-[10px] text-slate-300 font-normal hidden sm:inline">— Moon awakens dormant planetary energy into lived reality</span>
+                    <span><strong>⚡ Chandra (Moon) Ignition Active</strong> {event.moonWindowDates ? `(${event.moonWindowDates})` : ''} &bull; Tangible Manifestation</span>
+                    <span className="text-[10px] text-slate-300 font-normal hidden sm:inline">— Moon transit or 7th aspect overlaps active window</span>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-slate-400 text-xs">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span><strong>💤 Dormant Background Potential</strong> ({event.probabilityScore}%) &bull; Less Felt</span>
-                    <span className="text-[10px] text-slate-500 hidden sm:inline">— Planetary combination remains latent until Moon traverses gate</span>
+                    <span><strong>💤 Active Background Effort — No Moon Transit or 7th Aspect in Window</strong> ({event.probabilityScore}%) &bull; Less Felt</span>
+                    <span className="text-[10px] text-slate-500 hidden sm:inline">— Effort builds silently without an in-window Moon transit or aspect</span>
                   </div>
                 )}
 

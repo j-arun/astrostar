@@ -3272,11 +3272,17 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               {/* UNIFIED SUPERSET: HOUSES, LORDSHIPS, NAKSHATRA GATES & ALL 7-PORTFOLIO EVENTS */}
               {(context?.eventManufacturingSuperset || (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)) && (() => {
                 const superset = context?.eventManufacturingSuperset;
-                const correlatedList = (
+                const rawCorrelatedList = (
                   narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0
                     ? narrative.correlatedGateEvents
                     : superset?.candidateOrSynthesizedEvents || []
                 );
+                const correlatedList = [...rawCorrelatedList].sort((a, b) => {
+                  const aMoon = Boolean(a.hasMoonSupport ?? a.latencyStatus === 'acute_moon_triggered');
+                  const bMoon = Boolean(b.hasMoonSupport ?? b.latencyStatus === 'acute_moon_triggered');
+                  if (aMoon !== bMoon) return aMoon ? -1 : 1;
+                  return b.probabilityScore - a.probabilityScore;
+                });
                 const portfolioFilters = ['all', 'Work', 'Money', 'Love', 'Health', 'Life', 'Friends', 'Trip'];
                 const visibleEvents = activeEventPortfolioFilter === 'all'
                   ? correlatedList
@@ -3447,9 +3453,13 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                             </span>
                           </div>
 
-                          {ev.moonWindowDates && (
-                            <div className="text-[10.5px] font-mono text-cyan-300 bg-slate-950 px-2 py-1 rounded border border-slate-800/80">
-                              Moon Window: {ev.moonWindowDates}
+                          {(ev.hasMoonSupport && ev.moonWindowDates) ? (
+                            <div className="text-[10.5px] font-mono text-cyan-300 bg-slate-950 px-2 py-1 rounded border border-cyan-500/30">
+                              Moon Window (In Active Range): {ev.moonWindowDates}
+                            </div>
+                          ) : (
+                            <div className="text-[10.5px] font-mono text-slate-400 bg-slate-950/70 px-2 py-1 rounded border border-slate-800/80">
+                              Moon Status: No Moon transit or 7th aspect in active window (background effort — less felt)
                             </div>
                           )}
 

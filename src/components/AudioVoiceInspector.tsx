@@ -145,6 +145,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [queryText, setQueryText] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'ta'>('en');
   const [activeDomainTab, setActiveDomainTab] = useState<string>('career_job');
+  const [activeEventPortfolioFilter, setActiveEventPortfolioFilter] = useState<string>('all');
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [liveNarrative, setLiveNarrative] = useState<LLMThreePartNarrative | null>(null);
@@ -312,7 +313,15 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       setEditablePrompt(generated);
       setIsPromptCustomized(false);
     }
-  }, [liveContext?.houseNumber, liveContext?.isComprehensiveMonthly, liveContext?.selectedMonth, liveContext?.selectedYear, liveContext?.activationScore, activeProvider]);
+  }, [
+    liveContext?.houseNumber,
+    liveContext?.isComprehensiveMonthly,
+    liveContext?.selectedMonth,
+    liveContext?.selectedYear,
+    liveContext?.activationScore,
+    liveContext?.eventManufacturingSuperset?.generatedAt,
+    activeProvider
+  ]);
 
   // Timer for generation
   useEffect(() => {
@@ -3259,6 +3268,211 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                   </div>
                 </div>
               )}
+
+              {/* UNIFIED SUPERSET: HOUSES, LORDSHIPS, NAKSHATRA GATES & ALL 7-PORTFOLIO EVENTS */}
+              {(context?.eventManufacturingSuperset || (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)) && (() => {
+                const superset = context?.eventManufacturingSuperset;
+                const correlatedList = (
+                  narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0
+                    ? narrative.correlatedGateEvents
+                    : superset?.candidateOrSynthesizedEvents || []
+                );
+                const portfolioFilters = ['all', 'Work', 'Money', 'Love', 'Health', 'Life', 'Friends', 'Trip'];
+                const visibleEvents = activeEventPortfolioFilter === 'all'
+                  ? correlatedList
+                  : correlatedList.filter(ev => ev.portfolio.toLowerCase() === activeEventPortfolioFilter.toLowerCase());
+
+                return (
+                  <div className="bg-slate-950 border border-indigo-500/40 rounded-2xl p-5 space-y-4 shadow-lg animate-fadeIn">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-extrabold text-white flex flex-wrap items-center gap-2">
+                            <span>Unified Superset: Houses, Lordships, Nakshatra Gates &amp; All Possible Domain Events</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-200 border border-indigo-500/40">
+                              {correlatedList.length} Correlated Events
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-slate-400">
+                            Synthesizes monthly houses &amp; Bhava lordships directly with the Antardasha Chamber, 3 Delivering-Hand Nakshatra Gates, and all 7 life portfolios.
+                          </p>
+                        </div>
+                      </div>
+                      {superset && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-mono">
+                          <span className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-amber-300 font-bold">
+                            AD Chamber: {superset.adChamberSummary.adCleanName} ({superset.adChamberSummary.polarityLabel})
+                          </span>
+                          <span className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300 font-bold">
+                            Hand: {superset.deliveringHandClean}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Superset AD Chamber + 3 Nakshatra Gates */}
+                    {superset && (
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold text-indigo-300">
+                              AD Natal Chamber: {superset.adChamberSummary.adNatalRashiName} (Lagna H{superset.adChamberSummary.adNatalHouseFromLagna} / Moon H{superset.adChamberSummary.adNatalHouseFromRashi}) • Score: {superset.adChamberSummary.netScore}
+                            </span>
+                            <span className="text-[11px] font-mono text-amber-300">
+                              Peak Venting Gate: {superset.adChamberSummary.peakVentingGate}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-relaxed">
+                            {superset.adChamberSummary.atmosphereNarrative}
+                          </p>
+                          {(superset.adChamberSummary.directOccupants.length > 0 || superset.adChamberSummary.incomingAspects.length > 0) && (
+                            <div className="flex flex-wrap gap-3 pt-1 text-[10.5px] text-slate-400 font-mono">
+                              {superset.adChamberSummary.directOccupants.length > 0 && (
+                                <span>Occupants: <strong className="text-slate-200">{superset.adChamberSummary.directOccupants.join(', ')}</strong></span>
+                              )}
+                              {superset.adChamberSummary.incomingAspects.length > 0 && (
+                                <span>Aspects: <strong className="text-slate-200">{superset.adChamberSummary.incomingAspects.join(', ')}</strong></span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                          {superset.gates.map(gate => (
+                            <div
+                              key={gate.gateIndex}
+                              className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="font-extrabold text-amber-300 text-xs">
+                                  Gate {gate.gateIndex}: {gate.nakshatraName}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 text-[10px] font-mono uppercase">
+                                  {gate.perspective}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-300 font-semibold">
+                                {gate.rashiName} &bull; Lagna H{gate.houseFromLagna} / Moon H{gate.houseFromRashi}
+                              </div>
+                              <div className="text-[10.5px] text-cyan-300 font-mono">
+                                Moon Ignition: {gate.moonIngressWindow || 'Brief Lunar Pulse'}
+                              </div>
+                              <p className="text-[10.5px] text-slate-400 leading-snug">
+                                <strong className="text-slate-300">Seat:</strong> {gate.anatomicalSeat}
+                              </p>
+                              <div className="text-[10.5px] text-slate-400 leading-snug">
+                                <strong className="text-slate-300">Grahas:</strong>{' '}
+                                {gate.activeGrahasInGate.length > 0
+                                  ? gate.activeGrahasInGate.map(g => `${g.name}${g.passageWindow ? ` (${g.passageWindow})` : ''}`).join(', ')
+                                  : 'Empty (Moon-triggered only)'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Synthesis Note from Major LLM / Engine */}
+                    {narrative.supersetSynthesisNote && (
+                      <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-xs text-indigo-100 leading-relaxed">
+                        <span className="block text-[10px] font-extrabold uppercase tracking-wider text-indigo-300 mb-1">
+                          Unified House-Lordship ↔ Nakshatra Gate Synthesis Note
+                        </span>
+                        {narrative.supersetSynthesisNote}
+                      </div>
+                    )}
+
+                    {/* 7-Portfolio Filter Bar */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {portfolioFilters.map(pf => {
+                        const count = pf === 'all'
+                          ? correlatedList.length
+                          : correlatedList.filter(e => e.portfolio.toLowerCase() === pf.toLowerCase()).length;
+                        if (pf !== 'all' && count === 0) return null;
+                        const active = activeEventPortfolioFilter === pf;
+                        return (
+                          <button
+                            key={pf}
+                            type="button"
+                            onClick={() => setActiveEventPortfolioFilter(pf)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                              active
+                                ? 'bg-indigo-500 text-white shadow'
+                                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                            }`}
+                          >
+                            <span>{pf === 'all' ? 'All Portfolios' : pf}</span>
+                            <span className="text-[10px] font-mono opacity-80">({count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Ordered Correlated Domain Events */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {visibleEvents.map((ev, idx) => (
+                        <div
+                          key={ev.id || idx}
+                          className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 space-y-2 transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-extrabold uppercase">
+                                  {ev.portfolio}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                  ev.latencyStatus === 'acute_moon_triggered'
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}>
+                                  {ev.latencyStatus === 'acute_moon_triggered' ? '⚡ Moon Ignition' : '💤 Dormant/Latent'}
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-white leading-snug pt-0.5">
+                                {ev.title}
+                              </h5>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-extrabold shrink-0 border ${
+                              ev.probabilityScore >= 75
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : ev.probabilityScore >= 60
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                            }`}>
+                              {ev.probabilityScore}%
+                            </span>
+                          </div>
+
+                          {ev.moonWindowDates && (
+                            <div className="text-[10.5px] font-mono text-cyan-300 bg-slate-950 px-2 py-1 rounded border border-slate-800/80">
+                              Moon Window: {ev.moonWindowDates}
+                            </div>
+                          )}
+
+                          <div className="text-[11px] space-y-1 text-slate-300">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-500">Houses &amp; Lordships: </span>
+                              <span className="text-amber-200/90 font-medium">{ev.correlatedHousesAndLordships}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-500">Nakshatra Gate: </span>
+                              <span className="text-indigo-200/90 font-medium">{ev.nakshatraGateTrigger}</span>
+                            </div>
+                          </div>
+
+                          <p className="text-[11.5px] text-slate-200 leading-relaxed pt-1 border-t border-slate-800/80">
+                            {ev.narrative}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* MULTI-FORMAT EXPORT DOSSIER BANNER: PDF, HTML & WORD */}
               <div className="p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">

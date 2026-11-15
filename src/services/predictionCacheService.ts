@@ -120,15 +120,54 @@ function writeLocalCache(entries: CachedPredictionEntry[]): void {
       localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(candidate));
       return;
     } catch {
-      // Drop htmlContent first on quota pressure, then oldest entries
       const hasHtml = candidate.some(e => Boolean(e.htmlContent));
       if (hasHtml) {
         candidate = candidate.map(({ htmlContent: _h, ...rest }) => rest);
-      } else {
+      } else if (candidate.length > 1) {
         candidate = candidate.slice(0, -1);
+      } else {
+        const only = candidate[0];
+        if (
+          (only.promptSent && only.promptSent.length > 4000) ||
+          (only.context?.multiYearMoonTransits && only.context.multiYearMoonTransits.length > 60)
+        ) {
+          candidate = [
+            {
+              ...only,
+              promptSent: only.promptSent ? only.promptSent.slice(0, 4000) : '',
+              context: {
+                ...only.context,
+                multiYearMoonTransits: only.context?.multiYearMoonTransits?.slice(0, 60)
+              }
+            }
+          ];
+        } else {
+          break;
+        }
       }
     }
   }
+}
+
+export function exportCachedEntryJson(
+  entry?: CachedPredictionEntry | null,
+  fallback?: { context: VedicHouseContext | null; narrative: LLMThreePartNarrative | null }
+): string {
+  if (entry) {
+    return JSON.stringify(entry, null, 2);
+  }
+  const cleanContext = fallback?.context ? sanitizeContextForCache(fallback.context) : null;
+  const cleanNarrative = fallback?.narrative ? sanitizeNarrativeForCache(fallback.narrative) : null;
+  return JSON.stringify(
+    {
+      title: cleanContext ? buildPredictionCacheTitle(cleanContext) : 'Live In-Memory Report',
+      promptSent: cleanNarrative?.promptSent || '',
+      context: cleanContext,
+      narrative: cleanNarrative
+    },
+    null,
+    2
+  );
 }
 
 export function toCacheSummary(entry: CachedPredictionEntry): CachedPredictionSummary {

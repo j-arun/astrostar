@@ -969,6 +969,65 @@ export function buildVedicHtmlContent(
       }).join('')}
     </section>
 
+    ${(context.eventManufacturingSuperset || (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)) ? (() => {
+      const ss = context.eventManufacturingSuperset;
+      const corrEvents = (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0)
+        ? narrative.correlatedGateEvents
+        : (ss?.candidateOrSynthesizedEvents || []);
+      return `
+      <!-- UNIFIED SUPERSET: HOUSES, LORDSHIPS, NAKSHATRA GATES & ALL 7-PORTFOLIO EVENTS -->
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title">UNIFIED SUPERSET: HOUSES, LORDSHIPS, NAKSHATRA GATES &amp; DOMAIN EVENTS</h2>
+          <span class="section-subtitle">${corrEvents.length} Correlated Forecasts Across All 7 Portfolios</span>
+        </div>
+
+        ${ss ? `
+        <div class="dual-card" style="background: #eef2ff; border-color: #c7d2fe;">
+          <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-size: 12.5px;">
+            <strong style="color: #3730a3;">AD Chamber (${escapeHtml(ss.adChamberSummary.adCleanName)} • ${escapeHtml(ss.adChamberSummary.polarityLabel)}, Score: ${ss.adChamberSummary.netScore})</strong>
+            <span style="color: #4338ca; font-weight: 700;">Delivering Hand: ${escapeHtml(ss.deliveringHandClean)} | Peak Venting Gate: ${escapeHtml(ss.adChamberSummary.peakVentingGate)}</span>
+          </div>
+          <p style="font-size: 12px; color: var(--slate-800); margin-bottom: 10px;">${escapeHtml(ss.adChamberSummary.atmosphereNarrative)}</p>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            ${ss.gates.map(g => `
+            <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; font-size: 11.5px;">
+              <div style="font-weight: 800; color: #b45309; margin-bottom: 3px;">Gate ${g.gateIndex}: ${escapeHtml(g.nakshatraName)}</div>
+              <div style="color: #334155; font-weight: 600;">${escapeHtml(g.rashiName)} (Lagna H${g.houseFromLagna} / Moon H${g.houseFromRashi}) [${escapeHtml(g.perspective.toUpperCase())}]</div>
+              <div style="color: #0369a1; font-size: 11px; margin-top: 3px;">Moon Ignition: ${escapeHtml(g.moonIngressWindow || 'Brief Lunar Pulse')}</div>
+              <div style="color: #475569; font-size: 11px; margin-top: 3px;"><strong>Anatomy:</strong> ${escapeHtml(g.anatomicalSeat)}</div>
+            </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${narrative.supersetSynthesisNote ? `
+        <div class="verdict-card" style="background: #eef2ff; border-color: #818cf8; border-left: 4px solid #4f46e5;">
+          <div class="verdict-title" style="color: #3730a3;">House-Lordship ↔ Nakshatra Gate Synthesis Note</div>
+          <div class="verdict-text" style="font-size: 12.5px;">${escapeHtml(narrative.supersetSynthesisNote)}</div>
+        </div>` : ''}
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          ${corrEvents.map(ev => `
+          <div class="domain-card" style="margin-bottom: 0; padding: 12px 14px; page-break-inside: avoid;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <div>
+                <span class="tag-pill" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">${escapeHtml(ev.portfolio)}</span>
+                <span class="tag-pill" style="background: ${ev.latencyStatus === 'acute_moon_triggered' ? '#dcfce7' : '#f1f5f9'}; color: ${ev.latencyStatus === 'acute_moon_triggered' ? '#166534' : '#475569'}; border-color: #cbd5e1;">
+                  ${ev.latencyStatus === 'acute_moon_triggered' ? 'Moon Ignition' : 'Dormant/Latent'}
+                </span>
+                <div style="font-weight: 700; font-size: 13px; color: var(--slate-900); margin-top: 2px;">${escapeHtml(ev.title)}</div>
+              </div>
+              <strong style="font-size: 13px; color: ${ev.probabilityScore >= 75 ? '#15803d' : '#b45309'}; white-space: nowrap;">${ev.probabilityScore}%</strong>
+            </div>
+            ${ev.moonWindowDates ? `<div style="font-size: 11px; color: #0369a1; font-weight: 600; margin-bottom: 4px;">Moon Window: ${escapeHtml(ev.moonWindowDates)}</div>` : ''}
+            <div style="font-size: 11px; color: #475569; margin-bottom: 3px;"><strong>Houses &amp; Lordships:</strong> ${escapeHtml(ev.correlatedHousesAndLordships)}</div>
+            <div style="font-size: 11px; color: #4338ca; margin-bottom: 6px;"><strong>Nakshatra Gate:</strong> ${escapeHtml(ev.nakshatraGateTrigger)}</div>
+            <p style="font-size: 12px; color: var(--slate-800); line-height: 1.5;">${escapeHtml(ev.narrative)}</p>
+          </div>`).join('')}
+        </div>
+      </section>`;
+    })() : ''}
+
     <section class="section structured-payload-section">
       <div class="section-header">
         <h2 class="section-title">5. STRUCTURED DATA PAYLOADS (FOLD 2)</h2>

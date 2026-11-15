@@ -81,6 +81,91 @@ export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   }
 };
 
+export type GatePerspective = 'lagna' | 'rashi' | 'combined';
+
+export interface SupersetGateGrahaDetail {
+  name: string;
+  key: string;
+  type: 'transit_current' | 'monthly_passage' | 'natal';
+  passageWindow?: string;
+  isExalted?: boolean;
+}
+
+export interface SupersetNakshatraGateSummary {
+  gateIndex: number;
+  nakshatraName: string;
+  rashiIndex: number;
+  rashiName: string;
+  houseFromLagna: number;
+  houseFromRashi: number;
+  perspective: GatePerspective;
+  anatomicalSeat: string;
+  significations: string;
+  moonIngressWindow?: string;
+  activeGrahasInGate: SupersetGateGrahaDetail[];
+}
+
+export interface HouseLordshipToGateLink {
+  houseFromLagna: number;
+  houseFromMoon: number;
+  rashiName: string;
+  rashiLord: string;
+  portfolioLabel: string;
+  natalOccupants: string[];
+  transitOccupants: string[];
+  isActivatedByAdLordship: boolean;
+  isActivatedByDeliveringHandGate: boolean;
+  matchingGateNakshatra?: string;
+  moonIgnitionDates?: string;
+}
+
+export interface CorrelatedManufacturedEvent {
+  id: string;
+  title: string;
+  portfolio: string;
+  probabilityScore: number;
+  isHighProbability: boolean;
+  latencyStatus: 'acute_moon_triggered' | 'dormant_latent';
+  hasMoonSupport: boolean;
+  moonWindowDates?: string;
+  correlatedHousesAndLordships: string;
+  nakshatraGateTrigger: string;
+  narrative: string;
+  source?: 'live_event_engine_llm' | 'deterministic_gate_candidate' | 'superset_major_llm';
+}
+
+export interface EventManufacturingSupersetPayload {
+  generatedAt: string;
+  selectedMd: string;
+  selectedAd: string;
+  deliveringHandKey: string;
+  deliveringHandClean: string;
+  adChamberSummary: {
+    adCleanName: string;
+    adNatalRashiName: string;
+    adNatalHouseFromLagna: number;
+    adNatalHouseFromRashi: number;
+    polarityLabel: string;
+    netScore: number;
+    peakVentingGate: string;
+    atmosphereNarrative: string;
+    directOccupants: string[];
+    incomingAspects: string[];
+    ruledHouses: Array<{
+      houseFromLagna: number;
+      houseFromRashi: number;
+      rashiName: string;
+      occupants: string[];
+      aspectingGrahas: string[];
+    }>;
+  };
+  gates: SupersetNakshatraGateSummary[];
+  houseLordshipToGateLinks: HouseLordshipToGateLink[];
+  candidateOrSynthesizedEvents: CorrelatedManufacturedEvent[];
+  usedLiveEventEngineEvents: boolean;
+  eventEngineModelUsed?: string;
+}
+
 export interface VedicHouseContext {
   houseNumber?: number;
   rashiIndex?: number;
@@ -298,6 +383,7 @@ export interface VedicHouseContext {
     isRetrograde: boolean;
   }>;
   vedicSpecialEvents?: VedicWindowAnalysis;
+  eventManufacturingSuperset?: EventManufacturingSupersetPayload;
 }
 
 export interface EmploymentStatusInference {
@@ -423,6 +509,10 @@ export interface LLMThreePartNarrative {
 
   // Predicted Specific Real-World Events & Timing (PF Transfer, Visa Papers Delay, Passport, Institutional Approvals)
   predictedSpecificEvents?: PredictedSpecificEvent[];
+
+  // Superset Unified House/Lordship + Nakshatra Gate + Event Manufacturing Correlation
+  supersetSynthesisNote?: string;
+  correlatedGateEvents?: CorrelatedManufacturedEvent[];
 
   // Private LLM Verification & Wire Telemetry
   endpointUsed: string;

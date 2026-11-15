@@ -24,7 +24,8 @@ import { VedicHouseContext, LLMThreePartNarrative } from '../services/llm/types'
 import { checkOllamaHealth } from '../services/llm/adapters';
 import {
   CachedPredictionSummary,
-  CachedPredictionEntry
+  CachedPredictionEntry,
+  exportCachedEntryJson
 } from '../services/predictionCacheService';
 import {
   buildDynamicQuestionCards,
@@ -180,6 +181,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
   }>({ checking: false, isOnline: false, models: [] });
 
   const [showCacheInspector, setShowCacheInspector] = useState<boolean>(false);
+  const [cacheInspectorTab, setCacheInspectorTab] = useState<'pack' | 'json'>('pack');
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [questionInput, setQuestionInput] = useState<string>('');
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
@@ -627,39 +629,113 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
       )}
 
       {/* OPTIONAL CACHE INSPECTOR DRAWER */}
-      {showCacheInspector && (
-        <div className="px-4 py-3 bg-slate-950/95 border-b border-amber-500/30 space-y-2.5 text-[11px]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-bold text-amber-300">
-              Cached Context Payload Fed to {effectiveModel}
-            </span>
-            <span className="text-slate-400 font-mono">
-              {activeCacheEntry?.cacheId ? `ID: ${activeCacheEntry.cacheId}` : 'Live In-Memory Report'}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div>
-              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
-                Original Prompt Sent to Cloud/Report Engine ({cachePromptPreview.length} chars)
-              </span>
-              <pre className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                {cachePromptPreview || 'Prompt reference unavailable for heuristic fallback report.'}
-              </pre>
+      {showCacheInspector && (() => {
+        const fullCachedJsonText = exportCachedEntryJson(activeCacheEntry, {
+          context: activeContext,
+          narrative: activeNarrative
+        });
+        const handleDownloadCacheJson = () => {
+          const blob = new Blob([fullCachedJsonText], { type: 'application/json;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${activeCacheEntry?.cacheId || 'vedic_superset_report'}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        };
+
+        return (
+          <div className="px-4 py-3 bg-slate-950/95 border-b border-amber-500/30 space-y-2.5 text-[11px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-amber-300">
+                  Cached Context Payload Fed to {effectiveModel}
+                </span>
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setCacheInspectorTab('pack')}
+                    className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold cursor-pointer transition ${
+                      cacheInspectorTab === 'pack'
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Prompt + Context Pack
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCacheInspectorTab('json')}
+                    className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold cursor-pointer transition ${
+                      cacheInspectorTab === 'json'
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Complete Cached JSON ({(fullCachedJsonText.length / 1024).toFixed(1)} KB)
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyMessage('cache_json_full', fullCachedJsonText)}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 text-[10.5px] font-bold cursor-pointer"
+                >
+                  {copiedId === 'cache_json_full' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedId === 'cache_json_full' ? 'Copied JSON' : 'Copy Full JSON'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadCacheJson}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 text-[10.5px] font-bold cursor-pointer"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Download JSON</span>
+                </button>
+                <span className="text-slate-400 font-mono">
+                  {activeCacheEntry?.cacheId ? `ID: ${activeCacheEntry.cacheId}` : 'Live In-Memory Report'}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
-                Compact Cached JSON + Transit Pack Preview
-              </span>
-              <pre className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-emerald-200/90 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                {buildCompactReportContextPack(activeContext, activeNarrative, questionInput || 'general overview', {
-                  promptSent: cachePromptPreview,
-                  cacheTitle: activeCacheEntry?.title
-                })}
-              </pre>
-            </div>
+
+            {cacheInspectorTab === 'pack' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Original Prompt Sent to Cloud/Report Engine ({cachePromptPreview.length} chars)
+                  </span>
+                  <pre className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    {cachePromptPreview || 'Prompt reference unavailable for heuristic fallback report.'}
+                  </pre>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Compact Cached JSON + Transit Pack Preview
+                  </span>
+                  <pre className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-emerald-200/90 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    {buildCompactReportContextPack(activeContext, activeNarrative, questionInput || 'general overview', {
+                      promptSent: cachePromptPreview,
+                      cacheTitle: activeCacheEntry?.title
+                    })}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                  Complete Cached JSON (Browser Cache + Disk — promptSent + context + eventManufacturingSuperset + narrative)
+                </span>
+                <pre className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-cyan-200/90 max-h-72 overflow-y-auto whitespace-pre-wrap">
+                  {fullCachedJsonText}
+                </pre>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* BODY: DYNAMIC PREDICTION-DRIVEN CARDS + FREE-FORM QUESTION BOX + CHAT THREAD */}
       <div className="p-4 space-y-4">

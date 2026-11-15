@@ -55,26 +55,31 @@ import { PrivatePredictionChatbot } from './PrivatePredictionChatbot';
 import { computeADChamberDynamics, ADChamberDynamics } from '../services/dashaChamberEngine';
 import { ADChamberMatrixCard } from './ADChamberMatrixCard';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
+import {
+  EventManufacturingSupersetPayload
+} from '../services/llm/types';
+import {
+  LORD_NAKSHATRA_GATES,
+  normalizeLordKey,
+  computeNakshatraGateDetails,
+  buildEventManufacturingSnapshot,
+  GatePerspective,
+  ManufacturedEventItem,
+  ActiveTransitGrahaDetail,
+  NakshatraGateInfo
+} from '../services/eventManufacturingBuilder';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export type GatePerspective = 'lagna' | 'rashi' | 'combined';
-
-export interface ManufacturedEventItem {
-  id: string;
-  title: string;
-  narrative: string; // 1-2 line crisp narrative of what is going to happen
-  probabilityScore: number; // 0..100
-  isHighProbability: boolean; // >= 60%
-  portfolio?: string; // Work, Life, Health, Money, Friends, Love, Trip
-  gateTrigger?: string; // Specific Nakshatra gate & transit trigger
-  hasMoonSupport?: boolean; // Whether Moon traverses this gate in the active month (~2.5 days)
-  moonWindowDates?: string; // e.g. "Oct 6–8" (the acute ignition window)
-  latencyStatus?: 'acute_moon_triggered' | 'dormant_latent'; // Acute felt manifestation vs dormant/latent potential
-}
+export type {
+  GatePerspective,
+  ManufacturedEventItem,
+  ActiveTransitGrahaDetail,
+  NakshatraGateInfo
+};
 
 export interface DashaPdItem {
   index: number; // 1..9
@@ -84,26 +89,6 @@ export interface DashaPdItem {
   endDate: string;
   isMonthActive: boolean;
   isSelected: boolean;
-}
-
-export interface ActiveTransitGrahaDetail {
-  name: string;
-  key: string;
-  type: 'transit_current' | 'monthly_passage' | 'natal';
-  passageWindow?: string;
-  isExalted?: boolean;
-}
-
-export interface NakshatraGateInfo {
-  nakshatraName: string;
-  rashiIndex: number; // 1..12
-  rashiName: string;
-  houseFromLagna: number;
-  houseFromRashi: number;
-  anatomicalSeat: string;
-  significations: string;
-  activeGrahasInGate: ActiveTransitGrahaDetail[];
-  moonIngressWindow?: string;
 }
 
 interface EventManufacturingEngineProps {
@@ -126,79 +111,7 @@ interface EventManufacturingEngineProps {
   monthlyGrahaSpans?: any[];
   geminiApiKey?: string;
   anthropicApiKey?: string;
-}
-
-// 9 Planetary Lords & their 3 Nakshatra Gates
-const LORD_NAKSHATRA_GATES: Record<string, { nakshatras: string[]; rashis: number[]; anatomies: string[]; signs: string[] }> = {
-  Ketu: {
-    nakshatras: ['Ashwini', 'Magha', 'Mula'],
-    rashis: [1, 5, 9], // Mesham, Simham, Dhanus
-    anatomies: ['Head & Cranium', 'Heart & Spine', 'Hips, Sciatic Nerve & Sacrum'],
-    signs: ['Spiritual detachment, sudden breaks, deep subconscious karma, surgery']
-  },
-  'Venus (Sukra)': {
-    nakshatras: ['Bharani', 'Purva Phalguni', 'Purva Ashadha'],
-    rashis: [1, 5, 9],
-    anatomies: ['Face, Eyes & Reproductive Fluids', 'Spine & Vital Circulation', 'Pelvic & Thigh Musculature'],
-    signs: ['Pleasure, attraction, luxury expenses, skin/facial countenance, romance']
-  },
-  'Sun (Surya)': {
-    nakshatras: ['Krittika', 'Uttara Phalguni', 'Uttara Ashadha'],
-    rashis: [2, 6, 10],
-    anatomies: ['Neck & Vocal Chords', 'Upper Abdomen & Gut Flora', 'Knees & Skeletal Structure'],
-    signs: ['Vitality, father, authority, government orders, bone density, ego expression']
-  },
-  'Moon (Chandra)': {
-    nakshatras: ['Rohini', 'Hasta', 'Shravana'],
-    rashis: [2, 6, 10],
-    anatomies: ['Throat & Thyroid', 'Digestive Organs & Bowels', 'Lymphatic Fluid & Knees'],
-    signs: ['Mind, emotional fluctuations, mother, home sanctuary, liquids, travel']
-  },
-  'Mars (Sevvai)': {
-    nakshatras: ['Mrigashira', 'Chitra', 'Dhanishta'],
-    rashis: [3, 7, 11],
-    anatomies: ['Shoulders & Upper Arms', 'Lower Abdomen & Kidneys', 'Shin Bones & Circulatory Heat'],
-    signs: ['Pitta burning, digestive heat, conflicts, surgery, muscular exertion, siblings, land']
-  },
-  Rahu: {
-    nakshatras: ['Ardra', 'Swati', 'Shatabhisha'],
-    rashis: [3, 7, 11],
-    anatomies: ['Respiratory Bronchials & Arms', 'Pelvic Organs & Bladder', 'Calves, Ankles & Nervous Signals'],
-    signs: ['Obsession, sudden twists, foreign connections, toxic exposure, unconventional gains']
-  },
-  'Jupiter (Guru)': {
-    nakshatras: ['Punarvasu', 'Vishakha', 'Purva Bhadrapada'],
-    rashis: [4, 8, 12],
-    anatomies: ['Chest & Lungs', 'Reproductive Tissues & Excretory', 'Feet & Toes'],
-    signs: ['Wisdom, divine grace, wealth clearance, advisory roles, children, liver']
-  },
-  'Saturn (Sani)': {
-    nakshatras: ['Pushya', 'Anuradha', 'Uttara Bhadrapada'],
-    rashis: [4, 8, 12],
-    anatomies: ['Stomach, Ribcage & Lungs', 'Bladder, Groin & Chronic Tissues', 'Feet & Nervous Terminals'],
-    signs: ['Delay, chronic friction, cold conditions, institutional duty, dental/bone wear, persistent marks']
-  },
-  'Mercury (Budha)': {
-    nakshatras: ['Ashlesha', 'Jyeshtha', 'Revati'],
-    rashis: [4, 8, 12],
-    anatomies: ['Stomach Lining, Gut Flora & Sleep', 'Secret Parts, Colon & Sensory Nerves', 'Feet, Lymph & Peripheral Nerves'],
-    signs: ['Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion']
-  }
-};
-
-function normalizeLordKey(lordStr: string): string {
-  if (!lordStr) return 'Mercury (Budha)';
-  const norm = lordStr.toLowerCase();
-  if (norm.includes('ketu')) return 'Ketu';
-  if (norm.includes('venus') || norm.includes('sukra')) return 'Venus (Sukra)';
-  if (norm.includes('sun') || norm.includes('surya')) return 'Sun (Surya)';
-  if (norm.includes('moon') || norm.includes('chandra')) return 'Moon (Chandra)';
-  if (norm.includes('mars') || norm.includes('sevvai')) return 'Mars (Sevvai)';
-  if (norm.includes('rahu')) return 'Rahu';
-  if (norm.includes('jupiter') || norm.includes('guru')) return 'Jupiter (Guru)';
-  if (norm.includes('saturn') || norm.includes('sani')) return 'Saturn (Sani)';
-  if (norm.includes('mercury') || norm.includes('budha')) return 'Mercury (Budha)';
-  return 'Mercury (Budha)';
+  onSnapshotChange?: (snapshot: EventManufacturingSupersetPayload) => void;
 }
 
 function parseEventsFromLlmResponse(rawText: string): ManufacturedEventItem[] {
@@ -287,7 +200,8 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   monthlyMoonSpans,
   monthlyGrahaSpans,
   geminiApiKey: propsGeminiApiKey,
-  anthropicApiKey: propsAnthropicApiKey
+  anthropicApiKey: propsAnthropicApiKey,
+  onSnapshotChange
 }) => {
   // 1. Dasha Hierarchy State: MD, AD, and Delivering Hand (PD or AD)
   const [selectedMd, setSelectedMd] = useState<string>(() => {
@@ -573,93 +487,15 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
 
   // 2. Compute the 3 Nakshatra Entry Gates with COMPLETE Planetary Passages (Transit + Spans + Natal)
   const gateDetails = useMemo<NakshatraGateInfo[]>(() => {
-    const lordMeta = LORD_NAKSHATRA_GATES[selectedHandKey] || LORD_NAKSHATRA_GATES['Mercury (Budha)'];
-    
-    return lordMeta.nakshatras.map((nakName, idx) => {
-      const rIdx = lordMeta.rashis[idx];
-      const rMeta = RASHI_LIST_META.find(r => r.index === rIdx) || RASHI_LIST_META[0];
-      const hLagna = ((rIdx - natalLagnaIdx + 12) % 12) + 1;
-      const hRashi = ((rIdx - natalRashiIdx + 12) % 12) + 1;
-
-      const grahaMap = new Map<string, ActiveTransitGrahaDetail>();
-
-      // A. Match Current Transits in this sign (strictly by astronomical zodiac sign index)
-      for (const t of (transitPlacements || [])) {
-        const signMatch = (
-          t.transit_rashi_index === rIdx ||
-          t.signIndex === rIdx ||
-          t.sign_index === rIdx
-        );
-        if (signMatch) {
-          const gKey = t.graha_key || t.graha_name;
-          const cleanName = toCleanEnglishPlanet(gKey);
-          grahaMap.set(cleanName, {
-            name: cleanName,
-            key: gKey,
-            type: 'transit_current',
-            passageWindow: 'Active in House'
-          });
-        }
-      }
-
-      // B. Match Monthly Graha Spans passing through this sign during the selected month
-      for (const span of (monthlyGrahaSpans || [])) {
-        if (span.sign_index === rIdx || span.signIndex === rIdx) {
-          const cleanName = toCleanEnglishPlanet(span.graha_key || span.graha_name);
-          const windowStr = `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${span.start_day}–${span.end_day}`;
-          const existing = grahaMap.get(cleanName);
-          if (existing) {
-            existing.passageWindow = windowStr;
-            existing.isExalted = span.is_exalted;
-          } else {
-            grahaMap.set(cleanName, {
-              name: cleanName,
-              key: span.graha_key,
-              type: 'monthly_passage',
-              passageWindow: windowStr,
-              isExalted: span.is_exalted
-            });
-          }
-        }
-      }
-
-      // C. Match Natal Occupants situated at birth in this sign (from flattenedD1)
-      for (const np of (flattenedD1 || [])) {
-        const rashiNorm = (np.rashi_name || '').toLowerCase();
-        const signNorm = (rMeta.eng || '').toLowerCase();
-        if (signNorm.includes(rashiNorm) || rashiNorm.includes(signNorm.slice(0, 4))) {
-          const cleanName = toCleanEnglishPlanet(np.body_name);
-          const existing = grahaMap.get(cleanName);
-          if (existing) {
-            existing.passageWindow = `${existing.passageWindow || 'Transit'} + Natal Seat`;
-          } else {
-            grahaMap.set(cleanName, {
-              name: `${cleanName} (Natal)`,
-              key: np.body_name,
-              type: 'natal',
-              passageWindow: 'Fixed Natal Position'
-            });
-          }
-        }
-      }
-
-      // D. Find Moon ingress dates for this sign (~2.5 days per month)
-      const matchedMoonSpans = (monthlyMoonSpans || []).filter((m: any) => m.signIndex === rIdx || m.houseNumber === hLagna);
-      const moonIngressWindow = matchedMoonSpans.length > 0
-        ? matchedMoonSpans.map(m => `${MONTH_NAMES[selectedMonth].slice(0, 3)} ${m.startDay}–${m.endDay}`).join(', ')
-        : undefined;
-
-      return {
-        nakshatraName: nakName,
-        rashiIndex: rIdx,
-        rashiName: rMeta.eng,
-        houseFromLagna: hLagna,
-        houseFromRashi: hRashi,
-        anatomicalSeat: lordMeta.anatomies[idx] || 'Vital Organs & Nerves',
-        significations: lordMeta.signs[0] || 'Karmic fruition gate',
-        activeGrahasInGate: Array.from(grahaMap.values()),
-        moonIngressWindow
-      };
+    return computeNakshatraGateDetails({
+      deliveringHandKey: selectedHandKey,
+      natalLagnaIdx,
+      natalRashiIdx,
+      selectedMonth,
+      transitPlacements: transitPlacements || [],
+      monthlyGrahaSpans: monthlyGrahaSpans || [],
+      flattenedD1: flattenedD1 || [],
+      monthlyMoonSpans: monthlyMoonSpans || []
     });
   }, [selectedHandKey, natalLagnaIdx, natalRashiIdx, transitPlacements, monthlyGrahaSpans, flattenedD1, monthlyMoonSpans, selectedMonth]);
 
@@ -691,6 +527,48 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
       }))
     });
   }, [selectedYear, selectedMonth, natalLagnaIdx, natalRashiIdx, flattenedD1]);
+
+  // 2D. Sync Superset Snapshot upward whenever gate selections, Dasha, or synthesized events update
+  useEffect(() => {
+    if (!onSnapshotChange) return;
+    const snap = buildEventManufacturingSnapshot({
+      selectedMonth,
+      selectedYear,
+      natalLagnaIdx,
+      natalRashiIdx,
+      activeDashaHierarchy,
+      flattenedD1: flattenedD1 || [],
+      transitPlacements: transitPlacements || [],
+      monthlyMoonSpans: monthlyMoonSpans || [],
+      monthlyGrahaSpans: monthlyGrahaSpans || [],
+      overrideMd: selectedMd,
+      overrideAd: selectedAd,
+      overrideHandKey: selectedHandKey,
+      gatePerspectives,
+      preSynthesizedEvents: manufacturedEvents,
+      preSynthesizedModel: lastSynthesizedModel || undefined,
+      vedicSpecialEvents
+    });
+    onSnapshotChange(snap);
+  }, [
+    onSnapshotChange,
+    selectedMonth,
+    selectedYear,
+    natalLagnaIdx,
+    natalRashiIdx,
+    activeDashaHierarchy,
+    flattenedD1,
+    transitPlacements,
+    monthlyMoonSpans,
+    monthlyGrahaSpans,
+    selectedMd,
+    selectedAd,
+    selectedHandKey,
+    gatePerspectives,
+    manufacturedEvents,
+    lastSynthesizedModel,
+    vedicSpecialEvents
+  ]);
 
   // 3. Complete Raw Prompt Payload for LLM Execution with Per-Gate Perspectives
   const promptPayload = useMemo(() => {

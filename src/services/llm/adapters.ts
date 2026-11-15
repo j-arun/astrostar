@@ -10,8 +10,108 @@ import {
   LLMThreePartNarrative,
   ILLMAdapter,
   AstroPromptVersion,
-  PromptVersionDefinition
+  PromptVersionDefinition,
+  CorrelatedManufacturedEvent,
+  PredictedSpecificEvent
 } from './types';
+
+function buildEventManufacturingSupersetSection(
+  context: VedicHouseContext,
+  compact: boolean = false
+): string {
+  const ss = context.eventManufacturingSuperset;
+  if (!ss) return '';
+
+  const ad = ss.adChamberSummary;
+  const ruledStr = ad.ruledHouses.length > 0
+    ? ad.ruledHouses
+        .map(
+          rh =>
+            `H${rh.houseFromLagna} Lagna / H${rh.houseFromRashi} Moon (${rh.rashiName}) — Occupants: ${
+              rh.occupants.length > 0 ? rh.occupants.join(', ') : 'None'
+            } | Aspects: ${rh.aspectingGrahas.length > 0 ? rh.aspectingGrahas.join(', ') : 'None'}`
+        )
+        .join('; ')
+    : 'No direct sign rulership (nodal/luminary delivery)';
+
+  const gatesLines = ss.gates
+    .map(g => {
+      const grahaList =
+        g.activeGrahasInGate.length > 0
+          ? g.activeGrahasInGate
+              .map(
+                ag =>
+                  `${ag.name}${ag.passageWindow ? ` (${ag.passageWindow})` : ''}${ag.isExalted ? ' [Exalted]' : ''}`
+              )
+              .join(', ')
+          : 'Empty (triggered purely on Moon 2.5-day ingress)';
+      return `  • Gate ${g.gateIndex}: ${g.nakshatraName} in ${g.rashiName} [Lagna H${g.houseFromLagna} | Moon H${g.houseFromRashi} | Perspective: ${g.perspective.toUpperCase()}]
+    Anatomy: ${g.anatomicalSeat} | Themes: ${g.significations}
+    Moon 2.5-Day Ignition: ${g.moonIngressWindow || 'Brief lunar transit window'} | Grahas: ${grahaList}`;
+    })
+    .join('\n');
+
+  const eventsToShow = compact
+    ? ss.candidateOrSynthesizedEvents.slice(0, 7)
+    : ss.candidateOrSynthesizedEvents;
+
+  const eventsLines = eventsToShow
+    .map(
+      (ev, i) =>
+        `  ${i + 1}. [${ev.portfolio}] ${ev.title} (${ev.probabilityScore}% | ${
+          ev.latencyStatus === 'acute_moon_triggered' ? 'Acute Moon-Triggered' : 'Dormant/Latent'
+        }${ev.moonWindowDates ? ` | Moon: ${ev.moonWindowDates}` : ''})
+     Houses & Lordships: ${ev.correlatedHousesAndLordships}
+     Nakshatra Gate: ${ev.nakshatraGateTrigger}
+     Causal Signal: ${ev.narrative}`
+    )
+    .join('\n');
+
+  if (compact) {
+    return `
+### Event Manufacturing Engine Superset (AD Chamber + 3 Nakshatra Gates + 7-Portfolio Candidates)
+- AD Chamber (${ad.adCleanName}): Natal ${ad.adNatalRashiName} (Lagna H${ad.adNatalHouseFromLagna} / Moon H${ad.adNatalHouseFromRashi}) | Polarity: ${ad.polarityLabel} (Net ${ad.netScore}) | Peak Venting Gate: ${ad.peakVentingGate}
+- AD Ruled Houses: ${ruledStr}
+- PD Delivering Hand: ${ss.deliveringHandClean}
+${gatesLines}
+- Candidate Domain Events Across All 7 Portfolios:
+${eventsLines}
+`;
+  }
+
+  const linksTable = ss.houseLordshipToGateLinks
+    .map(
+      l =>
+        `  • Lagna H${l.houseFromLagna} / Moon H${l.houseFromMoon} (${l.rashiName}, Lord: ${l.rashiLord}) [${l.portfolioLabel}] | Natal: ${
+          l.natalOccupants.length > 0 ? l.natalOccupants.join(', ') : '-'
+        } | Transit: ${l.transitOccupants.length > 0 ? l.transitOccupants.join(', ') : '-'} | AD Lordship: ${
+          l.isActivatedByAdLordship ? 'YES' : 'No'
+        } | PD Gate: ${l.matchingGateNakshatra || 'None'} | Moon Ignition: ${l.moonIgnitionDates || 'N/A'}`
+    )
+    .join('\n');
+
+  return `
+### Unified Event Manufacturing Engine Superset (AD Chamber + 3 Nakshatra Entry Gates + All 7 Portfolios)
+[CRITICAL CORRELATION REQUIREMENT: The monthly report MUST unify house/lordship transit analysis above with the Antardasha Chamber and the 3 Nakshatra Entry Gates below so every domain prediction cites the exact House/Lordship ↔ Nakshatra Gate ↔ Moon Ignition channel.]
+
+#### A. Antardasha (AD) Chamber Dynamics & Ruled House Portfolios
+- Active Dasha Channel: MD ${ss.selectedMd} > AD ${ss.selectedAd} > PD Delivering Hand ${ss.deliveringHandClean}
+- AD Chamber Natal Seat: ${ad.adCleanName} in ${ad.adNatalRashiName} (Lagna H${ad.adNatalHouseFromLagna} / Moon H${ad.adNatalHouseFromRashi})
+- AD Chamber Polarity & Net Score: ${ad.polarityLabel} (Score: ${ad.netScore}) | Peak Venting Gate: ${ad.peakVentingGate}
+- AD Chamber Direct Occupants: ${ad.directOccupants.length > 0 ? ad.directOccupants.join(', ') : 'None'} | Incoming Aspects: ${ad.incomingAspects.length > 0 ? ad.incomingAspects.join(', ') : 'None'}
+- AD Ruled Houses: ${ruledStr}
+- AD Chamber Atmosphere: ${ad.atmosphereNarrative}
+
+#### B. Delivering Hand (${ss.deliveringHandClean}) — 3 Nakshatra Entry Gates & Moon 2.5-Day Ignitions
+${gatesLines}
+
+#### C. 12-House & Bhava Lordship ↔ Nakshatra Gate Correlation Map
+${linksTable}
+
+#### D. Pre-Mapped Candidate / Synthesized Events Across All 7 Portfolios (${ss.usedLiveEventEngineEvents ? `Includes Live Event Engine LLM output via ${ss.eventEngineModelUsed || 'Engine'}` : 'Deterministic Ephemeris + Gate Baseline'})
+${eventsLines}
+`;
+}
 
 // Classical House Significations Matrix (Clean Unified English)
 const BHAVA_NAMES: Record<number, { title: string; karakas: string; financialRole: string }> = {
@@ -611,7 +711,7 @@ ${multiYearDashaSection}
 
 ### Bhava Karakas & Significations
 ${karakaInfoStr}
-
+${buildEventManufacturingSupersetSection(context, false)}
 ### User Inquiry
 "${context.userQuery || (context.isMultiYearPrediction ? `Synthesize a rigorous 1-to-2 year prediction from ${context.timelineStartDate} to ${context.timelineEndDate} testing against my lived experience footprint.` : context.isComprehensiveMonthly ? `Provide a comprehensive monthly Vedic evaluation for ${monthName} ${context.selectedYear}` : `Provide a definitive astrological evaluation for House ${context.houseNumber} in ${monthName} ${context.selectedYear}`)}"
 
@@ -663,6 +763,10 @@ CLASSICAL PARASHARA REASONING DIRECTIVES (PROMPT V2):
    - When a Parivartana Yoga (mutual sign exchange) is listed, evaluate BOTH levels: (i) Sign-Lord exchange between the two signs/planets and (ii) Bhava-level exchange from Janma Rashi (Moon), and specify the exact sub-period dates and real-world events (e.g., authority/government decisions, career elevation, property/contract resolution).
    - When a planet is in Debilitation (Neecha) — especially Neecha-Vakra transitioning to Direct or supported by Neecha Bhanga cancellation factors — explicitly explain the initial test/friction vs. the cancellation reversal and resultant achievement.
    - ALWAYS include a crisp, dedicated one-line summary covering these Parivartana, Neecha Bhanga, and station triggers (and what concrete events can happen) at the end of 'summarySentence' and analyze their timing inside 'part1_probabilityAndScope' and 'part3_microTimingWindow'.
+8. UNIFIED HOUSE-LORDSHIP ↔ NAKSHATRA GATE CORRELATION (SUPERSET MANDATE):
+   - When Unified Event Manufacturing Superset data is supplied, explicitly correlate every major House & Bhava Lordship analyzed in Parts 1–2 and 'supplementaryScenarios' with the AD Chamber, the 3 Delivering-Hand Nakshatra Entry Gates, and exact Moon 2.5-day ignition dates.
+   - Populate "supersetSynthesisNote" explaining how the Dasha Chamber and 3 Nakshatra Gates channel this month's transit and lordship activations into concrete outcomes.
+   - Populate "correlatedGateEvents" with 8 to 16 concrete event items spanning ALL 7 portfolios ("Work", "Money", "Love", "Health", "Life", "Friends", "Trip"), sorted from highest to lowest "probabilityScore" (0–100), explicitly naming the correlated Houses/Lordships and Nakshatra Gate trigger in each item.
 
 Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdown fences, no surrounding commentary):
 {
@@ -816,6 +920,22 @@ Return ONLY a valid, raw JSON object strictly adhering to this schema (no markdo
       "concreteImplication": "Passport renewal and official verifications proceed smoothly.",
       "preventiveRemedy": "Schedule appointment early during auspicious waxing Moon days."
     }
+  ],
+  "supersetSynthesisNote": "Concise 2-4 sentence synthesis correlating the active House/Bhava Lordships, Antardasha Chamber polarity, 3 Nakshatra Entry Gates, and Moon 2.5-day ignition windows.",
+  "correlatedGateEvents": [
+    {
+      "id": "corr-work-1",
+      "title": "Concrete domain event title",
+      "portfolio": "Work | Money | Love | Health | Life | Friends | Trip",
+      "probabilityScore": 84,
+      "isHighProbability": true,
+      "latencyStatus": "acute_moon_triggered",
+      "hasMoonSupport": true,
+      "moonWindowDates": "${monthName.slice(0, 3)} DD–DD",
+      "correlatedHousesAndLordships": "Lagna H10 / Moon H11 (Sign, Lord) + AD Lordship linkage",
+      "nakshatraGateTrigger": "Gate name, active transits, and perspective",
+      "narrative": "Clear explanation connecting the house lordship, AD chamber, Nakshatra gate, and timing window."
+    }
   ]
 }`;
 }
@@ -897,11 +1017,11 @@ ${allTransitsTable}
 ### Vimshottari Dasha Hierarchy
 ${dashaDelivery}
 Active Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
-${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
+${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n` : ''}${buildEventManufacturingSupersetSection(context, true)}
 ### User Inquiry
 "${context.userQuery || `Provide an astrological evaluation for ${monthName} ${context.selectedYear}`}"
 
-Synthesize analysis in plain English and return a raw JSON object with: summarySentence, natalPromiseVsTransitDelivery, part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow, peakDateRange, overallConfidence, supplementaryScenarios.`;
+Synthesize analysis in plain English and return a raw JSON object with: summarySentence, natalPromiseVsTransitDelivery, part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow, peakDateRange, overallConfidence, supplementaryScenarios, supersetSynthesisNote, correlatedGateEvents.`;
 }
 
 /**
@@ -1380,6 +1500,14 @@ ${part3}
       synthesisVerdict
     },
     supplementaryScenarios,
+    supersetSynthesisNote: context.eventManufacturingSuperset
+      ? `Unified Superset Synthesis: MD ${context.eventManufacturingSuperset.selectedMd} -> AD ${context.eventManufacturingSuperset.adChamberSummary.adCleanName} Chamber (${context.eventManufacturingSuperset.adChamberSummary.polarityLabel}, Lagna H${context.eventManufacturingSuperset.adChamberSummary.adNatalHouseFromLagna}/Moon H${context.eventManufacturingSuperset.adChamberSummary.adNatalHouseFromRashi}) channels results through Delivering Hand ${context.eventManufacturingSuperset.deliveringHandClean} via Nakshatra Gates ${context.eventManufacturingSuperset.gates.map(g => `${g.nakshatraName} (Lagna H${g.houseFromLagna}/Moon H${g.houseFromRashi})`).join(', ')}. Peak venting occurs via ${context.eventManufacturingSuperset.adChamberSummary.peakVentingGate}.`
+      : undefined,
+    correlatedGateEvents: context.eventManufacturingSuperset
+      ? [...context.eventManufacturingSuperset.candidateOrSynthesizedEvents].sort(
+          (a, b) => b.probabilityScore - a.probabilityScore
+        )
+      : undefined,
     predictedSpecificEvents: [
       {
         category: 'visa_immigration',
@@ -1437,7 +1565,8 @@ ${part3}
       summary,
       confidence: computedConfidence,
       microWindow: peakDateRange,
-      supplementaryScenariosCount: supplementaryScenarios.length
+      supplementaryScenariosCount: supplementaryScenarios.length,
+      correlatedGateEventsCount: context.eventManufacturingSuperset?.candidateOrSynthesizedEvents.length || 0
     }
   };
 }
@@ -1718,14 +1847,88 @@ function extractFieldsViaRegex(raw: string, fallback: import('./types').LLMThree
     }
   }
 
+  const synNoteMatch = raw.match(/"supersetSynthesisNote"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (synNoteMatch && synNoteMatch[1]) {
+    result.supersetSynthesisNote = unescapeJsonString(synNoteMatch[1]);
+  }
+
+  const corrEventsMatch = raw.match(/"correlatedGateEvents"\s*:\s*(\[[\s\S]*?\])/);
+  if (corrEventsMatch && corrEventsMatch[1]) {
+    try {
+      result.correlatedGateEvents = JSON.parse(corrEventsMatch[1]);
+    } catch {
+      try {
+        const repaired = repairTruncatedJson(corrEventsMatch[1]);
+        result.correlatedGateEvents = JSON.parse(repaired);
+      } catch {}
+    }
+  }
+
   return {
     ...fallback,
     ...result,
     part1_probabilityAndScope: sanitizeCleanField(result.part1_probabilityAndScope, fallback.part1_probabilityAndScope),
     part2_financialAndResources: sanitizeCleanField(result.part2_financialAndResources, fallback.part2_financialAndResources),
     part3_microTimingWindow: sanitizeCleanField(result.part3_microTimingWindow, fallback.part3_microTimingWindow),
-    summarySentence: sanitizeCleanField(result.summarySentence, fallback.summarySentence)
+    summarySentence: sanitizeCleanField(result.summarySentence, fallback.summarySentence),
+    supersetSynthesisNote: result.supersetSynthesisNote
+      ? sanitizeCleanField(result.supersetSynthesisNote, fallback.supersetSynthesisNote || '')
+      : fallback.supersetSynthesisNote,
+    correlatedGateEvents: normalizeCorrelatedGateEvents(result.correlatedGateEvents, fallback.correlatedGateEvents),
+    predictedSpecificEvents: normalizePredictedSpecificEvents(result.predictedSpecificEvents, fallback.predictedSpecificEvents)
   };
+}
+
+function normalizeCorrelatedGateEvents(
+  parsedList: any,
+  fallbackList?: CorrelatedManufacturedEvent[]
+): CorrelatedManufacturedEvent[] | undefined {
+  if (!Array.isArray(parsedList) || parsedList.length === 0) {
+    return fallbackList;
+  }
+  const normalized: CorrelatedManufacturedEvent[] = parsedList
+    .filter((item: any) => item && typeof item === 'object' && (item.title || item.narrative))
+    .map((item: any, idx: number) => {
+      const rawScore = Number(item.probabilityScore ?? item.probability ?? item.score ?? 65);
+      const prob = Math.max(
+        5,
+        Math.min(99, Math.round(rawScore <= 1 && rawScore > 0 ? rawScore * 100 : isNaN(rawScore) ? 65 : rawScore))
+      );
+      const hasMoon =
+        typeof item.hasMoonSupport === 'boolean'
+          ? item.hasMoonSupport
+          : Boolean(item.moonWindowDates && String(item.moonWindowDates).trim().length > 0);
+      const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' =
+        item.latencyStatus === 'dormant_latent' || !hasMoon ? 'dormant_latent' : 'acute_moon_triggered';
+      return {
+        id: String(item.id || `superset-evt-${idx + 1}`),
+        title: String(item.title || `Correlated Event ${idx + 1}`),
+        portfolio: String(item.portfolio || 'Life'),
+        probabilityScore: prob,
+        isHighProbability: typeof item.isHighProbability === 'boolean' ? item.isHighProbability : prob >= 60,
+        latencyStatus,
+        hasMoonSupport: hasMoon,
+        moonWindowDates: item.moonWindowDates ? String(item.moonWindowDates) : undefined,
+        correlatedHousesAndLordships: String(item.correlatedHousesAndLordships || item.housesAndLordships || 'Correlated Bhava Lordship'),
+        nakshatraGateTrigger: String(item.nakshatraGateTrigger || item.gateTrigger || 'Active Nakshatra Entry Gate'),
+        narrative: String(item.narrative || item.description || ''),
+        source: 'superset_major_llm' as const
+      };
+    })
+    .sort((a, b) => b.probabilityScore - a.probabilityScore);
+
+  return normalized.length > 0 ? normalized : fallbackList;
+}
+
+function normalizePredictedSpecificEvents(
+  parsedList: any,
+  fallbackList?: PredictedSpecificEvent[]
+): PredictedSpecificEvent[] | undefined {
+  if (!Array.isArray(parsedList) || parsedList.length === 0) {
+    return fallbackList;
+  }
+  const valid = parsedList.filter((item: any) => item && typeof item === 'object' && (item.eventTitle || item.concreteImplication));
+  return valid.length > 0 ? valid : fallbackList;
 }
 
 function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThreePartNarrative): any {
@@ -1742,6 +1945,7 @@ function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThree
   const p2 = root.part2_financialAndResources ?? root.part2 ?? root.financial_and_resources ?? root.financialAndResources ?? root['Part 2: Financial & Resource Sources'] ?? root['Part 2'];
   const p3 = root.part3_microTimingWindow ?? root.part3 ?? root.micro_timing_window ?? root.microTimingWindow ?? root['Part 3: Micro-Timing Window'] ?? root['Part 3'];
   const sum = root.summarySentence ?? root.summary ?? root.overview;
+  const supersetNote = root.supersetSynthesisNote ?? root.superset_synthesis_note;
 
   return {
     ...fallback,
@@ -1749,7 +1953,12 @@ function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThree
     part1_probabilityAndScope: sanitizeCleanField(p1, fallback.part1_probabilityAndScope),
     part2_financialAndResources: sanitizeCleanField(p2, fallback.part2_financialAndResources),
     part3_microTimingWindow: sanitizeCleanField(p3, fallback.part3_microTimingWindow),
-    summarySentence: sanitizeCleanField(sum, fallback.summarySentence)
+    summarySentence: sanitizeCleanField(sum, fallback.summarySentence),
+    supersetSynthesisNote: supersetNote
+      ? sanitizeCleanField(supersetNote, fallback.supersetSynthesisNote || '')
+      : fallback.supersetSynthesisNote,
+    correlatedGateEvents: normalizeCorrelatedGateEvents(root.correlatedGateEvents, fallback.correlatedGateEvents),
+    predictedSpecificEvents: normalizePredictedSpecificEvents(root.predictedSpecificEvents, fallback.predictedSpecificEvents)
   };
 }
 
@@ -1888,6 +2097,9 @@ export class QwenLocalAdapter implements ILLMAdapter {
           peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
           natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
           supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
+          predictedSpecificEvents: normalizePredictedSpecificEvents(parsed.predictedSpecificEvents, fallback.predictedSpecificEvents),
+          supersetSynthesisNote: parsed.supersetSynthesisNote || fallback.supersetSynthesisNote,
+          correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
           rawMarkdown: parsed.rawMarkdown || parsed.part1_probabilityAndScope,
           providerUsed: 'local_qwen',
           executionTimeMs: Date.now() - startMs,
@@ -2049,6 +2261,9 @@ ${parsed.part3_microTimingWindow}
           peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
           natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
           supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
+          predictedSpecificEvents: normalizePredictedSpecificEvents(parsed.predictedSpecificEvents, fallback.predictedSpecificEvents),
+          supersetSynthesisNote: parsed.supersetSynthesisNote || fallback.supersetSynthesisNote,
+          correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
           rawMarkdown,
           providerUsed: 'gemini_pro',
           executionTimeMs: Date.now() - startMs,
@@ -2201,6 +2416,9 @@ ${parsed.part3_microTimingWindow}
         peakDateRange: parsed.peakDateRange || fallback.peakDateRange,
         natalPromiseVsTransitDelivery: parsed.natalPromiseVsTransitDelivery || fallback.natalPromiseVsTransitDelivery,
         supplementaryScenarios: mergeScenarios(parsed.supplementaryScenarios, fallback.supplementaryScenarios || []),
+        predictedSpecificEvents: normalizePredictedSpecificEvents(parsed.predictedSpecificEvents, fallback.predictedSpecificEvents),
+        supersetSynthesisNote: parsed.supersetSynthesisNote || fallback.supersetSynthesisNote,
+        correlatedGateEvents: normalizeCorrelatedGateEvents(parsed.correlatedGateEvents, fallback.correlatedGateEvents),
         rawMarkdown,
         providerUsed: providerId,
         executionTimeMs: Date.now() - startMs,

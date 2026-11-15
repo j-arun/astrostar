@@ -47,9 +47,10 @@ import {
 } from '../data/parasharaCalculations';
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
-import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext } from '../services/llm/types';
+import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
+import { buildEventManufacturingSnapshot } from '../services/eventManufacturingBuilder';
 
 export function getSignIndexFromName(signName: string, fallback = 9): number {
   if (!signName) return fallback;
@@ -563,6 +564,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [inspectorHouseContext, setInspectorHouseContext] = useState<VedicHouseContext | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
   const [reportAutoRunTimestamp, setReportAutoRunTimestamp] = useState<number | undefined>(undefined);
+  const [liveEventEngineSuperset, setLiveEventEngineSuperset] = useState<EventManufacturingSupersetPayload | null>(null);
 
   const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
@@ -1048,7 +1050,39 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       geminiModel: getPreferredGeminiModel(),
       anthropicApiKey: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined,
       anthropicModel: (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5',
-      preferredLlmProvider: overrideProvider || selectedLlmProvider
+      preferredLlmProvider: overrideProvider || selectedLlmProvider,
+      eventManufacturingSuperset: (() => {
+        const matchesLive = Boolean(
+          liveEventEngineSuperset &&
+          toCleanEnglishPlanet(activeDashaHierarchy.mahadasha) === liveEventEngineSuperset.selectedMd &&
+          toCleanEnglishPlanet(activeDashaHierarchy.antardasha) === liveEventEngineSuperset.selectedAd
+        );
+        const gatePerspRecord = matchesLive && liveEventEngineSuperset
+          ? liveEventEngineSuperset.gates.reduce((acc, g, idx) => {
+              acc[idx] = g.perspective;
+              return acc;
+            }, {} as Record<number, 'lagna' | 'rashi' | 'combined'>)
+          : undefined;
+        return buildEventManufacturingSnapshot({
+          selectedMonth,
+          selectedYear,
+          natalLagnaIdx,
+          natalRashiIdx,
+          activeDashaHierarchy,
+          flattenedD1,
+          transitPlacements,
+          monthlyMoonSpans,
+          monthlyGrahaSpans,
+          overrideHandKey: matchesLive ? liveEventEngineSuperset?.deliveringHandKey : undefined,
+          gatePerspectives: gatePerspRecord,
+          preSynthesizedEvents:
+            matchesLive && liveEventEngineSuperset?.usedLiveEventEngineEvents
+              ? liveEventEngineSuperset.candidateOrSynthesizedEvents
+              : undefined,
+          preSynthesizedModel: matchesLive ? liveEventEngineSuperset?.eventEngineModelUsed : undefined,
+          vedicSpecialEvents
+        });
+      })()
     };
 
     setInspectorHouseContext(ctx);
@@ -2444,6 +2478,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           monthlyGrahaSpans={monthlyGrahaSpans}
           geminiApiKey={geminiKeyInput}
           anthropicApiKey={(typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : '') || undefined}
+          onSnapshotChange={setLiveEventEngineSuperset}
         />
       )}
         </>

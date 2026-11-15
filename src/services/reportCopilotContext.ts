@@ -111,6 +111,20 @@ export function buildDynamicQuestionCards(
     }
   }
 
+  // Add top acute Moon-triggered Correlated Gate Event card if available
+  const corrEvents = narrative?.correlatedGateEvents || context?.eventManufacturingSuperset?.candidateOrSynthesizedEvents || [];
+  if (corrEvents.length > 0) {
+    const topAcute = corrEvents.find(e => e.latencyStatus === 'acute_moon_triggered') || corrEvents[0];
+    cards.push({
+      id: `corr_${topAcute.portfolio.toLowerCase()}`,
+      category: 'event',
+      badge: `${topAcute.portfolio} • ${topAcute.probabilityScore}% (${topAcute.moonWindowDates || 'Gate Trigger'})`,
+      title: topAcute.title,
+      promptTemplate: `The unified report links "${topAcute.title}" (${topAcute.portfolio}, ${topAcute.probabilityScore}%) to ${topAcute.correlatedHousesAndLordships} and ${topAcute.nakshatraGateTrigger}. How will this manifest for my specific situation: `,
+      reasoningTag: truncateText(topAcute.narrative, 90)
+    });
+  }
+
   // Add top specific event from predictedSpecificEvents
   if (events.length > 0) {
     const sortedEvents = [...events].sort((a, b) => (b.likelihoodScore || 0) - (a.likelihoodScore || 0));
@@ -306,6 +320,52 @@ export function buildCompactReportContextPack(
         lines.push(`• ${ev.eventTitle} [${ev.categoryLabel} | ${ev.likelihood} (${ev.likelihoodScore}%) | Window: ${ev.projectedWindow}]: ${truncateText(ev.concreteImplication, 260)} (Trigger: ${truncateText(ev.astrologicalTrigger, 200)})`);
       });
     }
+
+    if (narrative.supersetSynthesisNote) {
+      lines.push(`\n--- Unified House-Lordship <-> Nakshatra Gate Synthesis Note ---`);
+      lines.push(narrative.supersetSynthesisNote);
+    }
+
+    if (narrative.correlatedGateEvents && narrative.correlatedGateEvents.length > 0) {
+      lines.push('\n=== [UNIFIED CORRELATED DOMAIN EVENTS (ALL 7 PORTFOLIOS)] ===');
+      narrative.correlatedGateEvents.forEach((ev, idx) => {
+        lines.push(
+          `${idx + 1}. [${ev.portfolio}] ${ev.title} (${ev.probabilityScore}% | ${
+            ev.latencyStatus === 'acute_moon_triggered' ? 'Acute Moon Ignition' : 'Dormant/Latent'
+          }${ev.moonWindowDates ? ` | Moon: ${ev.moonWindowDates}` : ''}) — Houses/Lordships: ${ev.correlatedHousesAndLordships} — Gate: ${ev.nakshatraGateTrigger} — Why: ${truncateText(ev.narrative, 220)}`
+        );
+      });
+    }
+  }
+
+  // 4B. Superset Event Manufacturing Chamber, 3 Nakshatra Gates & 12-House Correlation Map
+  if (context?.eventManufacturingSuperset) {
+    const ss = context.eventManufacturingSuperset;
+    const ad = ss.adChamberSummary;
+    lines.push('\n=== [AD CHAMBER & 3 NAKSHATRA GATES] ===');
+    lines.push(
+      `Dasha Channel: MD ${ss.selectedMd} -> AD ${ad.adCleanName} (Natal ${ad.adNatalRashiName}, Lagna H${ad.adNatalHouseFromLagna}/Moon H${ad.adNatalHouseFromRashi}, ${ad.polarityLabel}, Score ${ad.netScore}) -> Delivering Hand: ${ss.deliveringHandClean} | Peak Venting: ${ad.peakVentingGate}`
+    );
+    lines.push(`AD Atmosphere: ${truncateText(ad.atmosphereNarrative, 320)}`);
+    ss.gates.forEach(g => {
+      const grahas = g.activeGrahasInGate.length > 0
+        ? g.activeGrahasInGate.map(ag => `${ag.name}${ag.passageWindow ? ` (${ag.passageWindow})` : ''}`).join(', ')
+        : 'Empty (Moon pulse only)';
+      lines.push(
+        `• Gate ${g.gateIndex}: ${g.nakshatraName} in ${g.rashiName} (Lagna H${g.houseFromLagna} / Moon H${g.houseFromRashi}, Persp: ${g.perspective}) | Moon: ${g.moonIngressWindow || 'N/A'} | Anatomy: ${g.anatomicalSeat} | Grahas: ${grahas}`
+      );
+    });
+
+    lines.push('\n=== [HOUSE/LORDSHIP <-> NAKSHATRA GATE CORRELATION MAP] ===');
+    ss.houseLordshipToGateLinks.forEach(l => {
+      lines.push(
+        `• Lagna H${l.houseFromLagna}/Moon H${l.houseFromMoon} (${l.rashiName}, Lord: ${l.rashiLord}) [${l.portfolioLabel}] | Natal: ${
+          l.natalOccupants.join(', ') || '-'
+        } | Transit: ${l.transitOccupants.join(', ') || '-'} | AD Ruled: ${l.isActivatedByAdLordship ? 'YES' : 'No'} | Gate: ${
+          l.matchingGateNakshatra || '-'
+        } | Moon: ${l.moonIgnitionDates || '-'}`
+      );
+    });
   }
 
   // 5. Current Gochara & Question-Matched Transit / Moon Windows

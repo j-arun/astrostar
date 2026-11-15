@@ -693,45 +693,36 @@ export function analyzeVedicWindowEvents(params: {
       ? `${oneLinerParts.join(' | ')}.`
       : `Standard planetary flow across ${startDateStr} to ${endDateStr} with no same-sign stations, mutual Parivartana sign exchanges, or debilitation windows.`;
 
-  // 5. Build Structured Prompt Block for LLM
+  // 5. Build Compact Structured Prompt Block for LLM (Zero Decorations, Zero Data Loss)
   const lines: string[] = [];
-  lines.push(`### CRITICAL TRANSIT PHENOMENA: SAME-SIGN MOTION STATIONS, PARIVARTANA YOGAS & NEECHA BHANGA (${startDateStr} to ${endDateStr})`);
-  lines.push(`[MANDATORY EVALUATION RULE: You MUST explicitly analyze every retrograde↔direct station inside the same house, every Parivartana mutual exchange (at both Bhava and Sign-Lord levels), and every Debilitation/Neecha Bhanga reversal listed below with exact date windows and concrete likely events.]`);
-  lines.push(`\n**CONSOLIDATED WINDOW ONE-LINER:** ${consolidatedOneLiner}`);
+  lines.push(`## SPECIAL TRANSIT PHENOMENA (${startDateStr}..${endDateStr})`);
+  lines.push(`ONE_LINER: ${consolidatedOneLiner}`);
 
   if (sameSignStations.length > 0) {
-    lines.push(`\n#### A. Retrograde ↔ Direct Motion Shifts Inside Same Sign/House (${sameSignStations.length}):`);
+    lines.push(`STATIONS(${sameSignStations.length}):`);
     sameSignStations.forEach(s => {
-      lines.push(`  • ${s.summary}`);
-      lines.push(`    -> Likely Event Pivot: ${s.eventImpact}`);
+      lines.push(`- ${s.summary} | Impact: ${s.eventImpact}`);
     });
   } else {
-    lines.push(`\n#### A. Retrograde ↔ Direct Motion Shifts Inside Same Sign: None during ${startDateStr} to ${endDateStr}.`);
+    lines.push(`STATIONS(0): None`);
   }
 
   if (parivartanaYogas.length > 0) {
-    lines.push(`\n#### B. Parivartana Yoga (Sign-Lord & Bhava-Level Mutual Exchanges) (${parivartanaYogas.length}):`);
+    lines.push(`PARIVARTANA(${parivartanaYogas.length}):`);
     parivartanaYogas.forEach(p => {
-      lines.push(`  • **${p.grahaA} ↔ ${p.grahaB} ${p.yogaClass}** [${p.startDate} → ${p.endDate}]`);
-      lines.push(`    - ${p.bhavaExchangeSummary}`);
-      lines.push(`    - Sign-Lord Exchange: ${p.lordshipSummary}`);
-      lines.push(`    - Predicted Manifestation: ${p.predictedEvents}`);
+      lines.push(`- ${p.grahaA}<->${p.grahaB} ${p.yogaClass} [${p.startDate}..${p.endDate}] | ${p.bhavaExchangeSummary} | ${p.lordshipSummary} | Event: ${p.predictedEvents}`);
     });
   } else {
-    lines.push(`\n#### B. Parivartana Yoga (Mutual Sign/Bhava Exchanges): None active during ${startDateStr} to ${endDateStr}.`);
+    lines.push(`PARIVARTANA(0): None`);
   }
 
   if (debilitationEvents.length > 0) {
-    lines.push(`\n#### C. Debilitation (Neecha) & Neecha Bhanga Cancellation Windows (${debilitationEvents.length}):`);
+    lines.push(`NEECHA_BHANGA(${debilitationEvents.length}):`);
     debilitationEvents.forEach(d => {
-      lines.push(`  • **${d.summary}**`);
-      if (d.cancellationReasons.length > 0) {
-        lines.push(`    - Cancellation Factors: ${d.cancellationReasons.join(' | ')}`);
-      }
-      lines.push(`    - Predicted Manifestation: ${d.predictedEvents}`);
+      lines.push(`- ${d.summary}${d.cancellationReasons.length > 0 ? ` | Factors: ${d.cancellationReasons.join('; ')}` : ''} | Event: ${d.predictedEvents}`);
     });
   } else {
-    lines.push(`\n#### C. Debilitation (Neecha) & Neecha Bhanga Windows: None active during ${startDateStr} to ${endDateStr}.`);
+    lines.push(`NEECHA_BHANGA(0): None`);
   }
 
   return {

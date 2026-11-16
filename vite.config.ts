@@ -2567,7 +2567,10 @@ function localBatchPlugin(env: Record<string, string>): Plugin {
             }
           );
 
-          const htmlContent = htmlMod.buildVedicHtmlContent(activeContextPayload, narrative);
+          const htmlContent = htmlMod.buildVedicHtmlContent(activeContextPayload, narrative, {
+            kvOverrides: effectiveKvCfg?.overrides,
+            kvConfigSnapshot: effectiveKvCfg
+          });
 
           const savedAt = new Date();
           const yyyyMmDd = `${savedAt.getFullYear()}-${String(savedAt.getMonth() + 1).padStart(2, '0')}-${String(savedAt.getDate()).padStart(2, '0')}`;

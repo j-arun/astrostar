@@ -383,7 +383,9 @@ export interface VedicHouseContext {
     startDay: number;
     endDay: number;
     isRetrograde: boolean;
+    motionType?: 'Normal' | 'Vakra' | 'Adisara';
   }>;
+  priorMonthTailSummary?: string[];
   vedicSpecialEvents?: VedicWindowAnalysis;
   eventManufacturingSuperset?: EventManufacturingSupersetPayload;
   useKvCache?: boolean;

@@ -582,16 +582,49 @@ export function buildEphemeralsOnlyPrompt(
     .map(d => `${d.role}[${cleanPlanet(d.lordName)}]: H${d.natalHouseOccupied}(${d.natalDignity}) | ${cleanInlineText(d.ownedHousesTitle)}`)
     .join('\n');
 
-  // 3. Ingresses & Motion Phases
-  const ingressLines = (context.monthlyIngressEvents || []).slice(0, 6).map(e => `- ${cleanInlineText(e)}`).join('\n');
-  const motionSpans = (context.monthlyMotionSpans || []).slice(0, 8)
-    .map(sp => `${cleanPlanet(sp.grahaKey)}:${cleanSign(sp.signName)} D${sp.startDay}-${sp.endDay}[${sp.isRetrograde ? 'VAKRA' : 'DIR'}]`)
+  // 3. Ingresses, Motion Phases & Prior 3-Day Boundary Lookback (Never drop Jupiter/Saturn/Mars!)
+  const priorTailBlock = (context.priorMonthTailSummary && context.priorMonthTailSummary.length > 0)
+    ? `PRIOR_3D_BOUNDARY:\n${context.priorMonthTailSummary.map(l => `- ${cleanInlineText(l)}`).join('\n')}`
+    : '';
+  const ingressLines = (context.monthlyIngressEvents || []).slice(0, 18).map(e => `- ${cleanInlineText(e)}`).join('\n');
+  const motionSpans = (context.monthlyMotionSpans || []).slice(0, 14)
+    .map(sp => {
+      const mTag = sp.motionType === 'Adisara' ? 'ADISARA' : sp.isRetrograde ? 'VAKRA' : 'DIR';
+      return `${cleanPlanet(sp.grahaKey)}:${cleanSign(sp.signName)} D${sp.startDay}-${sp.endDay}[${mTag}]`;
+    })
     .join(' | ');
 
-  // 4. Special Window Phenomena (Parivartana / Neecha Bhanga / Stations)
-  const specialBlock = context.vedicSpecialEvents?.promptMarkdownBlock
-    ? cleanInlineText(context.vedicSpecialEvents.promptMarkdownBlock).slice(0, 1400)
-    : (context.vedicSpecialEvents?.consolidatedOneLiner ? `SPECIAL: ${cleanInlineText(context.vedicSpecialEvents.consolidatedOneLiner)}` : '');
+  // 4. Special Window Phenomena (Boundary Ingresses / Adisara / Stations / Parivartana / Neecha Bhanga — Compact Lossless Packing)
+  const buildCompactSpecialBlock = (): string => {
+    const vse = context.vedicSpecialEvents;
+    if (!vse) return '';
+    const spLines: string[] = [];
+    spLines.push(`## SPECIAL TRANSIT PHENOMENA (${vse.startDate}..${vse.endDate}${vse.priorTailStartDate ? ` + Tail ${vse.priorTailStartDate}` : ''})`);
+    if (vse.boundaryIngresses && vse.boundaryIngresses.length > 0) {
+      for (const ing of vse.boundaryIngresses) {
+        spLines.push(`- INGRESS${ing.isPriorMonthBoundary ? '[PRIOR_BOUNDARY]' : ''}: ${cleanPlanet(ing.grahaKey)} ${cleanSign(ing.fromSignName)}->${cleanSign(ing.toSignName)} on ${ing.ingressDate} (L${ing.toHouseFromLagna}/M${ing.toHouseFromMoon}) [${ing.motionType.toUpperCase()}]`);
+      }
+    }
+    if (vse.adisaraWindows && vse.adisaraWindows.length > 0) {
+      for (const aw of vse.adisaraWindows) {
+        spLines.push(`- ADISARA_FAST: ${cleanPlanet(aw.grahaKey)} in ${aw.signNames.map(cleanSign).join('->')} [${aw.startDate}..${aw.endDate}] (L${aw.houseFromLagna}/M${aw.houseFromMoon})`);
+      }
+    }
+    for (const s of vse.sameSignStations || []) {
+      spLines.push(`- STATION: ${cleanPlanet(s.grahaKey)} ${s.turnType} in ${cleanSign(s.signName)} on ${s.stationDate} (L${s.houseFromLagna}/M${s.houseFromMoon})`);
+    }
+    for (const p of vse.parivartanaYogas || []) {
+      spLines.push(`- PARIVARTANA: ${cleanPlanet(p.grahaA)}<->${cleanPlanet(p.grahaB)} (${cleanSign(p.signAName)}/M${p.moonHouseA} <-> ${cleanSign(p.signBName)}/M${p.moonHouseB}, L${p.lagnaHouseA}<->L${p.lagnaHouseB}) [${p.startDate}..${p.endDate}]`);
+    }
+    for (const d of vse.debilitationEvents || []) {
+      spLines.push(`- ${d.neechaBhangaStatus}: ${cleanPlanet(d.grahaKey)} in ${cleanSign(d.signName)} [${d.startDate}..${d.endDate}] (L${d.houseFromLagna}/M${d.houseFromMoon}, ${d.motionState.includes('Retrograde') ? 'Vakra' : 'Direct'})`);
+    }
+    if (spLines.length <= 1 && vse.consolidatedOneLiner) {
+      spLines.push(`ONE_LINER: ${cleanInlineText(vse.consolidatedOneLiner)}`);
+    }
+    return spLines.join('\n').slice(0, 2200);
+  };
+  const specialBlock = buildCompactSpecialBlock();
 
   // 5. Compact Tara Bala & Chandra Bala highlights
   const taraLine = (context.taraBalaTransitPlanets || [])
@@ -626,11 +659,15 @@ export function buildEphemeralsOnlyPrompt(
 
   const queryText = context.userQuery || `Synthesize complete Vedic evaluation & correlated events for ${periodLabel}.`;
 
+  const ingressSection = (priorTailBlock || ingressLines || motionSpans)
+    ? `## INGRESS, PRIOR-3D BOUNDARY & MOTION\n${[priorTailBlock, ingressLines, motionSpans ? `Phases: ${motionSpans}` : ''].filter(Boolean).join('\n')}`
+    : '';
+
   const candidateSections = [
     horizonLine,
     `## DASHA (${context.activeDasha.startDate}..${context.activeDasha.endDate})\n${dashaSummary}${dashaDossier ? `\n${dashaDossier}` : ''}`,
     `## GOCHARA EPHEMERIS (${periodLabel})\n${transitsBlock}`,
-    (ingressLines || motionSpans) ? `## INGRESS & MOTION\n${ingressLines}${motionSpans ? `\nPhases: ${motionSpans}` : ''}` : '',
+    ingressSection,
     specialBlock,
     taraLine ? `## TARA_BALA: ${taraLine}` : '',
     chandraLine ? `## CHANDRA_BALA: ${chandraLine}` : '',
@@ -641,14 +678,16 @@ export function buildEphemeralsOnlyPrompt(
   let combined = candidateSections.join('\n\n');
   const maxChars = Math.max(2000, maxTokenBudget * 4 - 200);
   if (combined.length > maxChars) {
-    // Shed lower-priority bulk while keeping Horizon, Dasha, Gochara, Special, and Inquiry 100% intact
+    // Shed lower-priority bulk while keeping Horizon, Dasha, Gochara, Ingress/Prior-Boundary, Special, and Inquiry 100% intact
+    const compactIngress = [priorTailBlock, ingressLines].filter(Boolean).join('\n').slice(0, 1400);
     const prioritySections = [
       horizonLine,
       `## DASHA (${context.activeDasha.startDate}..${context.activeDasha.endDate})\n${dashaSummary}`,
       `## GOCHARA EPHEMERIS (${periodLabel})\n${transitsBlock}`,
+      compactIngress ? `## INGRESS & PRIOR-3D BOUNDARY\n${compactIngress}` : '',
       specialBlock,
-      supersetCompact ? `## SUPERSET_GATES\n${supersetCompact.slice(0, 1400)}` : '',
-      chandraLine ? `## CHANDRA_BALA: ${chandraLine.slice(0, 700)}` : '',
+      supersetCompact ? `## SUPERSET_GATES\n${supersetCompact.slice(0, 1000)}` : '',
+      chandraLine ? `## CHANDRA_BALA: ${chandraLine.slice(0, 500)}` : '',
       `## INQUIRY\n"${queryText}"`
     ].filter(Boolean);
     combined = prioritySections.join('\n\n').slice(0, maxChars);

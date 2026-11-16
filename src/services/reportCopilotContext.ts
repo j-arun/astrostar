@@ -260,6 +260,16 @@ export function buildCompactReportContextPack(
     const vse = context.vedicSpecialEvents;
     lines.push('\n=== 3. DETERMINISTIC SPECIAL VEDIC EVENTS (PARIVARTANA, NEECHA BHANGA, RETROGRADE STATIONS) ===');
     lines.push(`Consolidated One-Liner: ${vse.consolidatedOneLiner}`);
+    if (vse.boundaryIngresses && vse.boundaryIngresses.length > 0) {
+      vse.boundaryIngresses.forEach(ing => {
+        lines.push(`- [SIGN INGRESS${ing.isPriorMonthBoundary ? ' / PRIOR BOUNDARY' : ''}] ${ing.summary} | Impact: ${ing.eventImpact}`);
+      });
+    }
+    if (vse.adisaraWindows && vse.adisaraWindows.length > 0) {
+      vse.adisaraWindows.forEach(aw => {
+        lines.push(`- [ADISARA FAST MOTION] ${aw.summary} | Impact: ${aw.eventImpact}`);
+      });
+    }
     if (vse.parivartanaYogas.length > 0) {
       vse.parivartanaYogas.forEach(p => {
         lines.push(`- [PARIVARTANA ${p.kind}] ${p.grahaA} (${p.signAName}, H${p.lagnaHouseA}) <-> ${p.grahaB} (${p.signBName}, H${p.lagnaHouseB}) (${p.startDate}..${p.endDate}, ${p.yogaClass}): ${p.bhavaExchangeSummary} | ${p.lordshipSummary} | Likely: ${p.predictedEvents}`);

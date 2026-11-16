@@ -586,15 +586,19 @@ function buildVedicPromptCompact(
         ? context.transitOccupants.map(t => `- ${toCleanEnglishPlanet(t.graha_key)}:${cleanTargetSign} ${formatDegreeCompact(t.degree_sputa)} ${formatNakshatraCompact(t.nakshatra_name, t.pada)}`).join('\n')
         : 'Computed per ephemeris.');
 
-  // 3. Fast Planet Ingress & Intra-Month Motion Events
+  // 3. Fast Planet Ingress, Prior 3-Day Boundary & Intra-Month Motion Events
+  const priorTailSection = (context.priorMonthTailSummary && context.priorMonthTailSummary.length > 0)
+    ? `Prior-3-Day Boundary Carry-Over (leading into Day 1):\n${context.priorMonthTailSummary.map(l => `- ${cleanEnglishSentence(l)}`).join('\n')}\n`
+    : '';
   const ingressTable = (context.monthlyIngressEvents && context.monthlyIngressEvents.length > 0)
     ? context.monthlyIngressEvents.map(e => `- ${cleanEnglishSentence(e)}`).join('\n')
     : '- Major slow planets maintain sign stability; fast planets transition per ephemeris.';
 
   const monthlyMotionSection = (context.monthlyMotionSpans && context.monthlyMotionSpans.length > 0)
-    ? `\nMotionPhases: ` + context.monthlyMotionSpans.map(sp =>
-        `${toCleanEnglishPlanet(sp.grahaKey)}:${toCleanEnglishSign(sp.signName)} D${sp.startDay}-${sp.endDay}[${sp.isRetrograde ? 'VAKRA' : 'DIRECT'}]`
-      ).join(' | ')
+    ? `\nMotionPhases: ` + context.monthlyMotionSpans.map(sp => {
+        const mLabel = sp.motionType === 'Adisara' ? 'ADISARA' : sp.isRetrograde ? 'VAKRA' : 'DIRECT';
+        return `${toCleanEnglishPlanet(sp.grahaKey)}:${toCleanEnglishSign(sp.signName)} D${sp.startDay}-${sp.endDay}[${mLabel}]`;
+      }).join(' | ')
     : '';
 
   const multiYearMajorTransitsSection = (context.isMultiYearPrediction && context.multiYearMajorTransits && context.multiYearMajorTransits.length > 0)
@@ -739,8 +743,8 @@ ${taraBalaTable}
 ## CHANDRA BALA & DAILY PROGRESSION
 ${chandraBalaTimelineStr}${multiYearMoonTransitsSection}
 ## SAV: ${ashtakavargaStr}
-## INGRESS & MOTION PHASES (${periodLabel})
-${ingressTable}${monthlyMotionSection}${multiYearMajorTransitsSection}${specialEventsSection}
+## INGRESS, PRIOR-3D BOUNDARY & MOTION PHASES (${periodLabel})
+${priorTailSection}${ingressTable}${monthlyMotionSection}${multiYearMajorTransitsSection}${specialEventsSection}
 ## VIMSHOTTARI DASHA (PD:${context.activeDasha.startDate}..${context.activeDasha.endDate})
 ${dashaDelivery}
 ${dashaDossierStr}${multiYearDashaSection}
@@ -852,7 +856,7 @@ ${allTransitsTable}
 ### Vimshottari Dasha Hierarchy
 ${dashaDelivery}
 Active Window: ${context.activeDasha.startDate} to ${context.activeDasha.endDate}
-${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n` : ''}${buildEventManufacturingSupersetSection(context, true)}
+${context.priorMonthTailSummary && context.priorMonthTailSummary.length > 0 ? `\n### Prior 3-Day Boundary Ephemeris\n${context.priorMonthTailSummary.map(l => `- ${l}`).join('\n')}\n` : ''}${context.vedicSpecialEvents?.promptMarkdownBlock ? `\n${context.vedicSpecialEvents.promptMarkdownBlock}\n` : ''}${buildEventManufacturingSupersetSection(context, true)}
 ### User Inquiry
 "${context.userQuery || `Provide an astrological evaluation for ${monthName} ${context.selectedYear}`}"
 

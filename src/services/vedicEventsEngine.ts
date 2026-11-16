@@ -98,12 +98,43 @@ export interface DebilitationNeechaBhangaEvent {
   predictedEvents: string;
 }
 
+export interface SignIngressEvent {
+  grahaKey: string;
+  grahaName: string;
+  fromSignIndex: number;
+  fromSignName: string;
+  toSignIndex: number;
+  toSignName: string;
+  toHouseFromLagna: number;
+  toHouseFromMoon: number;
+  ingressDate: string;
+  isPriorMonthBoundary: boolean;
+  motionType: 'Normal' | 'Vakra' | 'Adisara';
+  summary: string;
+  eventImpact: string;
+}
+
+export interface AdisaraMotionEvent {
+  grahaKey: string;
+  grahaName: string;
+  signNames: string[];
+  startDate: string;
+  endDate: string;
+  houseFromLagna: number;
+  houseFromMoon: number;
+  summary: string;
+  eventImpact: string;
+}
+
 export interface VedicWindowAnalysis {
   startDate: string;
   endDate: string;
+  priorTailStartDate?: string;
   sameSignStations: SameSignMotionTransition[];
   parivartanaYogas: ParivartanaYogaEvent[];
   debilitationEvents: DebilitationNeechaBhangaEvent[];
+  boundaryIngresses: SignIngressEvent[];
+  adisaraWindows: AdisaraMotionEvent[];
   consolidatedOneLiner: string;
   possibleEventsSummary: string[];
   promptMarkdownBlock: string;
@@ -280,6 +311,7 @@ export function analyzeVedicWindowEvents(params: {
   natalRashiIdx: number;
   flattenedNatalD1?: Array<{ body_name: string; rashi_name: string }>;
   overrides?: Record<string, number>;
+  priorTailDays?: number;
 }): VedicWindowAnalysis {
   const {
     startDateStr,
@@ -287,7 +319,8 @@ export function analyzeVedicWindowEvents(params: {
     natalLagnaIdx,
     natalRashiIdx,
     flattenedNatalD1 = [],
-    overrides = {}
+    overrides = {},
+    priorTailDays
   } = params;
 
   const parseMiddayUtc = (ds: string) =>
@@ -303,6 +336,8 @@ export function analyzeVedicWindowEvents(params: {
       sameSignStations: [],
       parivartanaYogas: [],
       debilitationEvents: [],
+      boundaryIngresses: [],
+      adisaraWindows: [],
       consolidatedOneLiner: 'No valid date window specified.',
       possibleEventsSummary: [],
       promptMarkdownBlock: ''
@@ -313,9 +348,16 @@ export function analyzeVedicWindowEvents(params: {
   const totalDays = Math.max(1, Math.round((dEnd.getTime() - dStart.getTime()) / DAY_MS) + 1);
   // 1-day precision up to 420 days (~14 months), 2-day up to 1500 days (~4 years), 3-day beyond
   const stepDays = totalDays > 1500 ? 3 : (totalDays > 420 ? 2 : 1);
+  // Automatically look back 3 days into prior month for monthly/short windows so cross-month boundary ingresses (e.g., Oct 29-31 -> Nov 1) are never lost
+  const effectiveLookbackDays = typeof priorTailDays === 'number'
+    ? Math.max(0, priorTailDays)
+    : (totalDays <= 45 ? 3 : 0);
+  const dScanStart = new Date(dStart.getTime() - effectiveLookbackDays * DAY_MS);
+  const scanStartStr = dScanStart.toISOString().slice(0, 10);
 
   const taraGrahas = ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
   const sevenGrahas = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+  const allTrackedIngresses = ['Jupiter', 'Saturn', 'Mars', 'Sun', 'Mercury', 'Venus', 'Rahu', 'Ketu'];
   const parivartanaGrahas = ['Sun', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn']; // Exclude 2.25-day Moon noise from multi-week yoga alerts unless single-month
 
   // Map natal D1 planet positions for Neecha Bhanga & Transit-Natal Parivartana checks
@@ -327,13 +369,14 @@ export function analyzeVedicWindowEvents(params: {
   }
 
   const getDailySnapshot = (dt: Date) => {
-    const map: Record<string, { signIdx: number; isRetro: boolean; houseLagna: number; houseMoon: number }> = {};
-    for (const g of sevenGrahas) {
+    const map: Record<string, { signIdx: number; isRetro: boolean; motionType: 'Normal' | 'Vakra' | 'Adisara'; houseLagna: number; houseMoon: number }> = {};
+    for (const g of ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu']) {
       const ov = overrides[g];
       if (ov && ov >= 1 && ov <= 12) {
         map[g] = {
           signIdx: ov,
           isRetro: false,
+          motionType: 'Normal',
           houseLagna: getHouse(ov, natalLagnaIdx),
           houseMoon: getHouse(ov, natalRashiIdx)
         };
@@ -342,6 +385,7 @@ export function analyzeVedicWindowEvents(params: {
         map[g] = {
           signIdx: pos.transit_rashi_index,
           isRetro: pos.is_retrograde,
+          motionType: pos.motion_type || (pos.is_retrograde ? 'Vakra' : 'Normal'),
           houseLagna: pos.relative_to_natal_lagna.house_number,
           houseMoon: pos.relative_to_natal_rashi.house_number
         };
@@ -350,9 +394,9 @@ export function analyzeVedicWindowEvents(params: {
     return map;
   };
 
-  // Collect sampled days (always includes last day)
+  // Collect sampled days across [dScanStart .. dEnd] (always includes dStart and dEnd when stepDays > 1 or 1)
   const sampleDates: Date[] = [];
-  for (let ms = dStart.getTime(); ms <= dEnd.getTime(); ms += stepDays * DAY_MS) {
+  for (let ms = dScanStart.getTime(); ms <= dEnd.getTime(); ms += stepDays * DAY_MS) {
     sampleDates.push(new Date(ms));
   }
   const lastSampleStr = sampleDates[sampleDates.length - 1]?.toISOString().slice(0, 10);
@@ -361,13 +405,15 @@ export function analyzeVedicWindowEvents(params: {
     sampleDates.push(new Date(dEnd));
   }
 
-  const snapshots = sampleDates.map(dt => ({
+  const allSnapshots = sampleDates.map(dt => ({
     dateStr: dt.toISOString().slice(0, 10),
     dt,
     planets: getDailySnapshot(dt)
   }));
+  const dStartCanonStr = dStart.toISOString().slice(0, 10);
+  const snapshots = allSnapshots.filter(s => s.dateStr >= dStartCanonStr);
 
-  // 1. Detect Same-Sign Retrograde <-> Direct Stations
+  // 1. Detect Same-Sign Retrograde <-> Direct Stations (include prior-tail pivot if within lookback)
   const sameSignStations: SameSignMotionTransition[] = [];
   for (const g of taraGrahas) {
     interface PhaseSegment {
@@ -377,7 +423,7 @@ export function analyzeVedicWindowEvents(params: {
       endDate: string;
     }
     const phases: PhaseSegment[] = [];
-    for (const snap of snapshots) {
+    for (const snap of allSnapshots) {
       const st = snap.planets[g];
       const last = phases[phases.length - 1];
       if (!last || last.signIdx !== st.signIdx || last.isRetro !== st.isRetro) {
@@ -402,6 +448,7 @@ export function analyzeVedicWindowEvents(params: {
         const hLagna = getHouse(curr.signIdx, natalLagnaIdx);
         const hMoon = getHouse(curr.signIdx, natalRashiIdx);
         const gName = PLANET_DISPLAY[g] || g;
+        const isBoundary = curr.startDate < dStartCanonStr;
         sameSignStations.push({
           grahaKey: g,
           grahaName: gName,
@@ -413,11 +460,98 @@ export function analyzeVedicWindowEvents(params: {
           stationDate: curr.startDate,
           beforeRange: `${prev.startDate} to ${prev.endDate}`,
           afterRange: `${curr.startDate} to ${curr.endDate}`,
-          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${curr.startDate} (${prev.isRetro ? 'Retro' : 'Direct'} ${prev.startDate}→${prev.endDate}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${curr.startDate}→${curr.endDate})`,
+          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${curr.startDate}${isBoundary ? ' [Prior Boundary Carry-Over]' : ''} (${prev.isRetro ? 'Retro' : 'Direct'} ${prev.startDate}→${prev.endDate}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${curr.startDate}→${curr.endDate})`,
           eventImpact: buildStationForecast(g, turnType, signName, hMoon)
         });
       }
     }
+  }
+
+  // 1B. Detect Sign Ingresses across [dScanStart .. dEnd] (captures Oct 29-31 boundary transitions like Jupiter Katakam -> Simham as well as in-month ingresses)
+  const boundaryIngresses: SignIngressEvent[] = [];
+  for (const g of allTrackedIngresses) {
+    for (let sIdx = 1; sIdx < allSnapshots.length; sIdx++) {
+      const prevSnap = allSnapshots[sIdx - 1];
+      const currSnap = allSnapshots[sIdx];
+      const prevSt = prevSnap.planets[g];
+      const currSt = currSnap.planets[g];
+      if (!prevSt || !currSt || prevSt.signIdx === currSt.signIdx) continue;
+
+      const isPriorBoundary = currSnap.dateStr <= dStartCanonStr && prevSnap.dateStr < dStartCanonStr;
+      const fromSignName = getSignName(prevSt.signIdx);
+      const toSignName = getSignName(currSt.signIdx);
+      const motionType: 'Normal' | 'Vakra' | 'Adisara' =
+        currSt.motionType === 'Adisara' || prevSt.motionType === 'Adisara'
+          ? 'Adisara'
+          : currSt.isRetro
+          ? 'Vakra'
+          : 'Normal';
+      const gName = PLANET_DISPLAY[g] || g;
+      const motionTag = motionType === 'Adisara' ? ' [ADISARA / Accelerated Ingress]' : motionType === 'Vakra' ? ' [Vakra Ingress]' : '';
+      const boundaryNote = isPriorBoundary ? ` (Prior-Month Boundary → active at ${dStartCanonStr} start)` : '';
+      boundaryIngresses.push({
+        grahaKey: g,
+        grahaName: gName,
+        fromSignIndex: prevSt.signIdx,
+        fromSignName,
+        toSignIndex: currSt.signIdx,
+        toSignName,
+        toHouseFromLagna: currSt.houseLagna,
+        toHouseFromMoon: currSt.houseMoon,
+        ingressDate: currSnap.dateStr,
+        isPriorMonthBoundary: isPriorBoundary,
+        motionType,
+        summary: `${gName} shifts ${fromSignName} → ${toSignName} (H${currSt.houseLagna} Lagna / H${currSt.houseMoon} Moon) on ${currSnap.dateStr}${motionTag}${boundaryNote}`,
+        eventImpact: `${g} changing Rashi from ${fromSignName.split(' ')[0]} into ${toSignName.split(' ')[0]} (Lagna H${currSt.houseLagna} / Moon H${currSt.houseMoon})${motionType === 'Adisara' ? ' under accelerated Adisara velocity triggers rapid sign-shift adjustments, urgent decisions, and immediate reallocation of that house portfolio' : ' initiates a fresh planetary chapter for those houses'}.`
+      });
+    }
+  }
+
+  // 1C. Detect Adisara (Accelerated Motion) Windows for Jupiter & Saturn across [dScanStart .. dEnd]
+  const adisaraWindows: AdisaraMotionEvent[] = [];
+  for (const g of ['Jupiter', 'Saturn']) {
+    let activeStart = '';
+    let activeEnd = '';
+    const activeSigns = new Set<string>();
+    let latestHLagna = 1;
+    let latestHMoon = 1;
+
+    const flushAdisara = () => {
+      if (!activeStart || !activeEnd) return;
+      // Keep if active in target window OR touched the 3-day prior boundary leading into target window
+      if (activeEnd >= scanStartStr) {
+        const gName = PLANET_DISPLAY[g] || g;
+        const signArr = Array.from(activeSigns);
+        adisaraWindows.push({
+          grahaKey: g,
+          grahaName: gName,
+          signNames: signArr,
+          startDate: activeStart,
+          endDate: activeEnd,
+          houseFromLagna: latestHLagna,
+          houseFromMoon: latestHMoon,
+          summary: `${gName} in ADISARA (Accelerated Motion) across ${signArr.join(' → ')} (H${latestHLagna} Lagna / H${latestHMoon} Moon) [${activeStart} → ${activeEnd}]`,
+          eventImpact: `${g} moving at Adisara velocity across ${signArr.map(s => s.split(' ')[0]).join(' → ')} compresses long-term fruition into urgent, decisive action involving H${latestHLagna} (Lagna) and H${latestHMoon} (Moon).`
+        });
+      }
+      activeStart = '';
+      activeEnd = '';
+      activeSigns.clear();
+    };
+
+    for (const snap of allSnapshots) {
+      const st = snap.planets[g];
+      if (st && st.motionType === 'Adisara') {
+        if (!activeStart) activeStart = snap.dateStr;
+        activeEnd = snap.dateStr;
+        activeSigns.add(getSignName(st.signIdx));
+        latestHLagna = st.houseLagna;
+        latestHMoon = st.houseMoon;
+      } else {
+        flushAdisara();
+      }
+    }
+    flushAdisara();
   }
 
   // 2. Detect Transit-Transit Parivartana Yogas (Sign & Bhava Mutual Exchanges)
@@ -660,6 +794,31 @@ export function analyzeVedicWindowEvents(params: {
   const oneLinerParts: string[] = [];
   const possibleEventsSummary: string[] = [];
 
+  if (boundaryIngresses.length > 0) {
+    const prioritizedIngresses = [...boundaryIngresses].sort((a, b) => {
+      const slowOrder: Record<string, number> = { Jupiter: 0, Saturn: 1, Rahu: 2, Ketu: 3, Mars: 4, Sun: 5, Venus: 6, Mercury: 7 };
+      if (a.isPriorMonthBoundary !== b.isPriorMonthBoundary) return a.isPriorMonthBoundary ? -1 : 1;
+      return (slowOrder[a.grahaKey] ?? 9) - (slowOrder[b.grahaKey] ?? 9);
+    });
+    const ingBits = prioritizedIngresses.map(
+      ing => `${ing.grahaKey} ${ing.fromSignName.split(' ')[0]}→${ing.toSignName.split(' ')[0]} on ${ing.ingressDate}${ing.motionType === 'Adisara' ? ' [Adisara]' : ''}${ing.isPriorMonthBoundary ? ' (Boundary→Month Start)' : ''}`
+    );
+    oneLinerParts.push(`Ingresses: ${ingBits.join('; ')}`);
+    prioritizedIngresses.forEach(ing =>
+      possibleEventsSummary.push(`[Sign Ingress${ing.isPriorMonthBoundary ? ' — Prior Boundary Carry-Over' : ''} — ${ing.ingressDate}] ${ing.summary}. ${ing.eventImpact}`)
+    );
+  }
+
+  if (adisaraWindows.length > 0) {
+    const adiBits = adisaraWindows.map(
+      aw => `${aw.grahaKey} Adisara in ${aw.signNames.map(s => s.split(' ')[0]).join('→')} (${aw.startDate}→${aw.endDate})`
+    );
+    oneLinerParts.push(`Adisara: ${adiBits.join('; ')}`);
+    adisaraWindows.forEach(aw =>
+      possibleEventsSummary.push(`[Adisara Fast Motion — ${aw.startDate}→${aw.endDate}] ${aw.eventImpact}`)
+    );
+  }
+
   if (sameSignStations.length > 0) {
     const stationBits = sameSignStations.map(
       s => `${s.grahaKey} turns ${s.turnType === 'Retrograde -> Direct' ? 'Direct' : 'Retrograde'} in ${s.signName.split(' ')[0]} on ${s.stationDate}`
@@ -691,12 +850,29 @@ export function analyzeVedicWindowEvents(params: {
   const consolidatedOneLiner =
     oneLinerParts.length > 0
       ? `${oneLinerParts.join(' | ')}.`
-      : `Standard planetary flow across ${startDateStr} to ${endDateStr} with no same-sign stations, mutual Parivartana sign exchanges, or debilitation windows.`;
+      : `Standard planetary flow across ${startDateStr} to ${endDateStr} with no sign ingresses, same-sign stations, mutual Parivartana sign exchanges, or debilitation windows.`;
 
   // 5. Build Compact Structured Prompt Block for LLM (Zero Decorations, Zero Data Loss)
   const lines: string[] = [];
-  lines.push(`## SPECIAL TRANSIT PHENOMENA (${startDateStr}..${endDateStr})`);
+  const lookbackHeaderNote = effectiveLookbackDays > 0 ? ` + Prior ${effectiveLookbackDays}d Boundary ${scanStartStr}` : '';
+  lines.push(`## SPECIAL TRANSIT PHENOMENA (${startDateStr}..${endDateStr}${lookbackHeaderNote})`);
   lines.push(`ONE_LINER: ${consolidatedOneLiner}`);
+
+  if (boundaryIngresses.length > 0) {
+    lines.push(`SIGN_INGRESSES(${boundaryIngresses.length}):`);
+    boundaryIngresses.forEach(ing => {
+      lines.push(`- ${ing.summary} | Impact: ${ing.eventImpact}`);
+    });
+  } else {
+    lines.push(`SIGN_INGRESSES(0): None`);
+  }
+
+  if (adisaraWindows.length > 0) {
+    lines.push(`ADISARA_FAST_MOTION(${adisaraWindows.length}):`);
+    adisaraWindows.forEach(aw => {
+      lines.push(`- ${aw.summary} | Impact: ${aw.eventImpact}`);
+    });
+  }
 
   if (sameSignStations.length > 0) {
     lines.push(`STATIONS(${sameSignStations.length}):`);
@@ -719,7 +895,8 @@ export function analyzeVedicWindowEvents(params: {
   if (debilitationEvents.length > 0) {
     lines.push(`NEECHA_BHANGA(${debilitationEvents.length}):`);
     debilitationEvents.forEach(d => {
-      lines.push(`- ${d.summary}${d.cancellationReasons.length > 0 ? ` | Factors: ${d.cancellationReasons.join('; ')}` : ''} | Event: ${d.predictedEvents}`);
+      const compactReasons = Array.from(new Set(d.cancellationReasons.map(r => r.replace(/\s*\(H\d+ from (Moon|Lagna)\)/g, '')))).slice(0, 4);
+      lines.push(`- ${d.summary}${compactReasons.length > 0 ? ` | Factors: ${compactReasons.join('; ')}` : ''} | Event: ${d.predictedEvents}`);
     });
   } else {
     lines.push(`NEECHA_BHANGA(0): None`);
@@ -728,9 +905,12 @@ export function analyzeVedicWindowEvents(params: {
   return {
     startDate: startDateStr,
     endDate: endDateStr,
+    priorTailStartDate: effectiveLookbackDays > 0 ? scanStartStr : undefined,
     sameSignStations,
     parivartanaYogas,
     debilitationEvents,
+    boundaryIngresses,
+    adisaraWindows,
     consolidatedOneLiner,
     possibleEventsSummary,
     promptMarkdownBlock: lines.join('\n')

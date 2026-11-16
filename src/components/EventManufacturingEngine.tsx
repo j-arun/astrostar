@@ -750,7 +750,7 @@ Return ONLY a valid JSON object matching this schema:
 
       if (selectedProvider === 'local_qwen') {
         // 1. LOCAL QWEN (Ollama port 11434 on local machine)
-        const localModel = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'qwen2.5:7b-instruct';
+        const localModel = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
         const localEndpoint = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') || 'http://localhost:11434/api/generate';
 
         const reqBody = {

@@ -1460,6 +1460,82 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
 }
 
 function docsServerPlugin(): Plugin {
+  const DOCS_MONTH_ORDER = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const scanDiskDocReports = () => {
+    const discovered: Array<{
+      year: number;
+      month: string;
+      monthIndex: number;
+      engineKey: string;
+      reportData: any;
+      htmlUrl?: string;
+      pdfUrl?: string;
+      docUrl?: string;
+      dataUrl: string;
+      timestamp: string;
+    }> = [];
+
+    const docsRoot = path.resolve(__dirname, 'docs');
+    if (!fs.existsSync(docsRoot)) return discovered;
+
+    try {
+      const yearDirs = fs.readdirSync(docsRoot).filter(d => /^\d{4}$/.test(d));
+      for (const yearStr of yearDirs) {
+        const yearNum = Number(yearStr);
+        const yearPath = path.join(docsRoot, yearStr);
+        if (!fs.statSync(yearPath).isDirectory()) continue;
+
+        const monthDirs = fs.readdirSync(yearPath);
+        for (const monthName of monthDirs) {
+          const monthPath = path.join(yearPath, monthName);
+          if (!fs.statSync(monthPath).isDirectory()) continue;
+          const mIdx = DOCS_MONTH_ORDER.findIndex(m => m.toLowerCase() === monthName.toLowerCase());
+
+          const engineDirs = fs.readdirSync(monthPath);
+          for (const engineKey of engineDirs) {
+            const engPath = path.join(monthPath, engineKey);
+            if (!fs.statSync(engPath).isDirectory()) continue;
+            const jsonPath = path.join(engPath, 'report_data.json');
+            if (!fs.existsSync(jsonPath)) continue;
+
+            try {
+              const reportData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+              const files = fs.readdirSync(engPath);
+              const pickLatestByExt = (ext: string) => {
+                const matched = files.filter(f => f.toLowerCase().endsWith(ext)).sort();
+                return matched.length > 0 ? `/docs/${yearStr}/${monthName}/${engineKey}/${matched[matched.length - 1]}` : undefined;
+              };
+              const htmlUrl = pickLatestByExt('.html');
+              const pdfUrl = pickLatestByExt('.pdf');
+              const docUrl = pickLatestByExt('.doc');
+              const stat = fs.statSync(jsonPath);
+              const ts = reportData?.savedAt || reportData?.reportGeneratedIso || stat.mtime.toISOString();
+
+              discovered.push({
+                year: yearNum,
+                month: monthName,
+                monthIndex: typeof reportData?.monthIndex === 'number' ? reportData.monthIndex : (mIdx >= 0 ? mIdx : 0),
+                engineKey,
+                reportData,
+                htmlUrl,
+                pdfUrl,
+                docUrl,
+                dataUrl: `/docs/${yearStr}/${monthName}/${engineKey}/report_data.json`,
+                timestamp: ts
+              });
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    return discovered;
+  };
+
   return {
     name: 'docs-server-plugin',
     configureServer(server) {
@@ -1473,22 +1549,62 @@ function docsServerPlugin(): Plugin {
         }
         const pathname = decodeURIComponent(urlObj.pathname);
 
-        // 1. GET /api/docs/catalog
+        // 1. GET /api/docs/catalog (merges reports_catalog.json + any disk report_data.json folders)
         if (pathname === '/api/docs/catalog' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
+          let cat: any = { years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} };
           try {
             const catalogPath = path.resolve(__dirname, 'docs/reports_catalog.json');
             if (fs.existsSync(catalogPath)) {
-              const data = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
-              res.statusCode = 200;
-              res.end(JSON.stringify(data));
-              return;
+              cat = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
             }
           } catch (e: any) {
             console.error('Error reading catalog:', e);
           }
+
+          if (!Array.isArray(cat.years)) cat.years = [2020, 2022, 2023, 2024, 2025, 2026, 2027];
+          if (!cat.catalog || typeof cat.catalog !== 'object') cat.catalog = {};
+
+          const diskReports = scanDiskDocReports();
+          for (const item of diskReports) {
+            if (!cat.years.includes(item.year)) {
+              cat.years.push(item.year);
+            }
+            const yKey = String(item.year);
+            if (!cat.catalog[yKey]) {
+              cat.catalog[yKey] = { year: item.year, months: {} };
+            }
+            if (!cat.catalog[yKey].months[item.month]) {
+              cat.catalog[yKey].months[item.month] = {
+                monthName: item.month,
+                monthIndex: item.monthIndex,
+                reports: {}
+              };
+            }
+            const existing = cat.catalog[yKey].months[item.month].reports[item.engineKey];
+            if (!existing) {
+              const provId = item.reportData?.narrative?.providerUsed || (item.engineKey.includes('qwen') || item.engineKey.includes('ollama') ? 'local_qwen' : item.engineKey);
+              const isLocal = provId === 'local_qwen' || item.engineKey.includes('ollama') || item.engineKey.includes('qwen');
+              cat.catalog[yKey].months[item.month].reports[item.engineKey] = {
+                engineKey: item.engineKey,
+                engineName: item.reportData?.engineName || item.engineKey,
+                categoryLabel: isLocal ? 'Local Batch / Ollama' : item.engineKey,
+                badge: isLocal ? '🖥️ Local Qwen Batch' : '📜 Saved Engine',
+                providerId: provId,
+                htmlUrl: item.htmlUrl || '',
+                pdfUrl: item.pdfUrl || '',
+                docUrl: item.docUrl || '',
+                dataUrl: item.dataUrl,
+                timestamp: item.timestamp,
+                hasNarrative: Boolean(item.reportData?.narrative),
+                summarySentence: item.reportData?.summarySentence || item.reportData?.narrative?.summarySentence || ''
+              };
+            }
+          }
+
+          cat.years.sort((a: number, b: number) => a - b);
           res.statusCode = 200;
-          res.end(JSON.stringify({ years: [2020, 2022, 2023, 2024, 2025, 2026, 2027], catalog: {} }));
+          res.end(JSON.stringify(cat));
           return;
         }
 
@@ -1644,22 +1760,50 @@ function docsServerPlugin(): Plugin {
           return;
         }
 
-        // 3b. GET /api/prediction-cache/list
+        // 3b. GET /api/prediction-cache/list (includes prediction_cache + all saved docs/{year}/{month}/{engine}/report_data.json)
         if (pathname === '/api/prediction-cache/list' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
+          let cacheItems: any[] = [];
           try {
             const cacheCatalogPath = path.resolve(__dirname, 'docs/prediction_cache/catalog.json');
             if (fs.existsSync(cacheCatalogPath)) {
-              const items = JSON.parse(fs.readFileSync(cacheCatalogPath, 'utf-8'));
-              res.statusCode = 200;
-              res.end(JSON.stringify({ success: true, items: Array.isArray(items) ? items : [] }));
-              return;
+              const parsed = JSON.parse(fs.readFileSync(cacheCatalogPath, 'utf-8'));
+              if (Array.isArray(parsed)) cacheItems = parsed;
             }
           } catch (e: any) {
             console.error('Error reading prediction cache catalog:', e);
           }
+
+          const seenKeys = new Set<string>(
+            cacheItems.map((it: any) => `${it?.dateRange || ''}|${it?.providerUsed || ''}|${it?.modelUsed || ''}`)
+          );
+          const diskReports = scanDiskDocReports();
+          const diskSummaries = diskReports
+            .filter(r => r.reportData?.narrative)
+            .map(r => {
+              const provRaw = r.reportData?.narrative?.providerUsed || (r.engineKey.includes('qwen') || r.engineKey.includes('ollama') ? 'local_qwen' : r.engineKey);
+              const modelUsed = r.reportData?.modelTag || r.reportData?.narrative?.ollamaStats?.model || r.reportData?.engineName || r.engineKey;
+              const dateRange = `${r.month} ${r.year}`;
+              return {
+                cacheId: `doc__${r.year}__${r.month}__${r.engineKey}`,
+                title: `Monthly Vedic Report (${dateRange})`,
+                scope: 'monthly',
+                dateRange,
+                providerUsed: provRaw === 'local_qwen' ? 'Local Vedic Qwen (Ollama)' : (r.reportData?.engineName || provRaw),
+                modelUsed,
+                createdAt: r.timestamp,
+                summaryPreview: (r.reportData?.summarySentence || r.reportData?.narrative?.summarySentence || r.reportData?.narrative?.part1_probabilityAndScope || '').slice(0, 220),
+                htmlUrl: r.htmlUrl
+              };
+            })
+            .filter(s => !seenKeys.has(`${s.dateRange}|${s.providerUsed}|${s.modelUsed}`));
+
+          const combined = [...cacheItems, ...diskSummaries].sort(
+            (a: any, b: any) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime()
+          );
+
           res.statusCode = 200;
-          res.end(JSON.stringify({ success: true, items: [] }));
+          res.end(JSON.stringify({ success: true, items: combined }));
           return;
         }
 
@@ -1667,13 +1811,59 @@ function docsServerPlugin(): Plugin {
         if (pathname === '/api/prediction-cache/load' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
           const rawId = urlObj.searchParams.get('id') || '';
-          const safeId = rawId.replace(/[^a-zA-Z0-9_-]/g, '');
+          const safeId = rawId.replace(/[^a-zA-Z0-9._-]/g, '');
           if (!safeId) {
             res.statusCode = 400;
             res.end(JSON.stringify({ success: false, error: 'Missing or invalid cache id' }));
             return;
           }
           try {
+            if (safeId.startsWith('doc__')) {
+              const parts = safeId.split('__');
+              if (parts.length >= 4) {
+                const docYear = parts[1];
+                const docMonth = parts[2];
+                const docEngine = parts.slice(3).join('__');
+                const engDir = path.resolve(__dirname, 'docs', docYear, docMonth, docEngine);
+                const reportJsonPath = path.join(engDir, 'report_data.json');
+                if (fs.existsSync(reportJsonPath)) {
+                  const data = JSON.parse(fs.readFileSync(reportJsonPath, 'utf-8'));
+                  const files = fs.readdirSync(engDir);
+                  const htmlFiles = files.filter(f => f.toLowerCase().endsWith('.html')).sort();
+                  const htmlUrl = htmlFiles.length > 0
+                    ? `/docs/${docYear}/${docMonth}/${docEngine}/${htmlFiles[htmlFiles.length - 1]}`
+                    : undefined;
+                  const mIdx = DOCS_MONTH_ORDER.findIndex(m => m.toLowerCase() === docMonth.toLowerCase());
+                  const mergedContext = {
+                    matchedRules: [],
+                    natalOccupants: [],
+                    transitOccupants: [],
+                    isComprehensiveMonthly: true,
+                    selectedMonth: typeof data?.monthIndex === 'number' ? data.monthIndex : (mIdx >= 0 ? mIdx : 0),
+                    selectedYear: Number(docYear) || 2026,
+                    ...(data?.context || {})
+                  };
+                  const entry = {
+                    cacheId: safeId,
+                    title: `Monthly Vedic Report (${docMonth} ${docYear})`,
+                    scope: 'monthly',
+                    dateRange: `${docMonth} ${docYear}`,
+                    providerUsed: data?.narrative?.providerUsed || data?.engineName || docEngine,
+                    modelUsed: data?.modelTag || data?.narrative?.ollamaStats?.model || data?.engineName || docEngine,
+                    createdAt: data?.savedAt || data?.reportGeneratedIso || new Date().toISOString(),
+                    summaryPreview: (data?.summarySentence || data?.narrative?.summarySentence || '').slice(0, 220),
+                    promptSent: data?.promptArtifact?.fullPromptText || data?.narrative?.promptSent || '',
+                    context: mergedContext,
+                    narrative: data?.narrative,
+                    htmlUrl
+                  };
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ success: true, entry }));
+                  return;
+                }
+              }
+            }
+
             let jsonPath = path.resolve(__dirname, 'docs/prediction_cache', `${safeId}.json`);
             if (!fs.existsSync(jsonPath)) {
               jsonPath = path.resolve(__dirname, 'public/docs/prediction_cache', `${safeId}.json`);
@@ -1844,23 +2034,42 @@ function localBatchPlugin(env: Record<string, string>): Plugin {
     recentLogs: string[];
   }
 
-  let state: BatchJobState = {
-    jobId: 'none',
-    status: 'idle',
-    modelTag: 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M',
-    engineKey: 'vedic-qwen2.5-14b-GGUF_Q4_K_M',
-    monthName: 'November',
-    monthIndex: 10,
-    year: 2026,
-    ollamaEndpoint: 'http://localhost:11434/api/generate',
-    delaySeconds: 120,
-    secondsRemaining: 0,
-    elapsedMs: 0,
-    promptChars: 0,
-    promptTokensEst: 0,
-    tokensGenerated: 0,
-    recentLogs: []
-  };
+  let state: BatchJobState = (() => {
+    const fallback: BatchJobState = {
+      jobId: 'none',
+      status: 'idle',
+      modelTag: 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M',
+      engineKey: 'vedic-qwen2.5-14b-GGUF_Q4_K_M',
+      monthName: 'November',
+      monthIndex: 10,
+      year: 2026,
+      ollamaEndpoint: 'http://localhost:11434/api/generate',
+      delaySeconds: 120,
+      secondsRemaining: 0,
+      elapsedMs: 0,
+      promptChars: 0,
+      promptTokensEst: 0,
+      tokensGenerated: 0,
+      recentLogs: []
+    };
+    try {
+      const persistedPath = path.resolve(__dirname, 'docs/batch_jobs/latest_batch_status.json');
+      if (fs.existsSync(persistedPath)) {
+        const parsed = JSON.parse(fs.readFileSync(persistedPath, 'utf-8'));
+        if (parsed && typeof parsed === 'object') {
+          const normalizedStatus =
+            parsed.status === 'running' || parsed.status === 'scheduled' ? 'cancelled' : parsed.status || 'idle';
+          return {
+            ...fallback,
+            ...parsed,
+            status: normalizedStatus,
+            recentLogs: Array.isArray(parsed.recentLogs) ? parsed.recentLogs : []
+          };
+        }
+      }
+    } catch {}
+    return fallback;
+  })();
 
   let countdownInterval: NodeJS.Timeout | null = null;
   let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -2465,11 +2674,58 @@ function localBatchPlugin(env: Record<string, string>): Plugin {
           };
           fs.writeFileSync(catalogPath, JSON.stringify(cat, null, 2), 'utf-8');
 
+          // Also persist into docs/prediction_cache/ so Prediction Cache & Local Q&A immediately show this batch run
+          try {
+            const predCacheDir = path.resolve(__dirname, 'docs/prediction_cache');
+            if (!fs.existsSync(predCacheDir)) fs.mkdirSync(predCacheDir, { recursive: true });
+            const safeCacheId = `pred_monthly_${state.monthName.toLowerCase()}_${state.year}_local_qwen_${timestampSlug}`.replace(/[^a-zA-Z0-9_-]/g, '');
+            const cacheHtmlFile = `${safeCacheId}.html`;
+            fs.writeFileSync(path.join(predCacheDir, cacheHtmlFile), htmlContent, 'utf-8');
+            const cacheEntry = {
+              cacheId: safeCacheId,
+              title: `Monthly Vedic Report (${state.monthName} ${state.year})`,
+              scope: 'monthly',
+              dateRange: `${state.monthName} ${state.year}`,
+              providerUsed: engineDisplayName,
+              modelUsed: state.modelTag,
+              createdAt: savedAt.toISOString(),
+              summaryPreview: (narrative.summarySentence || narrative.part1_probabilityAndScope || '').slice(0, 220),
+              htmlUrl: `/docs/prediction_cache/${cacheHtmlFile}`,
+              promptSent: promptSentLog,
+              context: activeContextPayload,
+              narrative
+            };
+            fs.writeFileSync(path.join(predCacheDir, `${safeCacheId}.json`), JSON.stringify(cacheEntry, null, 2), 'utf-8');
+
+            const predCatalogPath = path.join(predCacheDir, 'catalog.json');
+            let existingPredCat: any[] = [];
+            if (fs.existsSync(predCatalogPath)) {
+              try {
+                const parsed = JSON.parse(fs.readFileSync(predCatalogPath, 'utf-8'));
+                if (Array.isArray(parsed)) existingPredCat = parsed;
+              } catch {}
+            }
+            const summaryItem = {
+              cacheId: safeCacheId,
+              title: cacheEntry.title,
+              scope: cacheEntry.scope,
+              dateRange: cacheEntry.dateRange,
+              providerUsed: cacheEntry.providerUsed,
+              modelUsed: cacheEntry.modelUsed,
+              createdAt: cacheEntry.createdAt,
+              summaryPreview: cacheEntry.summaryPreview,
+              htmlUrl: cacheEntry.htmlUrl
+            };
+            const filteredPredCat = existingPredCat.filter((it: any) => it?.cacheId !== safeCacheId);
+            fs.writeFileSync(predCatalogPath, JSON.stringify([summaryItem, ...filteredPredCat].slice(0, 50), null, 2), 'utf-8');
+          } catch {}
+
           state.status = 'completed';
           state.completedAtIso = savedAt.toISOString();
           state.savedFolder = `docs/${state.year}/${state.monthName}/${engineKey}/`;
           state.savedHtmlUrl = htmlUrl;
           state.savedJsonUrl = jsonUrl;
+          persistBatchStatusFile();
 
           if (!useKvCache) {
             releaseOllamaModel(state.ollamaEndpoint, state.modelTag);

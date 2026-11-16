@@ -130,6 +130,9 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
   const [uiError, setUiError] = useState<string | null>(null);
   const [showPromptPreview, setShowPromptPreview] = useState<boolean>(false);
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
+  const [showKvPreflight, setShowKvPreflight] = useState<boolean>(false);
+  const [kvPrivateEnabled, setKvPrivateEnabled] = useState<boolean>(() => isKvCacheEnabledForEngine('privateOllama'));
+  const [savedBatchRuns, setSavedBatchRuns] = useState<Array<{ id: string; label: string; model: string; timestamp?: string; htmlUrl?: string }>>([]);
 
   const fetchStatus = async () => {
     try {
@@ -138,6 +141,26 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
         const data = await res.json();
         if (data?.state) setBatchState(data.state);
       }
+    } catch {}
+  };
+
+  const fetchSavedBatchRuns = async () => {
+    try {
+      const res = await fetch('/api/prediction-cache/list');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!Array.isArray(data?.items)) return;
+      const monthlyItems = data.items
+        .filter((it: any) => it?.scope === 'monthly' || String(it?.cacheId || '').startsWith('doc__'))
+        .slice(0, 8)
+        .map((it: any) => ({
+          id: String(it.cacheId),
+          label: String(it.dateRange || it.title || it.cacheId),
+          model: String(it.modelUsed || it.providerUsed || 'Local Ollama'),
+          timestamp: it.createdAt,
+          htmlUrl: it.htmlUrl
+        }));
+      setSavedBatchRuns(monthlyItems);
     } catch {}
   };
 
@@ -180,8 +203,10 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
 
   useEffect(() => {
     if (!isOpen) return;
+    setKvPrivateEnabled(isKvCacheEnabledForEngine('privateOllama'));
     fetchStatus();
     fetchOllamaModels();
+    fetchSavedBatchRuns();
     const timer = setInterval(fetchStatus, 2000);
     return () => clearInterval(timer);
   }, [isOpen]);
@@ -210,8 +235,6 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
       (m.name.toLowerCase().split('/').pop() || '') === modelTag.trim().toLowerCase() ||
       m.name.toLowerCase().split(':')[0] === modelTag.trim().toLowerCase().split(':')[0]
   );
-
-  const [showKvPreflight, setShowKvPreflight] = useState(false);
 
   const handleSchedule = async (kvDecision?: 'use_kv' | 'skip_kv') => {
     if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
@@ -321,9 +344,20 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
               <Cpu className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-extrabold text-white">
-                Offline Local 14B Batch Scheduler (Single Month)
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm sm:text-base font-extrabold text-white">
+                  Offline Local 14B Batch Scheduler (Single Month)
+                </h3>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    kvPrivateEnabled
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                      : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  }`}
+                >
+                  {kvPrivateEnabled ? 'KV Cache: ON (D1+D9+Rules Split)' : 'KV Cache: OFF (Preflight Ready)'}
+                </span>
+              </div>
               <p className="text-[11px] text-slate-400">
                 Runs {activePromptVer.toUpperCase()} Unified Prompt (1-Month Prediction + Manifestation Events) inside npm prompt
               </p>
@@ -644,7 +678,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 </div>
               )}
 
-              {batchState.recentLogs.length > 0 && (
+              {Array.isArray(batchState.recentLogs) && batchState.recentLogs.length > 0 && (
                 <div className="bg-black/60 border border-slate-800 rounded-lg p-2.5 font-mono text-[10.5px] text-slate-300 max-h-36 overflow-y-auto space-y-0.5">
                   <div className="flex items-center gap-1.5 text-slate-500 pb-1 border-b border-slate-800 mb-1">
                     <Terminal className="w-3 h-3" />
@@ -657,6 +691,48 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 8. Saved Monthly Batch & Local Runs on Disk */}
+          {savedBatchRuns.length > 0 && (
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Saved Monthly Reports on Disk ({savedBatchRuns.length})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchSavedBatchRuns}
+                  className="text-[10px] font-mono text-slate-400 hover:text-white cursor-pointer"
+                >
+                  Refresh
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-28 overflow-y-auto">
+                {savedBatchRuns.map(run => (
+                  <div
+                    key={run.id}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold text-slate-200 truncate">{run.label}</div>
+                      <div className="text-[10px] font-mono text-slate-400 truncate">{run.model}</div>
+                    </div>
+                    {run.htmlUrl && (
+                      <a
+                        href={run.htmlUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 text-[10px] font-bold shrink-0"
+                      >
+                        HTML
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -704,7 +780,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
       <KvCachePreflightModal
         isOpen={showKvPreflight}
         engineSlot="privateOllama"
-        context={buildContextForSelectedMonth()}
+        context={showKvPreflight ? buildContextForSelectedMonth() : null}
         actionLabel="Start Local 14B Batch"
         onCancel={() => setShowKvPreflight(false)}
         onGoToSettings={() => {

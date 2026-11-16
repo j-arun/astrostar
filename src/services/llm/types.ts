@@ -33,10 +33,10 @@ export interface LLMProviderConfig {
 export const LLM_PROVIDERS: Record<LLMProviderId, LLMProviderConfig> = {
   local_qwen: {
     id: 'local_qwen',
-    name: 'Local Qwen 2.5 7B (Ollama)',
-    badgeLabel: '🖥️ Local 7B (Ollama - Qwen 2.5 7B)',
-    model: 'qwen2.5:7b-instruct',
-    description: 'Local on-premise execution via Ollama (port 11434). Rapid 7B inference, complete privacy.',
+    name: 'Local Vedic Qwen 2.5 14B (Ollama)',
+    badgeLabel: '🖥️ Local 14B (Vedic Qwen 2.5)',
+    model: 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M',
+    description: 'Local on-premise execution via Ollama (port 11434) using Vedic Qwen 2.5 14B Q4_K_M with KV cache support.',
     endpoint: 'http://localhost:11434/api/generate'
   },
   gemini_pro: {

@@ -47,7 +47,7 @@ import {
   VedicHouseContext,
   LLMThreePartNarrative
 } from '../services/llm/types';
-import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog, getActivePromptVersion, PROMPT_VERSIONS } from '../services/llm/adapters';
+import { llmService, checkOllamaHealth, purgeOllamaMemory, buildVedicPrompt, fetchRecentLLMPromptLogs, persistLLMPromptLog, getActivePromptVersion, PROMPT_VERSIONS, PREFERRED_VEDIC_14B_MODEL, pickPreferredLocalOllamaModel } from '../services/llm/adapters';
 import {
   generateVedicPdfReport,
   generateVedicHtmlReport,
@@ -64,7 +64,10 @@ import {
   CachedPredictionEntry,
   savePredictionToCache,
   listCachedPredictions,
-  loadCachedPrediction
+  loadCachedPrediction,
+  resolvePredictionScope,
+  buildPredictionDateRange,
+  buildPredictionCacheTitle
 } from '../services/predictionCacheService';
 import { KvCachePreflightModal } from './KvCachePreflightModal';
 import {
@@ -175,7 +178,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [dbLogs, setDbLogs] = useState<any[]>([]);
   const [loadingDbLogs, setLoadingDbLogs] = useState<boolean>(false);
   const [localOllamaModel, setLocalOllamaModel] = useState<string>(() => {
-    return localStorage.getItem('astro_ollama_model') || 'qwen2.5:7b-instruct';
+    return localStorage.getItem('astro_ollama_model') || PREFERRED_VEDIC_14B_MODEL;
   });
   const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
@@ -355,6 +358,13 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
       checkOllamaHealth().then(res => {
         if (res.isOnline && res.models && res.models.length > 0) {
           setAvailableOllamaModels(res.models);
+          if (!res.models.includes(localOllamaModel)) {
+            const preferred = pickPreferredLocalOllamaModel(res.models, localOllamaModel);
+            setLocalOllamaModel(preferred);
+            try {
+              localStorage.setItem('astro_ollama_model', preferred);
+            } catch {}
+          }
         }
       }).catch(() => {});
     }
@@ -867,7 +877,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
                     Score: {(context.activationScore ?? 0).toFixed(2)}
                   </span>
                 )}
-                {context.transitOccupants.some(t => t.is_custom) && (
+                {(context.transitOccupants || []).some(t => t.is_custom) && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 flex items-center gap-1 shadow-sm">
                     <Check className="w-2.5 h-2.5" />
                     Custom Chart Transits Active
@@ -1948,10 +1958,38 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
               currentMonthIndex={context.selectedMonth}
               currentContext={context}
               currentNarrative={narrative}
-              onLoadReportIntoApp={(newNarrative) => {
-                setLoadedCachedEntry(null);
-                setSelectedCacheId('__live__');
-                setLiveNarrative(newNarrative);
+              onLoadReportIntoApp={(newNarrative, loadedContext) => {
+                if (loadedContext) {
+                  const mergedContext: VedicHouseContext = {
+                    ...context,
+                    ...loadedContext,
+                    matchedRules: loadedContext.matchedRules || [],
+                    natalOccupants: loadedContext.natalOccupants || [],
+                    transitOccupants: loadedContext.transitOccupants || []
+                  };
+                  const docYear = mergedContext.selectedYear;
+                  const docMonthName = MONTH_NAMES[mergedContext.selectedMonth] || `Month${mergedContext.selectedMonth + 1}`;
+                  const syntheticId = `doc__${docYear}__${docMonthName}__${newNarrative.providerUsed || 'report'}`;
+                  setLoadedCachedEntry({
+                    cacheId: syntheticId,
+                    title: buildPredictionCacheTitle(mergedContext),
+                    scope: resolvePredictionScope(mergedContext),
+                    dateRange: buildPredictionDateRange(mergedContext),
+                    providerUsed: LLM_PROVIDERS[newNarrative.providerUsed]?.name || newNarrative.providerUsed,
+                    modelUsed: newNarrative.ollamaStats?.model || LLM_PROVIDERS[newNarrative.providerUsed]?.model || newNarrative.providerUsed,
+                    createdAt: new Date().toISOString(),
+                    summaryPreview: (newNarrative.summarySentence || newNarrative.part1_probabilityAndScope || '').slice(0, 220),
+                    promptSent: newNarrative.promptSent || '',
+                    context: mergedContext,
+                    narrative: newNarrative
+                  });
+                  setSelectedCacheId(syntheticId);
+                  setLiveNarrative(newNarrative);
+                } else {
+                  setLoadedCachedEntry(null);
+                  setSelectedCacheId('__live__');
+                  setLiveNarrative(newNarrative);
+                }
               }}
             />
           )}
@@ -2434,23 +2472,23 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
               <span className="text-[10px] text-slate-500 uppercase block font-semibold">Active PD Lord</span>
               <span className="text-amber-300 font-bold font-mono text-[11px] truncate block">
-                {context.activeDasha.pratyantardasha}
+                {context.activeDasha?.pratyantardasha || 'N/A'}
               </span>
             </div>
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
               <span className="text-[10px] text-slate-500 uppercase block font-semibold">Natal Grahas</span>
               <span className="text-slate-300 font-bold text-[11px] truncate block">
-                {context.natalOccupants.length > 0
-                  ? context.natalOccupants.map(o => o.body_name.split(' ')[0]).join(', ')
+                {(context.natalOccupants || []).length > 0
+                  ? (context.natalOccupants || []).map(o => (o.body_name || '').split(' ')[0]).filter(Boolean).join(', ')
                   : 'Empty'}
               </span>
             </div>
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2">
               <span className="text-[10px] text-slate-500 uppercase block font-semibold">{context.isComprehensiveMonthly || !context.houseNumber ? 'Transit Grahas (Ephemeris)' : `Transit Grahas (House ${context.houseNumber})`}</span>
               <div className="text-[11px] truncate">
-                {context.transitOccupants.length > 0 ? (
+                {(context.transitOccupants || []).length > 0 ? (
                   <div className="flex flex-col gap-0.5">
-                    {context.transitOccupants.map((t, idx) => (
+                    {(context.transitOccupants || []).map((t, idx) => (
                       <span key={idx} className="text-cyan-300 font-bold block truncate" title={`${t.graha_key}: ${t.degree_sputa || 'N/A'}, ${t.nakshatra_name || 'N/A'} Pada ${t.pada || '?'}`}>
                         {t.graha_key} {t.degree_sputa ? `(${t.degree_sputa})` : ''} {t.nakshatra_name ? `• ${t.nakshatra_name} P${t.pada || '?'}` : ''}{t.is_retrograde ? ' [R]' : ''}{t.is_custom ? ' [Custom]' : ''}
                       </span>

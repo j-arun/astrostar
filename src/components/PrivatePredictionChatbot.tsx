@@ -26,8 +26,16 @@ import {
   Printer,
   Trash2,
   Sliders,
-  Globe
+  Globe,
+  Database,
+  ExternalLink
 } from 'lucide-react';
+import {
+  CachedPredictionSummary,
+  CachedPredictionEntry,
+  listCachedPredictions,
+  loadCachedPrediction
+} from '../services/predictionCacheService';
 import { NakshatraGateInfo, ManufacturedEventItem } from './EventManufacturingEngine';
 import { RASHI_LIST_META } from '../data/transitEphemeris';
 import {
@@ -316,6 +324,10 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
     checking: false
   });
   const [pendingKvQuery, setPendingKvQuery] = useState<string | null>(null);
+  const [monthBatchList, setMonthBatchList] = useState<CachedPredictionSummary[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('__none__');
+  const [loadedBatchEntry, setLoadedBatchEntry] = useState<CachedPredictionEntry | null>(null);
+  const [loadingBatchEntry, setLoadingBatchEntry] = useState<boolean>(false);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -357,9 +369,41 @@ Ask me specific questions comparing personal situations, like:
     }
   };
 
+  const refreshMonthBatchList = async (autoSelectCurrentMonth = true) => {
+    try {
+      const items = await listCachedPredictions();
+      const monthlyItems = items.filter(it => it.scope === 'monthly' || String(it.cacheId || '').startsWith('doc__'));
+      setMonthBatchList(monthlyItems);
+      if (autoSelectCurrentMonth) {
+        const targetRange = `${monthName} ${selectedYear}`.toLowerCase();
+        const matchingForMonth = monthlyItems.filter(it => (it.dateRange || '').toLowerCase() === targetRange);
+        const preferredLocal =
+          matchingForMonth.find(it =>
+            `${it.providerUsed} ${it.modelUsed} ${it.cacheId}`.toLowerCase().match(/vedic|qwen|ollama|local|fable/)
+          ) || matchingForMonth[0];
+        if (preferredLocal) {
+          setSelectedBatchId(preferredLocal.cacheId);
+          setLoadingBatchEntry(true);
+          const entry = await loadCachedPrediction(preferredLocal.cacheId);
+          setLoadedBatchEntry(entry);
+          setLoadingBatchEntry(false);
+        } else {
+          setSelectedBatchId('__none__');
+          setLoadedBatchEntry(null);
+        }
+      }
+    } catch {
+      setLoadingBatchEntry(false);
+    }
+  };
+
   useEffect(() => {
     checkOllamaHealth();
   }, [ollamaEndpoint]);
+
+  useEffect(() => {
+    void refreshMonthBatchList(true);
+  }, [monthName, selectedYear]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -572,6 +616,16 @@ Ask me specific questions comparing personal situations, like:
             ? `LANGUAGE RULE: Respond in clear, respectful Tamil (தமிழ்) script with clean technical clarity.`
             : `LANGUAGE RULE: Respond strictly in clear, fluent English. Use standard English zodiac signs (Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces) and English planet names (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu). Do not output Tamil script or regional Tamil transliterations.`;
 
+        const batchSynthesisSnippet = loadedBatchEntry?.narrative
+          ? [
+              `LOADED MONTHLY BATCH REPORT (${loadedBatchEntry.dateRange} | ${loadedBatchEntry.modelUsed}):`,
+              loadedBatchEntry.narrative.summarySentence ? `Summary: ${loadedBatchEntry.narrative.summarySentence}` : '',
+              loadedBatchEntry.narrative.part1_probabilityAndScope ? `Overview: ${loadedBatchEntry.narrative.part1_probabilityAndScope.slice(0, 600)}` : '',
+              loadedBatchEntry.narrative.part2_financialAndResources ? `Financial/Resources: ${loadedBatchEntry.narrative.part2_financialAndResources.slice(0, 450)}` : '',
+              loadedBatchEntry.narrative.part3_microTimingWindow ? `Timing: ${loadedBatchEntry.narrative.part3_microTimingWindow.slice(0, 450)}` : ''
+            ].filter(Boolean).join('\n')
+          : '';
+
         const dynamicSnapshotOnly = [
           `Timeline: ${screenContextSnapshot.monthName} ${screenContextSnapshot.selectedYear}`,
           `DASHA: MD:${screenContextSnapshot.dasha.md} | AD:${screenContextSnapshot.dasha.ad} | PD:${screenContextSnapshot.dasha.pd} (${screenContextSnapshot.dasha.window})`,
@@ -582,6 +636,7 @@ Ask me specific questions comparing personal situations, like:
           `GATES:\n${screenContextSnapshot.gates.join('\n')}`,
           `EVENTS:\n${screenContextSnapshot.events.slice(0, 8).join('\n')}`,
           vedicSpecialEvents?.promptMarkdownBlock ? `${vedicSpecialEvents.promptMarkdownBlock.slice(0, 1100)}` : '',
+          batchSynthesisSnippet,
           `USER QUESTION: "${query}"`
         ]
           .filter(Boolean)
@@ -1240,6 +1295,69 @@ INSTRUCTIONS:
                 </button>
               </div>
               <span className="text-[10.5px] font-mono text-slate-500">ctx: {numCtx.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* MONTHLY BATCH & LOCAL RUN LOADER BAR */}
+          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <span className="font-bold text-amber-300 flex items-center gap-1.5 shrink-0">
+                <Database className="w-3.5 h-3.5" />
+                <span>Month Batch Run:</span>
+              </span>
+              <select
+                value={selectedBatchId}
+                disabled={loadingBatchEntry}
+                onChange={async e => {
+                  const id = e.target.value;
+                  setSelectedBatchId(id);
+                  if (id === '__none__') {
+                    setLoadedBatchEntry(null);
+                    return;
+                  }
+                  setLoadingBatchEntry(true);
+                  try {
+                    const entry = await loadCachedPrediction(id);
+                    setLoadedBatchEntry(entry);
+                  } finally {
+                    setLoadingBatchEntry(false);
+                  }
+                }}
+                className="bg-slate-900 border border-amber-500/40 rounded-lg px-2.5 py-1 text-xs text-slate-200 max-w-xs sm:max-w-md truncate focus:outline-none cursor-pointer"
+              >
+                <option value="__none__">Live Screen Ephemeris Only ({monthName} {selectedYear})</option>
+                {monthBatchList.map(item => (
+                  <option key={item.cacheId} value={item.cacheId}>
+                    {item.dateRange} — {item.modelUsed} ({item.providerUsed})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void refreshMonthBatchList(false)}
+                className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] cursor-pointer"
+                title="Refresh saved batch runs from disk"
+              >
+                <RefreshCw className={`w-3 h-3 ${loadingBatchEntry ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {loadedBatchEntry && (
+                <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10.5px] font-mono">
+                  Batch Attached ({loadedBatchEntry.dateRange})
+                </span>
+              )}
+              {loadedBatchEntry?.htmlUrl && (
+                <a
+                  href={loadedBatchEntry.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 text-[11px] font-bold"
+                >
+                  <span>Open Batch HTML</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
           </div>
 

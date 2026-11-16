@@ -89,6 +89,17 @@ export default function App() {
       sessionStorage.setItem('astro_active_tab_v1', activeTab);
     } catch {}
   }, [activeTab]);
+
+  useEffect(() => {
+    const onNavSettings = () => {
+      setActiveTab('settings');
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch {}
+    };
+    window.addEventListener('astro-navigate-settings', onNavSettings);
+    return () => window.removeEventListener('astro-navigate-settings', onNavSettings);
+  }, []);
   const [selectedChart, setSelectedChart] = useState<'D1' | 'D9'>('D1');
   const [copied, setCopied] = useState<string | null>(null);
   const [incomingPredictionContext, setIncomingPredictionContext] = useState<VedicHouseContext | null>(null);

@@ -40,6 +40,12 @@ import {
   DynamicQuestionCard
 } from '../services/reportCopilotContext';
 import { RichFormattedText } from './PrivatePredictionChatbot';
+import { KvCachePreflightModal } from './KvCachePreflightModal';
+import {
+  isKvCacheEnabledForEngine,
+  loadKvCacheConfig,
+  buildKvCacheSystemPrefix
+} from '../services/llm/kvCacheManager';
 
 interface CopilotMessage {
   id: string;
@@ -185,6 +191,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [isAsking, setIsAsking] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pendingKvQuestion, setPendingKvQuestion] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -240,10 +247,19 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
     });
   };
 
-  const handleAskPrivateLLM = async (e?: React.FormEvent) => {
+  const handleAskPrivateLLM = async (
+    e?: React.FormEvent,
+    overrideQuestion?: string,
+    kvDecision?: 'use_kv' | 'skip_kv'
+  ) => {
     if (e) e.preventDefault();
-    const trimmed = questionInput.trim();
+    const trimmed = (overrideQuestion !== undefined ? overrideQuestion : questionInput).trim();
     if (!trimmed || isAsking) return;
+
+    if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
+      setPendingKvQuestion(trimmed);
+      return;
+    }
 
     const userMsg: CopilotMessage = {
       id: `u_${Date.now()}`,
@@ -272,7 +288,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
       );
 
       const priorTurns = nextHistory
-        .slice(-7, -1)
+        .slice(-5, -1)
         .map(m => `${m.role === 'user' ? 'USER QUESTION' : 'PRIVATE ASTROLOGER'}: ${m.text}`)
         .join('\n\n');
 
@@ -281,31 +297,45 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
           ? `5. LANGUAGE: Respond in clear Tamil (தமிழ்) script.`
           : `5. LANGUAGE: Strictly respond in clear, fluent English. Use English zodiac signs (Aries..Pisces) and English planet names (Sun..Ketu); do not use Tamil script or regional Tamil sign names.`;
 
-      const systemPrompt = [
-        `You are a private, on-premise Classical Parashara Vedic Astrologer & Personal Decision Advisor.`,
-        `You are answering directly from a cached Vedic Prediction Synthesis Report (JSON + Prompt + Ephemeris Transits).`,
-        `CRITICAL RULES:`,
-        `1. Stay strictly grounded in the provided REPORT DATA, DASHA TRIAD, SPECIAL VEDIC EVENTS (Parivartana, Neecha Bhanga, Retrograde↔Direct stations), and GOCHARA TRANSITS. Never invent dates, planetary signs, or yogas not present in the context.`,
-        `2. Address the user's specific personal life scenario (such as unresolved past relationships, reconciliation vs closure, career promotions, visa/financial steps) honestly and compassionately—if transits show clearing up, say when and why; if mixed or requiring closure/caution, explain clearly without false flattery.`,
-        `3. Explicitly cite exact planetary placements, houses (both from Lagna for lived reality and from Moon for mental/emotional experience), Dasha lords, date ranges, and any Parivartana/Neecha Bhanga/Direct station backing your verdict.`,
-        `4. Structure your reply cleanly with scannable headings (###), bullet points, concrete timing windows, and actionable takeaways.`,
-        languageDirective
-      ].join('\n');
+      const kvCfg = loadKvCacheConfig();
+      const useKvSplit = kvDecision === 'use_kv' || (kvDecision !== 'skip_kv' && Boolean(kvCfg.privateOllama.enabled));
 
-      const fullPrompt = [
-        `[SYSTEM INSTRUCTIONS]\n${systemPrompt}`,
-        `\n[CACHED VEDIC REPORT & TRANSIT CONTEXT]\n${compactContextPack}`,
-        priorTurns ? `\n[PRIOR FOLLOW-UP CONVERSATION]\n${priorTurns}` : '',
-        `\n[USER'S SPECIFIC PRIVATE QUESTION]\n${trimmed}\n\nRespond clearly in structured Markdown:`
-      ].filter(Boolean).join('\n');
+      const staticSystemPrompt = activeContext && useKvSplit
+        ? [
+            buildKvCacheSystemPrefix(
+              activeContext,
+              activeContext.promptVersion === 'v2' ? 'v2' : 'v3',
+              kvCfg.overrides,
+              'qa_chat'
+            ).systemPrompt,
+            `CRITICAL Q&A RULES:\n- Answer strictly from the report summary, active transits, Dasha, and special events (Parivartana, Neecha Bhanga, Retrograde stations).\n- ${languageDirective}`
+          ].join('\n\n')
+        : [
+            `You are a private, on-premise Classical Parashara Vedic Astrologer & Personal Decision Advisor.`,
+            `CRITICAL RULES:`,
+            `1. Stay strictly grounded in the provided REPORT DATA, DASHA TRIAD, SPECIAL VEDIC EVENTS, and GOCHARA TRANSITS.`,
+            `2. Explicitly cite exact planetary placements, houses (both from Lagna for lived reality and from Moon for mental/emotional experience), Dasha lords, and date ranges.`,
+            languageDirective
+          ].join('\n');
+
+      const dynamicPrompt = [
+        `[CACHED VEDIC REPORT & EPHEMERIS SUMMARY]\n${compactContextPack.slice(0, 6200)}`,
+        priorTurns ? `\n[PRIOR FOLLOW-UP CONVERSATION]\n${priorTurns.slice(0, 900)}` : '',
+        `\n[USER QUESTION]\n${trimmed}`
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 7600);
+
+      const fullPromptLegacy = `[SYSTEM INSTRUCTIONS]\n${staticSystemPrompt}\n\n${dynamicPrompt}\n\nRespond clearly in structured Markdown:`;
 
       const data = await callLocalOllamaGenerate({
         endpoint: cleanEndpoint,
         model: effectiveModel,
-        prompt: fullPrompt,
-        keep_alive: '5m',
+        ...(useKvSplit ? { system: staticSystemPrompt, prompt: dynamicPrompt } : { prompt: fullPromptLegacy }),
+        keep_alive: useKvSplit ? (kvCfg.privateOllama.keepAlive || '30m') : '5m',
         options: {
-          num_ctx: numCtx,
+          num_ctx: useKvSplit ? Math.min(numCtx, 8192) : numCtx,
           temperature,
           num_predict: 1600
         }
@@ -325,7 +355,7 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
           role: 'assistant',
           text: replyText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          modelUsed: `${formatLocalModelDisplayName(data?.model || effectiveModel)} [${responseLanguage === 'ta' ? 'TA' : 'EN'}]`,
+          modelUsed: `${formatLocalModelDisplayName(data?.model || effectiveModel)} [${responseLanguage === 'ta' ? 'TA' : 'EN'}${useKvSplit ? ' • KV' : ''}]`,
           durationMs: elapsed,
           evalCount: data?.eval_count,
           promptEvalCount: data?.prompt_eval_count
@@ -951,6 +981,24 @@ export const PrivateReportCopilot: React.FC<PrivateReportCopilotProps> = ({
           </>
         )}
       </div>
+
+      <KvCachePreflightModal
+        isOpen={Boolean(pendingKvQuestion)}
+        engineSlot="privateOllama"
+        context={activeContext}
+        actionLabel="Ask Private LLM"
+        onCancel={() => setPendingKvQuestion(null)}
+        onProceedWithKvCache={() => {
+          const q = pendingKvQuestion;
+          setPendingKvQuestion(null);
+          if (q) void handleAskPrivateLLM(undefined, q, 'use_kv');
+        }}
+        onProceedWithoutKvCache={() => {
+          const q = pendingKvQuestion;
+          setPendingKvQuestion(null);
+          if (q) void handleAskPrivateLLM(undefined, q, 'skip_kv');
+        }}
+      />
     </div>
   );
 };

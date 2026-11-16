@@ -15,7 +15,12 @@ import {
   ArrowRight,
   Database,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  RotateCcw,
+  Loader2,
+  Power,
+  Sliders
 } from 'lucide-react';
 import {
   AstroPromptVersion,
@@ -32,6 +37,20 @@ import {
 } from '../services/llm/adapters';
 import { samplePersonMaster, sampleNatalPlacements } from '../data/horoscopeData';
 import storedPersonsData from '../data/stored_persons.json';
+import {
+  KvCacheConfig,
+  KvCacheEngineSlot,
+  KvCacheBlockOverrides,
+  loadKvCacheConfig,
+  saveKvCacheConfig,
+  syncKvCacheConfigToServer,
+  buildKvCacheSystemPrefix,
+  buildEphemeralsOnlyPrompt,
+  buildDefaultD1Block,
+  buildDefaultD9Block,
+  buildDefaultRulesBlock,
+  buildDefaultDeliveryBlock
+} from '../services/llm/kvCacheManager';
 
 interface SettingsStudioProps {
   activePersonId?: string;
@@ -89,6 +108,114 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
       localStorage.setItem('astro_ollama_timeout_seconds', sec.toString());
     } catch {
       // ignore
+    }
+  };
+
+  // KV Cache Studio state (Private Ollama + Public Claude Sonnet, Claude Fable, Gemini Pro)
+  const [kvConfig, setKvConfig] = useState<KvCacheConfig>(() => loadKvCacheConfig());
+  const [activeKvBlockTab, setActiveKvBlockTab] = useState<'d1Chart' | 'd9Chart' | 'rules' | 'delivery'>('d1Chart');
+  const [primingSlot, setPrimingSlot] = useState<KvCacheEngineSlot | null>(null);
+  const [slotStatusMsg, setSlotStatusMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [applyingOllamaEnv, setApplyingOllamaEnv] = useState<boolean>(false);
+  const [ollamaEnvMsg, setOllamaEnvMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [unloadingOllama, setUnloadingOllama] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetch('/api/llm/kv-cache/config')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.success && data?.config) {
+          const local = loadKvCacheConfig();
+          // Preserve local overrides/enabled flags if already edited locally, merge server config cleanly
+          const merged: KvCacheConfig = {
+            privateOllama: { ...local.privateOllama, ...(data.config.privateOllama || {}), enabled: local.privateOllama.enabled || Boolean(data.config.privateOllama?.enabled) },
+            claudeSonnet: { ...local.claudeSonnet, ...(data.config.claudeSonnet || {}), enabled: local.claudeSonnet.enabled || Boolean(data.config.claudeSonnet?.enabled) },
+            claudeFable: { ...local.claudeFable, ...(data.config.claudeFable || {}), enabled: local.claudeFable.enabled || Boolean(data.config.claudeFable?.enabled) },
+            geminiPro: { ...local.geminiPro, ...(data.config.geminiPro || {}), enabled: local.geminiPro.enabled || Boolean(data.config.geminiPro?.enabled) },
+            overrides: { ...(data.config.overrides || {}), ...(local.overrides || {}) }
+          };
+          setKvConfig(saveKvCacheConfig(merged));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const persistKvUpdate = (nextCfg: KvCacheConfig) => {
+    const saved = saveKvCacheConfig(nextCfg);
+    setKvConfig(saved);
+    void syncKvCacheConfigToServer(saved);
+  };
+
+  const toggleSlotEnabled = (slot: KvCacheEngineSlot, nextVal?: boolean) => {
+    const enabled = nextVal !== undefined ? nextVal : !kvConfig[slot].enabled;
+    persistKvUpdate({
+      ...kvConfig,
+      [slot]: { ...kvConfig[slot], enabled }
+    });
+  };
+
+  const handleUpdateBlockOverride = (key: keyof KvCacheBlockOverrides, val: string) => {
+    persistKvUpdate({
+      ...kvConfig,
+      overrides: {
+        ...kvConfig.overrides,
+        [key]: val
+      }
+    });
+  };
+
+  const handleResetBlockOverride = (key: keyof KvCacheBlockOverrides) => {
+    const nextOverrides = { ...kvConfig.overrides };
+    delete nextOverrides[key];
+    persistKvUpdate({ ...kvConfig, overrides: nextOverrides });
+  };
+
+  const handleApplyOllamaEnv = async () => {
+    setApplyingOllamaEnv(true);
+    setOllamaEnvMsg(null);
+    try {
+      const res = await fetch('/api/llm/kv-cache/configure-ollama-env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flashAttention: kvConfig.privateOllama.flashAttention,
+          kvCacheType: kvConfig.privateOllama.kvCacheType
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setOllamaEnvMsg({ ok: true, text: data.message });
+    } catch (err: any) {
+      setOllamaEnvMsg({ ok: false, text: err?.message || 'Failed to apply Ollama Flash Attention / KV Cache flags.' });
+    } finally {
+      setApplyingOllamaEnv(false);
+    }
+  };
+
+  const handleUnloadOllama = async () => {
+    setUnloadingOllama(true);
+    try {
+      const endpoint = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') || 'http://localhost:11434/api/generate';
+      const model = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || kvConfig.privateOllama.model || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
+      const res = await fetch('/api/llm/kv-cache/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ollamaEndpoint: endpoint, model })
+      });
+      const data = await res.json().catch(() => ({}));
+      setSlotStatusMsg(prev => ({
+        ...prev,
+        privateOllama: { ok: res.ok, text: data?.message || 'Model unloaded from RAM/VRAM.' }
+      }));
+    } catch (err: any) {
+      setSlotStatusMsg(prev => ({
+        ...prev,
+        privateOllama: { ok: false, text: err?.message || 'Unload request failed' }
+      }));
+    } finally {
+      setUnloadingOllama(false);
     }
   };
 
@@ -204,6 +331,93 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
     };
   }, [activePersonId]);
 
+  const kvMode: 'v2' | 'v3' = selectedVersion === 'v2' ? 'v2' : 'v3';
+
+  const kvPrefixPreview = useMemo(() => {
+    return buildKvCacheSystemPrefix(previewContext, kvMode, kvConfig.overrides, 'json_report');
+  }, [previewContext, kvMode, kvConfig.overrides]);
+
+  const kvEphemerisPreview = useMemo(() => {
+    return buildEphemeralsOnlyPrompt(previewContext, selectedVersion, 2000);
+  }, [previewContext, selectedVersion]);
+
+  const handlePrimeEngineKvCache = async (slot: KvCacheEngineSlot) => {
+    setPrimingSlot(slot);
+    try {
+      const nextCfg: KvCacheConfig = {
+        ...kvConfig,
+        [slot]: { ...kvConfig[slot], enabled: true }
+      };
+      persistKvUpdate(nextCfg);
+
+      const res = await fetch('/api/llm/kv-cache/warm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot,
+          systemPrompt: kvPrefixPreview.systemPrompt,
+          systemHash: kvPrefixPreview.systemHash,
+          config: nextCfg,
+          apiKey:
+            slot === 'geminiPro'
+              ? localStorage.getItem('astro_gemini_api_key') || undefined
+              : slot === 'claudeSonnet' || slot === 'claudeFable'
+                ? localStorage.getItem('astro_anthropic_api_key') || undefined
+                : undefined,
+          ollamaEndpoint:
+            (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') ||
+            'http://localhost:11434/api/generate',
+          model:
+            slot === 'privateOllama'
+              ? (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') ||
+                nextCfg.privateOllama.model ||
+                'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M'
+              : (nextCfg[slot] as any)?.model
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      persistKvUpdate({
+        ...nextCfg,
+        [slot]: {
+          ...nextCfg[slot],
+          enabled: true,
+          primedAt: new Date().toISOString(),
+          primedHash: kvPrefixPreview.systemHash,
+          ...(typeof data.promptEvalCount === 'number' ? { promptEvalCount: data.promptEvalCount } : {}),
+          ...(typeof data.cacheCreationTokens === 'number' ? { cacheCreationTokens: data.cacheCreationTokens } : {}),
+          ...(typeof data.cacheReadTokens === 'number' ? { cacheReadTokens: data.cacheReadTokens } : {}),
+          ...(typeof data.cachedContentTokens === 'number' ? { cachedContentTokens: data.cachedContentTokens } : {})
+        }
+      });
+
+      setSlotStatusMsg(prev => ({
+        ...prev,
+        [slot]: { ok: true, text: data.message || 'KV Cache primed cleanly!' }
+      }));
+    } catch (err: any) {
+      setSlotStatusMsg(prev => ({
+        ...prev,
+        [slot]: { ok: false, text: err?.message || 'Priming failed' }
+      }));
+    } finally {
+      setPrimingSlot(null);
+    }
+  };
+
+  const defaultBlockTexts = useMemo(
+    () => ({
+      d1Chart: buildDefaultD1Block(previewContext),
+      d9Chart: buildDefaultD9Block(previewContext),
+      rules: buildDefaultRulesBlock(kvMode),
+      delivery: buildDefaultDeliveryBlock(kvMode, 'json_report')
+    }),
+    [previewContext, kvMode]
+  );
+
   // Read-only prompt text rendered dynamically
   const renderedPromptText = useMemo(() => {
     if (inspectVersion === 'v1') {
@@ -262,6 +476,377 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
             <span>{saveBanner}</span>
           </div>
         )}
+      </div>
+
+      {/* SECTION 0: KV CACHE & PROMPT PREFIX STUDIO (PRIVATE + PUBLIC LLMS) */}
+      <div className="bg-slate-900/95 border border-emerald-500/30 rounded-2xl p-5 sm:p-6 shadow-xl space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Database className="w-5 h-5 text-emerald-400" />
+              <h3 className="text-base sm:text-lg font-bold text-white">
+                KV Cache &amp; System Prefix Studio (Private &amp; Public LLMs)
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono">
+                hash:{kvPrefixPreview.systemHash}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 max-w-3xl">
+              Load static D1, D9, V3/V2 Rules &amp; Generic Delivery once into the cached{' '}
+              <code className="text-amber-300">system</code> slot. Monthly runs &amp; Q&amp;A then dispatch{' '}
+              <strong className="text-emerald-300">ONLY dynamic Ephemeris + Question (&le; 2,000 tokens)</strong>{' '}
+              in the user prompt. Trigger any engine here first before running monthly predictions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-amber-500/30 text-amber-300">
+              System KV Prefix: <strong>~{kvPrefixPreview.systemTokensEst.toLocaleString()}</strong> tok
+            </div>
+            <div
+              className={`px-3 py-1.5 rounded-xl bg-slate-950 border ${
+                kvEphemerisPreview.withinBudget
+                  ? 'border-emerald-500/40 text-emerald-300'
+                  : 'border-rose-500/40 text-rose-300'
+              }`}
+            >
+              Dynamic Ephemeris: <strong>~{kvEphemerisPreview.tokensEst.toLocaleString()}</strong> / 2,000 tok
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Independent Engine Enable + Prime Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* Card 1: Private Local Ollama */}
+          <div
+            className={`rounded-xl border p-4 space-y-3 transition-all ${
+              kvConfig.privateOllama.enabled
+                ? 'bg-emerald-950/20 border-emerald-500/50'
+                : 'bg-slate-950/70 border-slate-800'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-extrabold text-white flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-emerald-400" />
+                  <span>Private Local LLM</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono truncate max-w-[175px]">
+                  Ollama 14B / Qwen (FlashAttn + {kvConfig.privateOllama.kvCacheType})
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSlotEnabled('privateOllama')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  kvConfig.privateOllama.enabled ? 'bg-emerald-500' : 'bg-slate-700'
+                }`}
+                title="Toggle KV Cache for Private Ollama"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    kvConfig.privateOllama.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 text-[11px] bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-800">
+              <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={kvConfig.privateOllama.flashAttention}
+                  onChange={e =>
+                    persistKvUpdate({
+                      ...kvConfig,
+                      privateOllama: { ...kvConfig.privateOllama, flashAttention: e.target.checked }
+                    })
+                  }
+                  className="rounded border-slate-600 text-emerald-500"
+                />
+                <span>Flash Attn</span>
+              </label>
+              <select
+                value={kvConfig.privateOllama.kvCacheType}
+                onChange={e =>
+                  persistKvUpdate({
+                    ...kvConfig,
+                    privateOllama: { ...kvConfig.privateOllama, kvCacheType: e.target.value as 'q8_0' | 'f16' }
+                  })
+                }
+                className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-amber-300"
+              >
+                <option value="q8_0">q8_0 KV</option>
+                <option value="f16">f16 KV</option>
+              </select>
+              <select
+                value={kvConfig.privateOllama.keepAlive}
+                onChange={e =>
+                  persistKvUpdate({
+                    ...kvConfig,
+                    privateOllama: { ...kvConfig.privateOllama, keepAlive: e.target.value }
+                  })
+                }
+                className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-cyan-300"
+              >
+                <option value="15m">15m</option>
+                <option value="30m">30m</option>
+                <option value="60m">60m</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                disabled={primingSlot !== null}
+                onClick={() => handlePrimeEngineKvCache('privateOllama')}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+              >
+                {primingSlot === 'privateOllama' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                <span>Prime Private Ollama KV</span>
+              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  disabled={applyingOllamaEnv}
+                  onClick={handleApplyOllamaEnv}
+                  className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-amber-300 border border-slate-700 cursor-pointer"
+                  title="Sets OLLAMA_FLASH_ATTENTION & OLLAMA_KV_CACHE_TYPE"
+                >
+                  {applyingOllamaEnv ? 'Applying...' : 'Apply Env Flags'}
+                </button>
+                <button
+                  type="button"
+                  disabled={unloadingOllama}
+                  onClick={handleUnloadOllama}
+                  className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-[10px] font-bold text-rose-300 border border-slate-700 cursor-pointer"
+                >
+                  {unloadingOllama ? 'Unloading...' : 'Unload RAM'}
+                </button>
+              </div>
+            </div>
+
+            {ollamaEnvMsg && (
+              <div className={`text-[10px] leading-snug p-2 rounded-lg border ${ollamaEnvMsg.ok ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'}`}>
+                {ollamaEnvMsg.text}
+              </div>
+            )}
+            {slotStatusMsg.privateOllama && (
+              <div className={`text-[10px] leading-snug p-2 rounded-lg border ${slotStatusMsg.privateOllama.ok ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'}`}>
+                {slotStatusMsg.privateOllama.text}
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Claude Sonnet */}
+          <div
+            className={`rounded-xl border p-4 space-y-3 transition-all ${
+              kvConfig.claudeSonnet.enabled
+                ? 'bg-amber-950/20 border-amber-500/50'
+                : 'bg-slate-950/70 border-slate-800'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-extrabold text-white">Claude Sonnet</div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                  {kvConfig.claudeSonnet.model} (ephemeral cache)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSlotEnabled('claudeSonnet')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  kvConfig.claudeSonnet.enabled ? 'bg-amber-500' : 'bg-slate-700'
+                }`}
+                title="Toggle KV Cache for Claude Sonnet"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    kvConfig.claudeSonnet.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Pins D1 + D9 + Rules via Anthropic <code className="text-amber-300">cache_control: ephemeral</code>. Only &le; 2K ephemeris bills at full input rate.
+            </p>
+            <button
+              type="button"
+              disabled={primingSlot !== null}
+              onClick={() => handlePrimeEngineKvCache('claudeSonnet')}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+            >
+              {primingSlot === 'claudeSonnet' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>Prime Claude Sonnet KV</span>
+            </button>
+            {slotStatusMsg.claudeSonnet && (
+              <div className={`text-[10px] leading-snug p-2 rounded-lg border ${slotStatusMsg.claudeSonnet.ok ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'}`}>
+                {slotStatusMsg.claudeSonnet.text}
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Claude Fable 5.1 */}
+          <div
+            className={`rounded-xl border p-4 space-y-3 transition-all ${
+              kvConfig.claudeFable.enabled
+                ? 'bg-purple-950/20 border-purple-500/50'
+                : 'bg-slate-950/70 border-slate-800'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-extrabold text-white">Claude Fable 5.1</div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                  {kvConfig.claudeFable.model} (ephemeral cache)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSlotEnabled('claudeFable')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  kvConfig.claudeFable.enabled ? 'bg-purple-500' : 'bg-slate-700'
+                }`}
+                title="Toggle KV Cache for Claude Fable"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    kvConfig.claudeFable.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Pre-warms Anthropic KV prefix for deep adaptive synthesis on <code className="text-purple-300">claude-fable-5-1</code> across sequential months.
+            </p>
+            <button
+              type="button"
+              disabled={primingSlot !== null}
+              onClick={() => handlePrimeEngineKvCache('claudeFable')}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+            >
+              {primingSlot === 'claudeFable' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>Prime Claude Fable KV</span>
+            </button>
+            {slotStatusMsg.claudeFable && (
+              <div className={`text-[10px] leading-snug p-2 rounded-lg border ${slotStatusMsg.claudeFable.ok ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'}`}>
+                {slotStatusMsg.claudeFable.text}
+              </div>
+            )}
+          </div>
+
+          {/* Card 4: Google Gemini Pro */}
+          <div
+            className={`rounded-xl border p-4 space-y-3 transition-all ${
+              kvConfig.geminiPro.enabled
+                ? 'bg-cyan-950/20 border-cyan-500/50'
+                : 'bg-slate-950/70 border-slate-800'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-extrabold text-white">Google Gemini Pro</div>
+                <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                  {kvConfig.geminiPro.model} (systemInstruction)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSlotEnabled('geminiPro')}
+                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  kvConfig.geminiPro.enabled ? 'bg-cyan-500' : 'bg-slate-700'
+                }`}
+                title="Toggle KV Cache for Google Gemini Pro"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    kvConfig.geminiPro.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Routes static D1/D9/Rules/JSON schema into Gemini <code className="text-cyan-300">systemInstruction</code> so implicit prefix KV cache hits cleanly.
+            </p>
+            <button
+              type="button"
+              disabled={primingSlot !== null}
+              onClick={() => handlePrimeEngineKvCache('geminiPro')}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+            >
+              {primingSlot === 'geminiPro' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>Prime Gemini Pro KV</span>
+            </button>
+            {slotStatusMsg.geminiPro && (
+              <div className={`text-[10px] leading-snug p-2 rounded-lg border ${slotStatusMsg.geminiPro.ok ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'}`}>
+                {slotStatusMsg.geminiPro.text}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modular 4-Section System Cache Editor (Edit any single section independently) */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { id: 'd1Chart', label: '1. D1 Chart' },
+                  { id: 'd9Chart', label: '2. D9 Chart' },
+                  { id: 'rules', label: `3. Rules (${kvMode.toUpperCase()})` },
+                  { id: 'delivery', label: '4. Delivery Contract' }
+                ] as const
+              ).map(tab => {
+                const hasCustom = Boolean(kvConfig.overrides[tab.id]?.trim());
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveKvBlockTab(tab.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeKvBlockTab === tab.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    {hasCustom && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Custom edited" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {kvConfig.overrides[activeKvBlockTab] && (
+              <button
+                type="button"
+                onClick={() => handleResetBlockOverride(activeKvBlockTab)}
+                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Block to Default</span>
+              </button>
+            )}
+          </div>
+
+          <textarea
+            value={kvConfig.overrides[activeKvBlockTab] ?? defaultBlockTexts[activeKvBlockTab]}
+            onChange={e => handleUpdateBlockOverride(activeKvBlockTab, e.target.value)}
+            rows={7}
+            spellCheck={false}
+            className="w-full rounded-lg bg-slate-900 border border-slate-800 focus:border-emerald-500/60 focus:outline-none p-3 font-mono text-[11px] text-slate-200 leading-relaxed"
+          />
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
+            <span>
+              Edit any single KV section above independently; untouched blocks automatically reflect your active person chart &amp; rules.
+            </span>
+            <span className="font-mono text-slate-400">
+              Section ~{Math.round((kvConfig.overrides[activeKvBlockTab] ?? defaultBlockTexts[activeKvBlockTab]).length / 4)} tok
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* SECTION 1: PROMPT VERSION SELECTOR */}

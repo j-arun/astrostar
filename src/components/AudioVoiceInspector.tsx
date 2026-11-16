@@ -66,6 +66,12 @@ import {
   listCachedPredictions,
   loadCachedPrediction
 } from '../services/predictionCacheService';
+import { KvCachePreflightModal } from './KvCachePreflightModal';
+import {
+  KvCacheEngineSlot,
+  mapProviderToKvSlot,
+  isKvCacheEnabledForEngine
+} from '../services/llm/kvCacheManager';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -232,6 +238,12 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
   const [isPromptCustomized, setIsPromptCustomized] = useState<boolean>(false);
   const [showPromptStudio, setShowPromptStudio] = useState<boolean>(true);
   const [promptStudioFold, setPromptStudioFold] = useState<'plain' | 'structured'>('plain');
+  const [pendingKvGate, setPendingKvGate] = useState<{
+    slot: KvCacheEngineSlot;
+    customQuery?: string;
+    promptOverride?: string;
+    providerOverride?: LLMProviderId;
+  } | null>(null);
 
   const handleApplyPreset = (domain: 'career' | 'love' | 'finance' | 'health') => {
     if (!context) return;
@@ -370,8 +382,26 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     };
   }, []);
 
-  const handleGenerate = async (customQuery?: string, promptOverrideToUse?: string, providerOverride?: LLMProviderId) => {
+  const handleGenerate = async (
+    customQuery?: string,
+    promptOverrideToUse?: string,
+    providerOverride?: LLMProviderId,
+    kvGateDecision?: 'use_kv' | 'skip_kv'
+  ) => {
     if (!liveContext) return;
+    const providerToUse = providerOverride || activeProviderRef.current;
+    const slot = mapProviderToKvSlot(providerToUse);
+
+    if (!kvGateDecision && !isKvCacheEnabledForEngine(slot)) {
+      setPendingKvGate({
+        slot,
+        customQuery,
+        promptOverride: promptOverrideToUse,
+        providerOverride
+      });
+      return;
+    }
+
     stopSpeech();
 
     // Switch back to live view whenever user triggers a fresh synthesis
@@ -387,7 +417,6 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
     }
 
     const mySeq = ++requestSeqRef.current;
-    const providerToUse = providerOverride || activeProviderRef.current;
 
     // Set up AbortController for cancel support
     const controller = new AbortController();
@@ -406,6 +435,7 @@ export const AudioVoiceInspector: React.FC<AudioVoiceInspectorProps> = ({
         language: selectedLanguage,
         selectedLocalModel: localOllamaModel,
         customPromptOverride: promptToSend,
+        useKvCache: kvGateDecision === 'skip_kv' ? false : kvGateDecision === 'use_kv' ? true : undefined,
         enableTimeout,
         timeoutSeconds,
         geminiApiKey: geminiApiKey.trim() || undefined,
@@ -3681,10 +3711,35 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
       </div>
   );
 
+  const kvModal = (
+    <KvCachePreflightModal
+      isOpen={Boolean(pendingKvGate)}
+      engineSlot={pendingKvGate?.slot || 'geminiPro'}
+      context={liveContext}
+      actionLabel="Send Prediction Prompt"
+      onCancel={() => setPendingKvGate(null)}
+      onProceedWithKvCache={() => {
+        const pending = pendingKvGate;
+        setPendingKvGate(null);
+        if (pending) {
+          void handleGenerate(pending.customQuery, pending.promptOverride, pending.providerOverride, 'use_kv');
+        }
+      }}
+      onProceedWithoutKvCache={() => {
+        const pending = pendingKvGate;
+        setPendingKvGate(null);
+        if (pending) {
+          void handleGenerate(pending.customQuery, pending.promptOverride, pending.providerOverride, 'skip_kv');
+        }
+      }}
+    />
+  );
+
   if (inlineView) {
     return (
       <div className="w-full flex-1 flex flex-col animate-fadeIn">
         {inspectorContent}
+        {kvModal}
       </div>
     );
   }
@@ -3692,6 +3747,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
   return (
     <div className={`fixed inset-0 z-50 flex ${isFullScreen ? 'p-0' : 'items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md'} animate-fadeIn`}>
       {inspectorContent}
+      {kvModal}
     </div>
   );
 };

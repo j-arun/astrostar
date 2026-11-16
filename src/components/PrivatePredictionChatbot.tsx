@@ -41,6 +41,13 @@ import {
 } from '../services/llm/adapters';
 import { ADChamberDynamics } from '../services/dashaChamberEngine';
 import type { VedicWindowAnalysis } from '../services/vedicEventsEngine';
+import { KvCachePreflightModal } from './KvCachePreflightModal';
+import {
+  isKvCacheEnabledForEngine,
+  loadKvCacheConfig,
+  buildDefaultRulesBlock,
+  buildDefaultDeliveryBlock
+} from '../services/llm/kvCacheManager';
 
 export interface ChatMessage {
   id: string;
@@ -300,6 +307,7 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
     availableModels: [],
     checking: false
   });
+  const [pendingKvQuery, setPendingKvQuery] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -519,9 +527,15 @@ Ask me specific questions comparing personal situations, like:
   };
 
   // Submit User Message to Local Ollama (via CORS-free proxy or direct) with deterministic fallback
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string, kvDecision?: 'use_kv' | 'skip_kv') => {
     const query = (textToSend || userInput).trim();
     if (!query || isGenerating) return;
+
+    // Pre-flight KV cache check when local Ollama is available or targeted
+    if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
+      setPendingKvQuery(query);
+      return;
+    }
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -542,61 +556,61 @@ Ask me specific questions comparing personal situations, like:
     const canTryOllama = ollamaStatus.isOnline || (await pingOllamaHealth(ollamaEndpoint)).isOnline;
     if (canTryOllama) {
       try {
+        const kvCfg = loadKvCacheConfig();
+        const useKvSplit = kvDecision === 'use_kv' || (kvDecision !== 'skip_kv' && Boolean(kvCfg.privateOllama.enabled));
+
         const languageDirective =
           responseLanguage === 'ta'
             ? `LANGUAGE RULE: Respond in clear, respectful Tamil (தமிழ்) script with clean technical clarity.`
             : `LANGUAGE RULE: Respond strictly in clear, fluent English. Use standard English zodiac signs (Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces) and English planet names (Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu). Do not output Tamil script or regional Tamil transliterations.`;
 
-        const systemPrompt = `You are a classical Parashara Vedic Astrological Prediction Analyst running privately on the user's local machine.
-The user is viewing their active monthly/timeline prediction screen and asking a personal follow-up question.
+        const dynamicSnapshotOnly = [
+          `Timeline: ${screenContextSnapshot.monthName} ${screenContextSnapshot.selectedYear}`,
+          `DASHA: MD:${screenContextSnapshot.dasha.md} | AD:${screenContextSnapshot.dasha.ad} | PD:${screenContextSnapshot.dasha.pd} (${screenContextSnapshot.dasha.window})`,
+          screenContextSnapshot.adChamber
+            ? `AD_CHAMBER: ${screenContextSnapshot.adChamber.adLord}@${screenContextSnapshot.adChamber.seat} (${screenContextSnapshot.adChamber.polarity}, Net:${screenContextSnapshot.adChamber.netScore}) | Conj:${screenContextSnapshot.adChamber.conjunctions.join(',') || 'None'} | Asp:${screenContextSnapshot.adChamber.aspects.join('; ') || 'None'}`
+            : '',
+          `TRANSITS:\n${screenContextSnapshot.transits.join('\n')}`,
+          `GATES:\n${screenContextSnapshot.gates.join('\n')}`,
+          `EVENTS:\n${screenContextSnapshot.events.slice(0, 8).join('\n')}`,
+          vedicSpecialEvents?.promptMarkdownBlock ? `${vedicSpecialEvents.promptMarkdownBlock.slice(0, 1100)}` : '',
+          `USER QUESTION: "${query}"`
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+          .slice(0, 7600);
 
-=== COMPLETE SCREEN DATA SNAPSHOT (GROUND TRUTH) ===
+        const staticKvSystem = [
+          kvCfg.overrides?.d1Chart?.trim() ||
+            `## NATAL BASELINE\nNative: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})\nLagna: ${screenContextSnapshot.natalLagna} | Natal Moon: ${screenContextSnapshot.natalMoon}`,
+          kvCfg.overrides?.d9Chart?.trim() || '',
+          kvCfg.overrides?.rules?.trim() || buildDefaultRulesBlock('v3'),
+          kvCfg.overrides?.delivery?.trim() || buildDefaultDeliveryBlock('v3', 'qa_chat'),
+          languageDirective
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+
+        const legacyUnifiedPrompt = `You are a classical Parashara Vedic Astrological Prediction Analyst running privately on the user's local machine.
 Native: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})
-Timeline: ${screenContextSnapshot.monthName} ${screenContextSnapshot.selectedYear}
-Natal Lagna (Ascendant): ${screenContextSnapshot.natalLagna}
-Natal Moon: ${screenContextSnapshot.natalMoon}
+Natal Lagna: ${screenContextSnapshot.natalLagna} | Natal Moon: ${screenContextSnapshot.natalMoon}
 
-Active Dasha Hierarchy:
-- Mahadasha (MD): ${screenContextSnapshot.dasha.md}
-- Antardasha (AD): ${screenContextSnapshot.dasha.ad}
-- Pratyantardasha (PD): ${screenContextSnapshot.dasha.pd}
-- Date Horizon: ${screenContextSnapshot.dasha.window}
-${screenContextSnapshot.adChamber ? `\nAD Pressure Chamber:\n- Host: ${screenContextSnapshot.adChamber.adLord} at ${screenContextSnapshot.adChamber.seat} (${screenContextSnapshot.adChamber.polarity}, Net Score: ${screenContextSnapshot.adChamber.netScore})\n- Conjunctions: ${screenContextSnapshot.adChamber.conjunctions.join(', ') || 'None'}\n- Incoming Aspects: ${screenContextSnapshot.adChamber.aspects.join('; ') || 'None'}\n` : ''}
-Transiting Planets in the Sky (Gochara Ephemeris):
-${screenContextSnapshot.transits.join('\n')}
-
-The 3 Delivering Nakshatra Gates:
-${screenContextSnapshot.gates.join('\n')}
-
-Manifested Prediction Events on Screen:
-${screenContextSnapshot.events.join('\n')}
-${vedicSpecialEvents?.promptMarkdownBlock ? `\n${vedicSpecialEvents.promptMarkdownBlock}\n` : ''}
-===================================================
-
-USER QUESTION:
-"${query}"
+${dynamicSnapshotOnly}
 
 INSTRUCTIONS:
 1. ${languageDirective}
-2. Answer strictly from the provided screen ground truth.
-3. Apply dual-fold transit reasoning cleanly: explain BOTH what happens in outer lived reality (House from Lagna) AND how it feels internally/mentally (House from Moon).
-4. If the user compares specific scenarios (e.g., on-site travel vs. new role assignment, high income, relationship outcomes):
-   - Provide an alignment probability percentage for each scenario.
-   - Format comparison tables with Markdown pipes (| Scenario | Alignment Probability | Key Transit Mechanisms |).
-   - Explain exact Lagna & Moon transit houses, transiting planets, and delivering Nakshatra gates supporting each outcome.
-   - Give a clear, decisive verdict grounded in the active screen data.
-5. If the user asks where planets are in transit, cite exact degrees, sign, Nakshatra, pada, and both Lagna and Moon house numbers from the transits list.
-6. Format cleanly with Markdown headings (###, ####), bullet points, and bold text.`;
+2. Answer strictly from the provided screen ground truth using Dual-Fold (Lagna lived event + Moon mental experience) reasoning.
+3. For scenario comparisons include a Markdown comparison table and decisive verdict.`;
 
         const data = await callLocalOllamaGenerate({
           endpoint: ollamaEndpoint,
           model: localModelName,
-          prompt: systemPrompt,
-          keep_alive: '5m',
+          ...(useKvSplit ? { system: staticKvSystem, prompt: dynamicSnapshotOnly } : { prompt: legacyUnifiedPrompt }),
+          keep_alive: useKvSplit ? (kvCfg.privateOllama.keepAlive || '30m') : '5m',
           options: {
             temperature: 0.3,
             num_predict: 2000,
-            num_ctx: numCtx
+            num_ctx: useKvSplit ? Math.min(numCtx, 8192) : numCtx
           }
         });
 
@@ -604,6 +618,7 @@ INSTRUCTIONS:
         if (responseText) {
           const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
           const tokInfo = data.eval_count ? ` • ${data.eval_count} tok` : '';
+          const kvTag = useKvSplit ? ' • KV' : '';
           const langTag = responseLanguage === 'ta' ? 'TA' : 'EN';
           const displayModel = formatLocalModelDisplayName(data.model || localModelName);
           if (!ollamaStatus.isOnline) {
@@ -616,7 +631,7 @@ INSTRUCTIONS:
               sender: 'assistant',
               text: responseText,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              modelUsed: `${displayModel} [${langTag}] • ${elapsedSec}s${tokInfo}`
+              modelUsed: `${displayModel} [${langTag}${kvTag}] • ${elapsedSec}s${tokInfo}`
             }
           ]);
           setIsGenerating(false);
@@ -1381,6 +1396,23 @@ INSTRUCTIONS:
           )}
         </div>
       )}
+
+      <KvCachePreflightModal
+        isOpen={Boolean(pendingKvQuery)}
+        engineSlot="privateOllama"
+        actionLabel="Send Local Q&A"
+        onCancel={() => setPendingKvQuery(null)}
+        onProceedWithKvCache={() => {
+          const q = pendingKvQuery;
+          setPendingKvQuery(null);
+          if (q) void handleSendMessage(q, 'use_kv');
+        }}
+        onProceedWithoutKvCache={() => {
+          const q = pendingKvQuery;
+          setPendingKvQuery(null);
+          if (q) void handleSendMessage(q, 'skip_kv');
+        }}
+      />
     </div>
   );
 };

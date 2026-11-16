@@ -1054,7 +1054,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
         req.on('end', async () => {
           res.setHeader('Content-Type', 'application/json');
           try {
-            const { prompt, apiKey: bodyApiKey, model: requestedModel, isTestPing } = JSON.parse(body || '{}');
+            const { prompt, systemInstruction, apiKey: bodyApiKey, model: requestedModel, isTestPing } = JSON.parse(body || '{}');
 
             // Header x-goog-api-key / x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = (req.headers['x-goog-api-key'] || req.headers['x-api-key']) as string | undefined;
@@ -1172,6 +1172,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                     model: candModel,
                     contents: prompt,
                     config: {
+                      ...(systemInstruction ? { systemInstruction } : {}),
                       temperature: 0.2,
                       responseMimeType: 'application/json'
                     }
@@ -1272,7 +1273,7 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
         req.on('end', async () => {
           res.setHeader('Content-Type', 'application/json');
           try {
-            const { prompt, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens, isTestPing } = JSON.parse(body || '{}');
+            const { prompt, system, usePromptCache, model: requestedModel, apiKey: bodyApiKey, thinkingMode, budgetTokens, maxTokens, isTestPing } = JSON.parse(body || '{}');
 
             // Header x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = req.headers['x-api-key'] as string | undefined;
@@ -1312,6 +1313,14 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             const payload: any = {
               model: primaryModel,
               max_tokens: effectiveMaxTokens,
+              ...(system && String(system).trim().length > 0
+                ? {
+                    system:
+                      usePromptCache !== false
+                        ? [{ type: 'text', text: String(system), cache_control: { type: 'ephemeral' } }]
+                        : String(system)
+                  }
+                : {}),
               messages: [
                 {
                   role: 'user',
@@ -1344,8 +1353,8 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
             }
             // If thinkingMode is 'auto', no thinking field is passed, allowing Anthropic default adaptive behavior
 
-            // 1. Log outgoing payload right before fetch (as requested)
-            console.log("SENT:", JSON.stringify({ ...payload, messages: "[omitted]" }));
+            // 1. Log outgoing payload right before fetch
+            console.log("SENT:", JSON.stringify({ ...payload, system: payload.system ? "[cached_system]" : undefined, messages: "[omitted]" }));
 
             let anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
@@ -1803,7 +1812,7 @@ function docsServerPlugin(): Plugin {
   };
 }
 
-function localBatchPlugin(): Plugin {
+function localBatchPlugin(env: Record<string, string>): Plugin {
   const BATCH_MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -1857,6 +1866,38 @@ function localBatchPlugin(): Plugin {
   let heartbeatInterval: NodeJS.Timeout | null = null;
   let activeHttpReq: http.ClientRequest | null = null;
   let activeContextPayload: any = null;
+  let activePayloadKvConfig: any = null;
+
+  const kvConfigFilePath = path.resolve(__dirname, 'src/data/kv_cache_config.json');
+
+  const readPersistedKvCacheConfig = () => {
+    try {
+      if (fs.existsSync(kvConfigFilePath)) {
+        return JSON.parse(fs.readFileSync(kvConfigFilePath, 'utf-8'));
+      }
+    } catch {}
+    return {
+      privateOllama: {
+        enabled: false,
+        flashAttention: true,
+        kvCacheType: 'q8_0',
+        keepAlive: '30m',
+        model: 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M'
+      },
+      claudeSonnet: { enabled: false, model: 'claude-sonnet-5-5' },
+      claudeFable: { enabled: false, model: 'claude-fable-5-1' },
+      geminiPro: { enabled: false, model: 'gemini-flash-latest' },
+      overrides: {}
+    };
+  };
+
+  const writePersistedKvCacheConfig = (cfg: any) => {
+    try {
+      const dir = path.dirname(kvConfigFilePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(kvConfigFilePath, JSON.stringify(cfg, null, 2), 'utf-8');
+    } catch {}
+  };
 
   const sanitizeFolderKey = (raw: string): string => {
     const trimmed = String(raw || 'vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
@@ -2106,11 +2147,11 @@ function localBatchPlugin(): Plugin {
         const periodLabel = `${state.monthName} ${state.year}`;
         pushLog('=========================================================================');
         pushLog(`[BATCH START] Firing ${periodLabel} on ${state.modelTag}`);
-        pushLog(`[BATCH INFO] Endpoint: ${state.ollamaEndpoint} | stream=true | num_ctx=16384 | timeout=UNLIMITED`);
         setConsoleTitle(`[BATCH RUNNING] ${periodLabel} (${state.modelTag})`);
 
         try {
           const adaptersMod: any = await server.ssrLoadModule('/src/services/llm/adapters.ts');
+          const kvMod: any = await server.ssrLoadModule('/src/services/llm/kvCacheManager.ts');
           const htmlMod: any = await server.ssrLoadModule('/src/services/htmlReportGenerator.ts');
 
           const activePromptVer =
@@ -2119,25 +2160,43 @@ function localBatchPlugin(): Plugin {
             activeContextPayload.promptVersion === 'v3'
               ? activeContextPayload.promptVersion
               : 'v3';
-          const prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, activePromptVer);
+
+          const effectiveKvCfg = activePayloadKvConfig || readPersistedKvCacheConfig();
+          const useKvCache = Boolean(effectiveKvCfg?.privateOllama?.enabled) && activePromptVer !== 'v1';
+
+          let systemPromptText: string | undefined;
+          let systemTokensEst = 0;
+          let prompt = '';
+          if (useKvCache) {
+            const mode: 'v2' | 'v3' = activePromptVer === 'v2' ? 'v2' : 'v3';
+            const sysRes = kvMod.buildKvCacheSystemPrefix(
+              activeContextPayload,
+              mode,
+              effectiveKvCfg.overrides || {},
+              'json_report'
+            );
+            const ephRes = kvMod.buildEphemeralsOnlyPrompt(activeContextPayload, activePromptVer, 2000);
+            systemPromptText = sysRes.systemPrompt;
+            systemTokensEst = sysRes.systemTokensEst;
+            prompt = ephRes.ephemeralsPrompt;
+          } else {
+            prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, activePromptVer);
+          }
+
           state.promptChars = prompt.length;
           state.promptTokensEst = Math.round(prompt.length / 4);
-          pushLog(`[BATCH PROMPT] Built ${activePromptVer.toUpperCase()} unified prompt (Monthly Prediction + Manifestation Events): ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
 
-          const requestBody = {
-            model: state.modelTag,
-            prompt,
-            stream: true,
-            format: 'json',
-            keep_alive: '2m',
-            options: {
-              temperature: 0.3,
-              num_predict: 6144,
-              num_ctx: 16384
-            }
-          };
+          const primaryNumCtx = 8192;
+          const primaryNumPredict = 3200;
+          const keepAliveSetting = useKvCache ? (effectiveKvCfg?.privateOllama?.keepAlive || '30m') : '2m';
 
-          const payloadStr = JSON.stringify(requestBody);
+          pushLog(`[BATCH INFO] Endpoint: ${state.ollamaEndpoint} | stream=true | num_ctx=${primaryNumCtx} | num_predict=${primaryNumPredict} | keep_alive=${keepAliveSetting} | timeout=UNLIMITED`);
+          if (useKvCache) {
+            pushLog(`[BATCH KV CACHE] System Prefix (~${systemTokensEst} tokens cached in KV) | Ephemeris Prompt (${prompt.length} chars, ~${state.promptTokensEst} tokens <= 2K). Evaluating in Ollama...`);
+          } else {
+            pushLog(`[BATCH PROMPT] Built ${activePromptVer.toUpperCase()} unified prompt: ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
+          }
+
           const targetUrl = new URL(state.ollamaEndpoint);
           const client = targetUrl.protocol === 'https:' ? https : http;
 
@@ -2154,93 +2213,112 @@ function localBatchPlugin(): Plugin {
             setConsoleTitle(`[BATCH ${periodLabel}] ${statusText}`);
           }, 15000);
 
-          const streamResult: {
+          const executeOllamaStream = (bodyObj: Record<string, any>): Promise<{
             responseText: string;
             finalMeta: any;
-          } = await new Promise((resolve, reject) => {
-            let aggregated = '';
-            let ndjsonBuffer = '';
-            let finalMeta: any = {};
-            let firstTokenLogged = false;
+          }> => {
+            const payloadStr = JSON.stringify(bodyObj);
+            return new Promise((resolve, reject) => {
+              let aggregated = '';
+              let ndjsonBuffer = '';
+              let finalMeta: any = {};
+              let firstTokenLogged = false;
 
-            const outReq = client.request(
-              {
-                hostname: targetUrl.hostname,
-                port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
-                path: targetUrl.pathname + targetUrl.search,
-                method: 'POST',
-                timeout: 0,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(payloadStr)
-                }
-              },
-              (inRes) => {
-                inRes.setTimeout(0);
-                if (inRes.socket) {
-                  inRes.socket.setTimeout(0);
-                  inRes.socket.setKeepAlive(true, 15000);
-                }
+              const outReq = client.request(
+                {
+                  hostname: targetUrl.hostname,
+                  port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+                  path: targetUrl.pathname + targetUrl.search,
+                  method: 'POST',
+                  timeout: 0,
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payloadStr)
+                  }
+                },
+                (inRes) => {
+                  inRes.setTimeout(0);
+                  if (inRes.socket) {
+                    inRes.socket.setTimeout(0);
+                    inRes.socket.setKeepAlive(true, 15000);
+                  }
 
-                if ((inRes.statusCode || 500) >= 400) {
-                  let errBody = '';
-                  inRes.on('data', chunk => { errBody += chunk.toString('utf-8'); });
-                  inRes.on('end', () => {
-                    reject(new Error(`Ollama HTTP ${inRes.statusCode}: ${errBody || inRes.statusMessage}`));
-                  });
-                  return;
-                }
+                  if ((inRes.statusCode || 500) >= 400) {
+                    let errBody = '';
+                    inRes.on('data', chunk => { errBody += chunk.toString('utf-8'); });
+                    inRes.on('end', () => {
+                      reject(new Error(`Ollama HTTP ${inRes.statusCode}: ${errBody || inRes.statusMessage}`));
+                    });
+                    return;
+                  }
 
-                inRes.on('data', (chunk: Buffer) => {
-                  ndjsonBuffer += chunk.toString('utf-8');
-                  const lines = ndjsonBuffer.split('\n');
-                  ndjsonBuffer = lines.pop() || '';
+                  inRes.on('data', (chunk: Buffer) => {
+                    ndjsonBuffer += chunk.toString('utf-8');
+                    const lines = ndjsonBuffer.split('\n');
+                    ndjsonBuffer = lines.pop() || '';
 
-                  for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed) continue;
-                    try {
-                      const obj = JSON.parse(trimmed);
-                      if (typeof obj.response === 'string' && obj.response.length > 0) {
-                        aggregated += obj.response;
-                        state.tokensGenerated += 1;
-                        if (!firstTokenLogged) {
-                          firstTokenLogged = true;
-                          pushLog(`[BATCH STREAM][${periodLabel}] Prefill complete in ${formatElapsed(Date.now() - startMs)} — streaming response tokens...`);
+                    for (const line of lines) {
+                      const trimmed = line.trim();
+                      if (!trimmed) continue;
+                      try {
+                        const obj = JSON.parse(trimmed);
+                        if (typeof obj.response === 'string' && obj.response.length > 0) {
+                          aggregated += obj.response;
+                          state.tokensGenerated += 1;
+                          if (!firstTokenLogged) {
+                            firstTokenLogged = true;
+                            pushLog(`[BATCH STREAM][${periodLabel}] Prefill complete in ${formatElapsed(Date.now() - startMs)} — streaming response tokens...`);
+                          }
                         }
-                      }
-                      if (obj.done) {
-                        finalMeta = obj;
-                      }
-                    } catch {}
-                  }
-                });
+                        if (obj.done) {
+                          finalMeta = obj;
+                        }
+                      } catch {}
+                    }
+                  });
 
-                inRes.on('end', () => {
-                  if (ndjsonBuffer.trim()) {
-                    try {
-                      const tail = JSON.parse(ndjsonBuffer.trim());
-                      if (typeof tail.response === 'string') aggregated += tail.response;
-                      if (tail.done) finalMeta = tail;
-                    } catch {}
-                  }
-                  resolve({ responseText: aggregated, finalMeta });
-                });
+                  inRes.on('end', () => {
+                    if (ndjsonBuffer.trim()) {
+                      try {
+                        const tail = JSON.parse(ndjsonBuffer.trim());
+                        if (typeof tail.response === 'string') aggregated += tail.response;
+                        if (tail.done) finalMeta = tail;
+                      } catch {}
+                    }
+                    resolve({ responseText: aggregated, finalMeta });
+                  });
 
-                inRes.on('error', err => reject(err));
-              }
-            );
+                  inRes.on('error', err => reject(err));
+                }
+              );
 
-            activeHttpReq = outReq;
-            outReq.setTimeout(0);
-            outReq.on('socket', sock => {
-              sock.setTimeout(0);
-              sock.setKeepAlive(true, 15000);
+              activeHttpReq = outReq;
+              outReq.setTimeout(0);
+              outReq.on('socket', sock => {
+                sock.setTimeout(0);
+                sock.setKeepAlive(true, 15000);
+              });
+              outReq.on('error', err => reject(err));
+              outReq.write(payloadStr);
+              outReq.end();
             });
-            outReq.on('error', err => reject(err));
-            outReq.write(payloadStr);
-            outReq.end();
-          });
+          };
+
+          const requestBody: Record<string, any> = {
+            model: state.modelTag,
+            ...(useKvCache && systemPromptText ? { system: systemPromptText } : {}),
+            prompt,
+            stream: true,
+            format: 'json',
+            keep_alive: keepAliveSetting,
+            options: {
+              temperature: 0.3,
+              num_predict: primaryNumPredict,
+              num_ctx: primaryNumCtx
+            }
+          };
+
+          const streamResult = await executeOllamaStream(requestBody);
 
           activeHttpReq = null;
           clearTimers();
@@ -2260,16 +2338,22 @@ function localBatchPlugin(): Plugin {
             evalCount: streamResult.finalMeta?.eval_count ?? state.tokensGenerated
           };
 
+          const promptSentLog = useKvCache && systemPromptText
+            ? `[SYSTEM KV CACHE ~${systemTokensEst} tok]\n${systemPromptText}\n\n[EPHEMERIS PROMPT <=2K (~${state.promptTokensEst} tok)]\n${prompt}`
+            : prompt;
+
           const narrative = adaptersMod.buildBatchNarrativeFromRawResponse(
             activeContextPayload,
             streamResult.responseText,
             {
               modelTag: state.modelTag,
-              promptSent: prompt,
+              promptSent: promptSentLog,
               endpointUsed: state.ollamaEndpoint,
               executionTimeMs: elapsedMs,
               requestBody,
               rawResponseBody: { ...streamResult.finalMeta, response: streamResult.responseText },
+              kvCacheUsed: useKvCache,
+              systemTokens: systemTokensEst,
               ollamaStats
             }
           );
@@ -2387,7 +2471,11 @@ function localBatchPlugin(): Plugin {
           state.savedHtmlUrl = htmlUrl;
           state.savedJsonUrl = jsonUrl;
 
-          releaseOllamaModel(state.ollamaEndpoint, state.modelTag);
+          if (!useKvCache) {
+            releaseOllamaModel(state.ollamaEndpoint, state.modelTag);
+          } else {
+            pushLog(`[BATCH KV CACHE] Preserved loaded KV cache in RAM for ${keepAliveSetting} (use Unload Model button to free RAM manually).`);
+          }
 
           pushLog('=========================================================================');
           pushLog(`[BATCH COMPLETE] ${periodLabel} finished in ${formatElapsed(elapsedMs)}!`);
@@ -2462,10 +2550,11 @@ function localBatchPlugin(): Plugin {
               const forwardBody = JSON.stringify({
                 model: requestedModel,
                 prompt: payload.prompt || '',
+                ...(payload.system ? { system: payload.system } : {}),
                 stream: false,
                 ...(payload.format ? { format: payload.format } : {}),
                 ...(payload.keep_alive !== undefined ? { keep_alive: payload.keep_alive } : {}),
-                options: payload.options || { temperature: 0.3, num_predict: 2000, num_ctx: 16384 }
+                options: payload.options || { temperature: 0.3, num_predict: 2000, num_ctx: 8192 }
               });
 
               const parsed = new URL(generateUrl);
@@ -2509,6 +2598,267 @@ function localBatchPlugin(): Plugin {
               res.end(JSON.stringify({
                 error: err?.message || 'Local Ollama proxy connection failed (Is Ollama running on port 11434?)'
               }));
+            }
+          });
+          return;
+        }
+
+        // Unified KV Cache Configuration, Ollama Flash-Attention/q8_0 Env, Warmup & Unload Endpoints
+        if (rawUrl.split('?')[0].startsWith('/api/llm/kv-cache/')) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204;
+            res.end();
+            return;
+          }
+
+          const kvPath = rawUrl.split('?')[0];
+          res.setHeader('Content-Type', 'application/json');
+
+          if (kvPath === '/api/llm/kv-cache/config' && req.method === 'GET') {
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, config: readPersistedKvCacheConfig() }));
+            return;
+          }
+
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const payload = body ? JSON.parse(body) : {};
+
+              if (kvPath === '/api/llm/kv-cache/config' && req.method === 'POST') {
+                writePersistedKvCacheConfig(payload);
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true, config: payload }));
+                return;
+              }
+
+              if (kvPath === '/api/llm/kv-cache/configure-ollama-env') {
+                const enableFlash = payload.flashAttention !== false;
+                const kvType = payload.kvCacheType === 'f16' ? 'f16' : 'q8_0';
+                process.env.OLLAMA_FLASH_ATTENTION = enableFlash ? '1' : '0';
+                process.env.OLLAMA_KV_CACHE_TYPE = kvType;
+
+                if (process.platform === 'win32') {
+                  await new Promise<void>(resolve => {
+                    execFile('setx', ['OLLAMA_FLASH_ATTENTION', enableFlash ? '1' : '0'], { windowsHide: true }, () => {
+                      execFile('setx', ['OLLAMA_KV_CACHE_TYPE', kvType], { windowsHide: true }, () => resolve());
+                    });
+                  });
+                }
+
+                res.statusCode = 200;
+                res.end(JSON.stringify({
+                  success: true,
+                  platform: process.platform,
+                  flashAttention: enableFlash,
+                  kvCacheType: kvType,
+                  message:
+                    process.platform === 'win32'
+                      ? `Applied OLLAMA_FLASH_ATTENTION=${enableFlash ? '1' : '0'} and OLLAMA_KV_CACHE_TYPE=${kvType} to Windows user environment. Restart the Ollama tray app once for the new KV cache flags to take effect.`
+                      : `Set OLLAMA_FLASH_ATTENTION=${enableFlash ? '1' : '0'} and OLLAMA_KV_CACHE_TYPE=${kvType} in server environment.`
+                }));
+                return;
+              }
+
+              if (kvPath === '/api/llm/kv-cache/unload' && req.method === 'POST') {
+                const endpoint = String(payload.ollamaEndpoint || 'http://localhost:11434/api/generate').trim();
+                const model = String(payload.model || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+                releaseOllamaModel(endpoint, model);
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true, message: `Unloaded ${model} from Ollama RAM/VRAM.` }));
+                return;
+              }
+
+              if (kvPath === '/api/llm/kv-cache/warm' && req.method === 'POST') {
+                const slot = String(payload.slot || 'privateOllama');
+                const systemPrompt = String(payload.systemPrompt || '');
+                if (!systemPrompt.trim()) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: 'Missing systemPrompt payload for KV cache warm.' }));
+                  return;
+                }
+
+                if (slot === 'privateOllama') {
+                  const baseEndpoint = String(payload.ollamaEndpoint || 'http://localhost:11434').trim().replace(/\/+$/, '');
+                  const genUrl = baseEndpoint.endsWith('/api/generate') ? baseEndpoint : `${baseEndpoint}/api/generate`;
+                  let targetModel = String(payload.model || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M').trim();
+                  const tagsCheck = await fetchInstalledOllamaModels(genUrl);
+                  if (!tagsCheck.reachable) {
+                    res.statusCode = 503;
+                    res.end(JSON.stringify({ success: false, error: `Ollama unreachable at ${genUrl}: ${tagsCheck.error || 'Start ollama serve first'}` }));
+                    return;
+                  }
+                  if (tagsCheck.models.length > 0) {
+                    const resolved = resolveOllamaModelTag(targetModel, tagsCheck.models.map(m => m.name));
+                    if (resolved.matchType !== 'not_found') {
+                      targetModel = resolved.resolved;
+                    }
+                  }
+                  const keepAlive = String(payload?.config?.privateOllama?.keepAlive || '30m');
+                  const bodyStr = JSON.stringify({
+                    model: targetModel,
+                    system: systemPrompt,
+                    prompt: 'Acknowledge system context ready with "OK".',
+                    stream: false,
+                    keep_alive: keepAlive,
+                    options: { num_ctx: 8192, num_predict: 4, temperature: 0 }
+                  });
+                  const parsedUrl = new URL(genUrl);
+                  const client = parsedUrl.protocol === 'https:' ? https : http;
+                  const warmResp: any = await new Promise((resolve, reject) => {
+                    const outReq = client.request(
+                      {
+                        hostname: parsedUrl.hostname,
+                        port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                        path: parsedUrl.pathname + parsedUrl.search,
+                        method: 'POST',
+                        timeout: 0,
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Content-Length': Buffer.byteLength(bodyStr)
+                        }
+                      },
+                      inRes => {
+                        let out = '';
+                        inRes.on('data', c => { out += c.toString('utf-8'); });
+                        inRes.on('end', () => {
+                          try {
+                            resolve({ status: inRes.statusCode || 200, json: JSON.parse(out || '{}') });
+                          } catch {
+                            resolve({ status: inRes.statusCode || 500, json: { error: out } });
+                          }
+                        });
+                      }
+                    );
+                    outReq.on('error', err => reject(err));
+                    outReq.write(bodyStr);
+                    outReq.end();
+                  });
+
+                  if (warmResp.status >= 400) {
+                    res.statusCode = warmResp.status;
+                    res.end(JSON.stringify({ success: false, error: warmResp.json?.error || `Ollama warm HTTP ${warmResp.status}` }));
+                    return;
+                  }
+
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    success: true,
+                    slot,
+                    model: warmResp.json?.model || targetModel,
+                    promptEvalCount: warmResp.json?.prompt_eval_count ?? Math.round(systemPrompt.length / 4),
+                    loadDurationMs: warmResp.json?.load_duration ? Math.round(warmResp.json.load_duration / 1e6) : undefined,
+                    totalDurationMs: warmResp.json?.total_duration ? Math.round(warmResp.json.total_duration / 1e6) : undefined,
+                    message: `Private Ollama KV cache warmed & pinned in RAM (${keepAlive}): ${warmResp.json?.prompt_eval_count ?? Math.round(systemPrompt.length / 4)} prefix tokens.`
+                  }));
+                  return;
+                }
+
+                if (slot === 'claudeSonnet' || slot === 'claudeFable') {
+                  const rawKey = String(
+                    payload.apiKey || env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || ''
+                  ).trim();
+                  if (!rawKey) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ success: false, error: 'Missing Anthropic API key for Claude prompt cache warmup.' }));
+                    return;
+                  }
+                  const targetModel = String(
+                    payload.model || (slot === 'claudeFable' ? 'claude-fable-5-1' : 'claude-sonnet-5-5')
+                  );
+                  const claudePayload: any = {
+                    model: targetModel,
+                    max_tokens: 16,
+                    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+                    messages: [{ role: 'user', content: 'Confirm system context is cached in 2 words.' }]
+                  };
+                  if (targetModel === 'claude-fable-5-1') {
+                    claudePayload.thinking = { type: 'adaptive' };
+                    claudePayload.output_config = { effort: 'low' };
+                  } else if (targetModel.includes('5-5')) {
+                    claudePayload.thinking = { type: 'between_tools' };
+                  }
+                  const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-api-key': rawKey,
+                      'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify(claudePayload)
+                  });
+                  const data: any = await anthropicRes.json().catch(() => ({}));
+                  if (!anthropicRes.ok) {
+                    res.statusCode = anthropicRes.status;
+                    res.end(JSON.stringify({ success: false, error: data?.error?.message || `Anthropic HTTP ${anthropicRes.status}` }));
+                    return;
+                  }
+                  const created = Number(data?.usage?.cache_creation_input_tokens ?? 0);
+                  const read = Number(data?.usage?.cache_read_input_tokens ?? 0);
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    success: true,
+                    slot,
+                    model: data?.model || targetModel,
+                    cacheCreationTokens: created,
+                    cacheReadTokens: read,
+                    usage: data?.usage,
+                    message: read > 0
+                      ? `Claude KV prefix HIT (${read} tokens read from Anthropic ephemeral cache).`
+                      : created > 0
+                        ? `Claude KV prefix PRIMED (${created} tokens written to Anthropic 5-min ephemeral cache).`
+                        : `Claude prefix verified (${Math.round(systemPrompt.length / 4)} est tokens; note Anthropic caches prefixes >= 1,024 tokens).`
+                  }));
+                  return;
+                }
+
+                if (slot === 'geminiPro') {
+                  const rawKey = String(
+                    payload.apiKey || env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''
+                  ).trim();
+                  if (!rawKey) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ success: false, error: 'Missing Google Gemini API key for KV cache warmup.' }));
+                    return;
+                  }
+                  const { GoogleGenAI } = await import('@google/genai');
+                  const ai = new GoogleGenAI({ apiKey: rawKey });
+                  const targetModel = String(payload.model || 'gemini-flash-latest');
+                  const gRes: any = await ai.models.generateContent({
+                    model: targetModel,
+                    contents: 'Confirm system instruction received in 2 words.',
+                    config: {
+                      systemInstruction: systemPrompt,
+                      maxOutputTokens: 16,
+                      temperature: 0
+                    }
+                  });
+                  const cachedTok = Number(gRes?.usageMetadata?.cachedContentTokenCount ?? 0);
+                  const promptTok = Number(gRes?.usageMetadata?.promptTokenCount ?? Math.round(systemPrompt.length / 4));
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    success: true,
+                    slot,
+                    model: gRes?.modelVersion || targetModel,
+                    cachedContentTokens: cachedTok,
+                    promptTokenCount: promptTok,
+                    message: cachedTok > 0
+                      ? `Gemini context cache HIT (${cachedTok} cached tokens out of ${promptTok}).`
+                      : `Gemini systemInstruction prefix primed (${promptTok} tokens evaluated; implicit caching active on repeated calls).`
+                  }));
+                  return;
+                }
+
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: `Unknown KV cache slot '${slot}'` }));
+              }
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err?.message || 'KV cache endpoint failed' }));
             }
           });
           return;
@@ -2637,6 +2987,10 @@ function localBatchPlugin(): Plugin {
                   ? ctx.promptVersion
                   : 'v3';
               activeContextPayload = { ...ctx, promptVersion: requestedVer };
+              activePayloadKvConfig = payload.kvCacheConfig || null;
+              if (payload.kvCacheConfig) {
+                writePersistedKvCacheConfig(payload.kvCacheConfig);
+              }
               state = {
                 jobId: `batch_${year}_${monthName.toLowerCase()}_${Date.now()}`,
                 status: delaySeconds === 0 ? 'running' : 'scheduled',
@@ -2707,7 +3061,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin(), localBatchPlugin()],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin(), localBatchPlugin(env)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

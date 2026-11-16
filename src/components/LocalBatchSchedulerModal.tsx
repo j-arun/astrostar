@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { VedicHouseContext } from '../services/llm/types';
 import { buildVedicPrompt, getActivePromptVersion } from '../services/llm/adapters';
+import { KvCachePreflightModal } from './KvCachePreflightModal';
+import { isKvCacheEnabledForEngine, loadKvCacheConfig } from '../services/llm/kvCacheManager';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -209,7 +211,14 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
       m.name.toLowerCase().split(':')[0] === modelTag.trim().toLowerCase().split(':')[0]
   );
 
-  const handleSchedule = async () => {
+  const [showKvPreflight, setShowKvPreflight] = useState(false);
+
+  const handleSchedule = async (kvDecision?: 'use_kv' | 'skip_kv') => {
+    if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
+      setShowKvPreflight(true);
+      return;
+    }
+
     setUiError(null);
     setSubmitting(true);
     try {
@@ -219,7 +228,19 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
         localStorage.setItem('astro_ollama_endpoint', ollamaEndpoint.trim());
       } catch {}
 
-      const context = { ...buildContextForSelectedMonth(), promptVersion: activePromptVer };
+      const currentKvCfg = loadKvCacheConfig();
+      const effectiveKvCfg =
+        kvDecision === 'skip_kv'
+          ? { ...currentKvCfg, privateOllama: { ...currentKvCfg.privateOllama, enabled: false } }
+          : kvDecision === 'use_kv'
+            ? { ...currentKvCfg, privateOllama: { ...currentKvCfg.privateOllama, enabled: true } }
+            : currentKvCfg;
+
+      const context = {
+        ...buildContextForSelectedMonth(),
+        promptVersion: activePromptVer,
+        useKvCache: effectiveKvCfg.privateOllama.enabled
+      };
       const res = await fetch('/api/batch/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,7 +248,8 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           context,
           modelTag: trimmedModel,
           delaySeconds,
-          ollamaEndpoint: ollamaEndpoint.trim() || 'http://localhost:11434/api/generate'
+          ollamaEndpoint: ollamaEndpoint.trim() || 'http://localhost:11434/api/generate',
+          kvCacheConfig: effectiveKvCfg
         })
       });
 
@@ -664,7 +686,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
             )}
             <button
               type="button"
-              onClick={handleSchedule}
+              onClick={() => handleSchedule()}
               disabled={submitting || batchState?.status === 'running'}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/20 disabled:opacity-50 cursor-pointer transition"
             >
@@ -678,6 +700,29 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           </div>
         </div>
       </div>
+
+      <KvCachePreflightModal
+        isOpen={showKvPreflight}
+        engineSlot="privateOllama"
+        context={buildContextForSelectedMonth()}
+        actionLabel="Start Local 14B Batch"
+        onCancel={() => setShowKvPreflight(false)}
+        onGoToSettings={() => {
+          setShowKvPreflight(false);
+          onClose();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('astro-navigate-settings', { detail: { focusSlot: 'privateOllama' } }));
+          }
+        }}
+        onProceedWithKvCache={() => {
+          setShowKvPreflight(false);
+          void handleSchedule('use_kv');
+        }}
+        onProceedWithoutKvCache={() => {
+          setShowKvPreflight(false);
+          void handleSchedule('skip_kv');
+        }}
+      />
     </div>
   );
 };

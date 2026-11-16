@@ -384,6 +384,7 @@ export interface VedicHouseContext {
   }>;
   vedicSpecialEvents?: VedicWindowAnalysis;
   eventManufacturingSuperset?: EventManufacturingSupersetPayload;
+  useKvCache?: boolean;
 }
 
 export interface EmploymentStatusInference {
@@ -539,6 +540,10 @@ export interface LLMThreePartNarrative {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    cachedTokens?: number;
+    cacheCreationTokens?: number;
+    systemTokens?: number;
+    kvCacheUsed?: boolean;
     source?: 'api_reported' | 'char_estimated';
   };
   thinkingContent?: string;

@@ -14,6 +14,14 @@ import {
   CorrelatedManufacturedEvent,
   PredictedSpecificEvent
 } from './types';
+import {
+  loadKvCacheConfig,
+  mapProviderToKvSlot,
+  isKvCacheEnabledForEngine,
+  buildKvCacheSystemPrefix,
+  buildEphemeralsOnlyPrompt,
+  KvCacheConfig
+} from './kvCacheManager';
 
 function cleanEnglishMultiline(text: string): string {
   if (!text) return '';
@@ -873,6 +881,63 @@ export function buildVedicPrompt(
 }
 
 /**
+ * Resolves KV Cache configuration for the requested engine and splits the request into:
+ * - Static System KV Prefix (D1 + D9 + Rules + Generic Delivery Contract)
+ * - Dynamic Ephemeris + Inquiry Prompt (<= 2,000 tokens)
+ * When KV Cache is disabled (or a manual customPromptOverride is supplied), returns the unified single prompt.
+ */
+export function prepareKvAwarePrompt(
+  context: VedicHouseContext,
+  providerId: LLMProviderId | string,
+  providerName: string,
+  outputKind: 'json_report' | 'qa_chat' = 'json_report',
+  kvConfigOverride?: KvCacheConfig
+): {
+  useKvCache: boolean;
+  systemPrompt?: string;
+  userPrompt: string;
+  systemHash?: string;
+  systemTokensEst: number;
+  ephemeralsTokensEst: number;
+  kvConfig: KvCacheConfig;
+  promptVersion: AstroPromptVersion;
+} {
+  const kvConfig = kvConfigOverride || loadKvCacheConfig();
+  const slot = mapProviderToKvSlot(String(providerId));
+  const activeVer = resolveEffectivePromptVersion(context);
+  const hasManualOverride = Boolean(context.customPromptOverride && context.customPromptOverride.trim().length > 0);
+  const kvEnabled = !hasManualOverride && activeVer !== 'v1' && (
+    context.useKvCache !== undefined ? context.useKvCache : isKvCacheEnabledForEngine(slot, kvConfig)
+  );
+
+  if (kvEnabled) {
+    const mode: 'v2' | 'v3' = activeVer === 'v2' ? 'v2' : 'v3';
+    const sys = buildKvCacheSystemPrefix(context, mode, kvConfig.overrides, outputKind);
+    const eph = buildEphemeralsOnlyPrompt(context, activeVer, 2000);
+    return {
+      useKvCache: true,
+      systemPrompt: sys.systemPrompt,
+      userPrompt: eph.ephemeralsPrompt,
+      systemHash: sys.systemHash,
+      systemTokensEst: sys.systemTokensEst,
+      ephemeralsTokensEst: eph.tokensEst,
+      kvConfig,
+      promptVersion: activeVer
+    };
+  }
+
+  const fullPrompt = buildVedicPrompt(context, providerName);
+  return {
+    useKvCache: false,
+    userPrompt: fullPrompt,
+    systemTokensEst: 0,
+    ephemeralsTokensEst: Math.round(fullPrompt.length / 4),
+    kvConfig,
+    promptVersion: activeVer
+  };
+}
+
+/**
  * Deterministic Parashara Fallback Synthesizer
  * Guarantees instantaneous, astronomically grounded responses when external APIs are unreachable.
  */
@@ -1497,6 +1562,7 @@ export async function callLocalOllamaGenerate(params: {
   endpoint?: string;
   model: string;
   prompt: string;
+  system?: string;
   options?: Record<string, any>;
   format?: string;
   keep_alive?: string | number;
@@ -1516,10 +1582,11 @@ export async function callLocalOllamaGenerate(params: {
     endpoint: cleanEndpoint,
     model: params.model,
     prompt: params.prompt,
+    ...(params.system ? { system: params.system } : {}),
     stream: false,
     ...(params.format ? { format: params.format } : {}),
     ...(params.keep_alive !== undefined ? { keep_alive: params.keep_alive } : {}),
-    options: params.options || { temperature: 0.3, num_predict: 2000, num_ctx: 16384 }
+    options: params.options || { temperature: 0.3, num_predict: 2000, num_ctx: 8192 }
   };
 
   try {
@@ -1557,6 +1624,7 @@ export async function callLocalOllamaGenerate(params: {
     body: JSON.stringify({
       model: params.model,
       prompt: params.prompt,
+      ...(params.system ? { system: params.system } : {}),
       stream: false,
       ...(params.format ? { format: params.format } : {}),
       ...(params.keep_alive !== undefined ? { keep_alive: params.keep_alive } : {}),
@@ -2016,21 +2084,24 @@ export class QwenLocalAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const prompt = buildVedicPrompt(context, 'Local Qwen 2.5 7B');
-    const endpoint = 'http://localhost:11434/api/generate';
     const targetModel = context.selectedLocalModel || 'qwen2.5:7b-instruct';
+    const prepared = prepareKvAwarePrompt(context, 'local_qwen', targetModel, 'json_report');
+    const prompt = prepared.userPrompt;
+    const promptLogText = prepared.useKvCache
+      ? `[SYSTEM KV CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
+      : prepared.userPrompt;
+    const endpoint = 'http://localhost:11434/api/generate';
 
-    // keep_alive: '5m' keeps the model warm in VRAM/RAM so subsequent prompts run fast without reloading 4.7 GB from disk
-    // Users can click "🧹 Purge VRAM" anytime in the UI to immediately free memory on demand
-    const requestBody = {
+    const requestBody: Record<string, any> = {
       model: targetModel,
       prompt,
+      ...(prepared.useKvCache && prepared.systemPrompt ? { system: prepared.systemPrompt } : {}),
       stream: false,
       format: 'json',
-      keep_alive: '5m',
+      keep_alive: prepared.useKvCache ? (prepared.kvConfig.privateOllama.keepAlive || '30m') : '5m',
       options: {
         temperature: 0.3,
-        num_predict: 3500, // Generous token ceiling so local LLM completes entire JSON without abrupt cutoff
+        num_predict: 3200,
         num_ctx: 8192
       }
     };
@@ -2060,12 +2131,24 @@ export class QwenLocalAdapter implements ILLMAdapter {
     }
 
     try {
-      const res = await fetch(endpoint, {
+      let res = await fetch('/api/llm/ollama-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          endpoint: 'http://localhost:11434',
+          ...requestBody
+        }),
         signal: controller.signal
-      });
+      }).catch(() => null as any);
+
+      if (!res || res.status === 404) {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+      }
 
       if (timeoutTimer) {
         clearTimeout(timeoutTimer);
@@ -2074,8 +2157,6 @@ export class QwenLocalAdapter implements ILLMAdapter {
       if (res.ok) {
         const json = await res.json();
 
-        // Model is kept active in VRAM for fast subsequent inferences.
-        // It can be manually evicted anytime via the "Purge VRAM" button in the inspector header.
         const fallback = synthesizeAnalyticalVedicNarrative(context, 'local_qwen', startMs);
         const parsed = extractAndParseVedicJson(json.response || '', fallback);
 
@@ -2101,11 +2182,11 @@ export class QwenLocalAdapter implements ILLMAdapter {
           endpointUsed: endpoint,
           connectionStatus: 'connected_live',
           isPrivateLocal: true,
-          promptSent: prompt,
+          promptSent: promptLogText,
           rawRequestBody: requestBody,
           rawResponseBody: json,
           httpStatus: res.status,
-          memoryPurged: true,
+          memoryPurged: !prepared.useKvCache,
           ollamaStats: {
             model: json.model || targetModel,
             totalDurationMs: json.total_duration ? Math.round(json.total_duration / 1e6) : undefined,
@@ -2115,15 +2196,21 @@ export class QwenLocalAdapter implements ILLMAdapter {
           },
           tokenTelemetry: (typeof json.prompt_eval_count === 'number' || typeof json.eval_count === 'number')
             ? {
-                inputTokens: json.prompt_eval_count ?? Math.round(prompt.length / 4),
+                inputTokens: json.prompt_eval_count ?? prepared.ephemeralsTokensEst,
                 outputTokens: json.eval_count ?? Math.round((json.response || '').length / 4),
-                totalTokens: (json.prompt_eval_count ?? Math.round(prompt.length / 4)) + (json.eval_count ?? Math.round((json.response || '').length / 4)),
+                totalTokens: (json.prompt_eval_count ?? prepared.ephemeralsTokensEst) + (json.eval_count ?? Math.round((json.response || '').length / 4)),
+                systemTokens: prepared.systemTokensEst,
+                cachedTokens: prepared.useKvCache ? prepared.systemTokensEst : 0,
+                kvCacheUsed: prepared.useKvCache,
                 source: 'api_reported'
               }
             : {
-                inputTokens: Math.round(prompt.length / 4),
+                inputTokens: prepared.ephemeralsTokensEst,
                 outputTokens: Math.round((json.response || '').length / 4),
-                totalTokens: Math.round(prompt.length / 4) + Math.round((json.response || '').length / 4),
+                totalTokens: prepared.ephemeralsTokensEst + Math.round((json.response || '').length / 4),
+                systemTokens: prepared.systemTokensEst,
+                cachedTokens: prepared.useKvCache ? prepared.systemTokensEst : 0,
+                kvCacheUsed: prepared.useKvCache,
                 source: 'char_estimated'
               }
         };
@@ -2205,6 +2292,8 @@ export function buildBatchNarrativeFromRawResponse(
     executionTimeMs: number;
     requestBody?: any;
     rawResponseBody?: any;
+    kvCacheUsed?: boolean;
+    systemTokens?: number;
     ollamaStats?: {
       model?: string;
       totalDurationMs?: number;
@@ -2242,19 +2331,25 @@ export function buildBatchNarrativeFromRawResponse(
     rawRequestBody: meta.requestBody,
     rawResponseBody: meta.rawResponseBody,
     httpStatus: 200,
-    memoryPurged: true,
+    memoryPurged: !meta.kvCacheUsed,
     ollamaStats: meta.ollamaStats || { model: meta.modelTag },
     tokenTelemetry: (typeof meta.ollamaStats?.promptEvalCount === 'number' || typeof meta.ollamaStats?.evalCount === 'number')
       ? {
           inputTokens: meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4),
           outputTokens: meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4),
           totalTokens: (meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4)) + (meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4)),
+          systemTokens: meta.systemTokens,
+          cachedTokens: meta.kvCacheUsed ? meta.systemTokens : 0,
+          kvCacheUsed: Boolean(meta.kvCacheUsed),
           source: 'api_reported'
         }
       : {
           inputTokens: Math.round(meta.promptSent.length / 4),
           outputTokens: Math.round((rawResponseText || '').length / 4),
           totalTokens: Math.round(meta.promptSent.length / 4) + Math.round((rawResponseText || '').length / 4),
+          systemTokens: meta.systemTokens,
+          cachedTokens: meta.kvCacheUsed ? meta.systemTokens : 0,
+          kvCacheUsed: Boolean(meta.kvCacheUsed),
           source: 'char_estimated'
         }
   };
@@ -2269,7 +2364,11 @@ export class GeminiStudioAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const prompt = buildVedicPrompt(context, 'Google Gemini Pro');
+    const prepared = prepareKvAwarePrompt(context, 'gemini_pro', 'Google Gemini Pro', 'json_report');
+    const prompt = prepared.userPrompt;
+    const promptLogText = prepared.useKvCache
+      ? `[SYSTEM KV CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
+      : prepared.userPrompt;
     const endpoint = '/api/llm/gemini';
 
     const geminiKey = (
@@ -2286,6 +2385,7 @@ export class GeminiStudioAdapter implements ILLMAdapter {
     const requestBody: any = {
       model: geminiModel,
       prompt,
+      ...(prepared.useKvCache && prepared.systemPrompt ? { systemInstruction: prepared.systemPrompt } : {}),
       apiKey: geminiKey || undefined
     };
 
@@ -2343,29 +2443,34 @@ ${parsed.part3_microTimingWindow}
           endpointUsed: `Google Gemini Cloud API (${json.model || geminiModel})`,
           connectionStatus: 'connected_live',
           isPrivateLocal: false,
-          promptSent: prompt,
+          promptSent: promptLogText,
           rawRequestBody: requestBody,
           rawResponseBody: json,
           httpStatus: res.status,
           tokenTelemetry: json.usageMetadata
             ? {
-                inputTokens: Number(json.usageMetadata.promptTokenCount ?? Math.round(prompt.length / 4)),
+                inputTokens: Number(json.usageMetadata.promptTokenCount ?? prepared.ephemeralsTokensEst),
                 outputTokens: Number(
                   (json.usageMetadata.candidatesTokenCount ?? 0) + (json.usageMetadata.thoughtsTokenCount ?? 0) ||
                     Math.round((json.text || '').length / 4)
                 ),
                 totalTokens: Number(
                   json.usageMetadata.totalTokenCount ??
-                    (Number(json.usageMetadata.promptTokenCount ?? Math.round(prompt.length / 4)) +
+                    (Number(json.usageMetadata.promptTokenCount ?? prepared.ephemeralsTokensEst) +
                       Number(json.usageMetadata.candidatesTokenCount ?? Math.round((json.text || '').length / 4)) +
                       Number(json.usageMetadata.thoughtsTokenCount ?? 0))
                 ),
+                cachedTokens: Number(json.usageMetadata.cachedContentTokenCount ?? 0),
+                systemTokens: prepared.systemTokensEst,
+                kvCacheUsed: prepared.useKvCache,
                 source: 'api_reported'
               }
             : {
-                inputTokens: Math.round(prompt.length / 4),
+                inputTokens: prepared.ephemeralsTokensEst,
                 outputTokens: Math.round((json.text || '').length / 4),
-                totalTokens: Math.round(prompt.length / 4) + Math.round((json.text || '').length / 4),
+                totalTokens: prepared.ephemeralsTokensEst + Math.round((json.text || '').length / 4),
+                systemTokens: prepared.systemTokensEst,
+                kvCacheUsed: prepared.useKvCache,
                 source: 'char_estimated'
               }
         };
@@ -2448,15 +2553,20 @@ async function callClaudeProxy(
     customModel = 'claude-haiku-5-5';
   }
 
-  const prompt = buildVedicPrompt(context, modelDisplayName);
+  const prepared = prepareKvAwarePrompt(context, providerId, modelDisplayName, 'json_report');
+  const prompt = prepared.userPrompt;
+  const promptLogText = prepared.useKvCache
+    ? `[SYSTEM EPHEMERAL CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
+    : prepared.userPrompt;
   const endpoint = '/api/llm/claude';
   const customKey = context.anthropicApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : null) || '';
 
   const thinkingMode = context.anthropicThinkingMode || (typeof window !== 'undefined' ? (localStorage.getItem('astro_anthropic_thinking_mode') as 'disabled' | 'enabled' | 'auto') : null) || 'disabled';
 
-  const requestBody = {
+  const requestBody: any = {
     model: customModel,
     prompt,
+    ...(prepared.useKvCache && prepared.systemPrompt ? { system: prepared.systemPrompt, usePromptCache: true } : {}),
     apiKey: customKey ? customKey.trim() : undefined,
     thinkingMode,
     maxTokens: 16000
@@ -2521,7 +2631,7 @@ ${parsed.part3_microTimingWindow}
         endpointUsed: `Anthropic Claude Cloud API (${json.model || customModel})`,
         connectionStatus: 'connected_live',
         isPrivateLocal: false,
-        promptSent: prompt,
+        promptSent: promptLogText,
         rawRequestBody: requestBody,
         rawResponseBody: json,
         httpStatus: res.status,
@@ -2539,12 +2649,18 @@ ${parsed.part3_microTimingWindow}
                 Number(json.usage.cache_creation_input_tokens ?? 0) +
                 Number(json.usage.cache_read_input_tokens ?? 0) +
                 Number(json.usage.output_tokens ?? Math.round(rawText.length / 4)),
+              cachedTokens: Number(json.usage.cache_read_input_tokens ?? 0),
+              cacheCreationTokens: Number(json.usage.cache_creation_input_tokens ?? 0),
+              systemTokens: prepared.systemTokensEst,
+              kvCacheUsed: prepared.useKvCache,
               source: 'api_reported'
             }
           : {
-              inputTokens: Math.round(prompt.length / 4),
+              inputTokens: prepared.ephemeralsTokensEst,
               outputTokens: Math.round(rawText.length / 4),
-              totalTokens: Math.round(prompt.length / 4) + Math.round(rawText.length / 4),
+              totalTokens: prepared.ephemeralsTokensEst + Math.round(rawText.length / 4),
+              systemTokens: prepared.systemTokensEst,
+              kvCacheUsed: prepared.useKvCache,
               source: 'char_estimated'
             }
       };

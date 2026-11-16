@@ -68,6 +68,13 @@ import {
   ActiveTransitGrahaDetail,
   NakshatraGateInfo
 } from '../services/eventManufacturingBuilder';
+import { KvCachePreflightModal } from './KvCachePreflightModal';
+import {
+  KvCacheEngineSlot,
+  mapProviderToKvSlot,
+  isKvCacheEnabledForEngine,
+  loadKvCacheConfig
+} from '../services/llm/kvCacheManager';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -707,8 +714,19 @@ Return ONLY a valid JSON object matching this schema:
     }
   };
 
+  const [pendingKvSlot, setPendingKvSlot] = useState<KvCacheEngineSlot | null>(null);
+
   // Generic LLM Synthesis Execution supporting Gemini, Claude, and Ollama
-  const handleSynthesizeEvents = async () => {
+  const handleSynthesizeEvents = async (kvDecision?: 'use_kv' | 'skip_kv') => {
+    const slot = mapProviderToKvSlot(selectedProvider);
+    if (!kvDecision && !isKvCacheEnabledForEngine(slot)) {
+      setPendingKvSlot(slot);
+      return;
+    }
+
+    const kvCfg = loadKvCacheConfig();
+    const useKv = kvDecision === 'use_kv' || (kvDecision !== 'skip_kv' && Boolean(kvCfg[slot]?.enabled));
+
     setIsSynthesizing(true);
     setSynthesisError(null);
     setSynthesisSeconds(0);
@@ -722,29 +740,45 @@ Return ONLY a valid JSON object matching this schema:
       let endpoint = '/api/llm/gemini';
       let payloadBody: any = { prompt: promptPayload };
 
+      const markerIdx = promptPayload.indexOf('[CRITICAL PARASHARA REASONING LAWS');
+      const dynamicPart = markerIdx > 0 ? promptPayload.slice(0, markerIdx).trim() : promptPayload;
+      const staticPart = markerIdx > 0
+        ? `${kvCfg.overrides?.d1Chart?.trim() ? `${kvCfg.overrides.d1Chart.trim()}\n\n` : ''}${promptPayload.slice(markerIdx).trim()}`
+        : '';
+
       if (selectedProvider === 'local_qwen') {
         // 1. LOCAL QWEN (Ollama port 11434 on local machine)
         const localModel = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'qwen2.5:7b-instruct';
         const localEndpoint = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_endpoint') : '') || 'http://localhost:11434/api/generate';
 
+        const reqBody = {
+          model: localModel,
+          ...(useKv && staticPart ? { system: staticPart, prompt: dynamicPart } : { prompt: promptPayload }),
+          stream: false,
+          format: 'json',
+          keep_alive: useKv ? (kvCfg.privateOllama.keepAlive || '30m') : '5m',
+          options: {
+            temperature: 0.3,
+            num_predict: 2500,
+            num_ctx: 8192
+          }
+        };
+
         let res: Response;
         try {
-          res = await fetch(localEndpoint, {
+          res = await fetch('/api/llm/ollama-generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: localModel,
-              prompt: promptPayload,
-              stream: false,
-              format: 'json',
-              keep_alive: '5m',
-              options: {
-                temperature: 0.3,
-                num_predict: 2500,
-                num_ctx: 8192
-              }
-            })
-          });
+            body: JSON.stringify({ endpoint: localEndpoint, ...reqBody })
+          }).catch(() => null as any);
+
+          if (!res || res.status === 404) {
+            res = await fetch(localEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(reqBody)
+            });
+          }
         } catch (fetchErr: any) {
           const msg = `Cannot connect to local Ollama on port 11434 (${fetchErr.message}). Please ensure Ollama is running locally with 'ollama serve' and model '${localModel}', or switch to Claude / Gemini above.`;
           setSynthesisError(msg);
@@ -784,7 +818,8 @@ Return ONLY a valid JSON object matching this schema:
           : ((typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5');
 
         payloadBody = {
-          prompt: promptPayload,
+          prompt: useKv && staticPart ? dynamicPart : promptPayload,
+          ...(useKv && staticPart ? { system: staticPart, usePromptCache: true } : {}),
           model: activeClaudeModel,
           apiKey: activeClaudeKey || undefined,
           thinkingMode: selectedProvider === 'claude_fable' ? 'auto' : undefined
@@ -828,7 +863,8 @@ Return ONLY a valid JSON object matching this schema:
         const modelToUse = getPreferredGeminiModel();
 
         payloadBody = {
-          prompt: promptPayload,
+          prompt: useKv && staticPart ? dynamicPart : promptPayload,
+          ...(useKv && staticPart ? { systemInstruction: staticPart } : {}),
           model: modelToUse,
           apiKey: activeGeminiKey || undefined
         };
@@ -1134,7 +1170,7 @@ Return ONLY a valid JSON object matching this schema:
           {/* Primary Action Button: MANUFACTURE EVENTS IN LLM */}
           <button
             type="button"
-            onClick={handleSynthesizeEvents}
+            onClick={() => handleSynthesizeEvents()}
             disabled={isSynthesizing}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95 disabled:opacity-50"
           >
@@ -1163,7 +1199,7 @@ Return ONLY a valid JSON object matching this schema:
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleSynthesizeEvents}
+                onClick={() => handleSynthesizeEvents()}
                 className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] transition cursor-pointer"
               >
                 ↻ Retry Now
@@ -1659,7 +1695,7 @@ Return ONLY a valid JSON object matching this schema:
             </div>
             <button
               type="button"
-              onClick={handleSynthesizeEvents}
+              onClick={() => handleSynthesizeEvents()}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs transition shadow-lg shadow-purple-600/30 cursor-pointer active:scale-95"
             >
               <Zap className="w-4 h-4 fill-current text-amber-300" />
@@ -1843,6 +1879,21 @@ Return ONLY a valid JSON object matching this schema:
           </div>
         </div>
       )}
+
+      <KvCachePreflightModal
+        isOpen={Boolean(pendingKvSlot)}
+        engineSlot={pendingKvSlot || 'geminiPro'}
+        actionLabel="Manufacture Events"
+        onCancel={() => setPendingKvSlot(null)}
+        onProceedWithKvCache={() => {
+          setPendingKvSlot(null);
+          void handleSynthesizeEvents('use_kv');
+        }}
+        onProceedWithoutKvCache={() => {
+          setPendingKvSlot(null);
+          void handleSynthesizeEvents('skip_kv');
+        }}
+      />
     </div>
   );
 };

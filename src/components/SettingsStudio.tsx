@@ -49,7 +49,8 @@ import {
   buildDefaultD1Block,
   buildDefaultD9Block,
   buildDefaultRulesBlock,
-  buildDefaultDeliveryBlock
+  buildDefaultDeliveryBlock,
+  isStalePlaceholderD9Override
 } from '../services/llm/kvCacheManager';
 
 interface SettingsStudioProps {
@@ -126,13 +127,16 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
       .then(data => {
         if (data?.success && data?.config) {
           const local = loadKvCacheConfig();
-          // Preserve local overrides/enabled flags if already edited locally, merge server config cleanly
+          const mergedOverrides = { ...(data.config.overrides || {}), ...(local.overrides || {}) };
+          if (isStalePlaceholderD9Override(mergedOverrides.d9Chart)) {
+            delete mergedOverrides.d9Chart;
+          }
           const merged: KvCacheConfig = {
             privateOllama: { ...local.privateOllama, ...(data.config.privateOllama || {}), enabled: local.privateOllama.enabled || Boolean(data.config.privateOllama?.enabled) },
             claudeSonnet: { ...local.claudeSonnet, ...(data.config.claudeSonnet || {}), enabled: local.claudeSonnet.enabled || Boolean(data.config.claudeSonnet?.enabled) },
             claudeFable: { ...local.claudeFable, ...(data.config.claudeFable || {}), enabled: local.claudeFable.enabled || Boolean(data.config.claudeFable?.enabled) },
             geminiPro: { ...local.geminiPro, ...(data.config.geminiPro || {}), enabled: local.geminiPro.enabled || Boolean(data.config.geminiPro?.enabled) },
-            overrides: { ...(data.config.overrides || {}), ...(local.overrides || {}) }
+            overrides: mergedOverrides
           };
           setKvConfig(saveKvCacheConfig(merged));
         }
@@ -219,11 +223,13 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
     }
   };
 
-  // Mock context generation to preview the prompt template in read-only mode
+  // Context generation to preview both standard prompts and KV Cache blocks using the active person's real D1 + D9
   const previewContext: VedicHouseContext = useMemo(() => {
     const rawPerson = (storedPersonsData as any)[activePersonId] || (storedPersonsData as any)['001ME'];
     const profile = rawPerson?.profile || samplePersonMaster;
-    const d1 = rawPerson?.d1_placements || sampleNatalPlacements;
+    const allPlacements: any[] = rawPerson?.placements || sampleNatalPlacements;
+    const d1 = rawPerson?.d1_placements || allPlacements.filter((p: any) => !p.chart_type || p.chart_type === 'D1');
+    const d9 = rawPerson?.d9_placements || allPlacements.filter((p: any) => p.chart_type === 'D9');
 
     return {
       houseNumber: 10,
@@ -311,7 +317,13 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
         house_number: p.house_number,
         is_retrograde: p.is_retrograde
       })),
-      flattenedNatalD9: [],
+      flattenedNatalD9: d9.map((p: any) => ({
+        body_name: p.body_name,
+        rashi_name: p.rashi_name,
+        degree_sputa: p.degree_sputa,
+        house_number: p.house_number,
+        is_retrograde: p.is_retrograde
+      })),
       natalJanmaStar: {
         nakshatra_name: profile.birth_star || 'Anuradha',
         pada: profile.birth_star_pada || 2,
@@ -832,7 +844,11 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
           </div>
 
           <textarea
-            value={kvConfig.overrides[activeKvBlockTab] ?? defaultBlockTexts[activeKvBlockTab]}
+            value={
+              activeKvBlockTab === 'd9Chart' && isStalePlaceholderD9Override(kvConfig.overrides.d9Chart)
+                ? defaultBlockTexts.d9Chart
+                : (kvConfig.overrides[activeKvBlockTab] ?? defaultBlockTexts[activeKvBlockTab])
+            }
             onChange={e => handleUpdateBlockOverride(activeKvBlockTab, e.target.value)}
             rows={7}
             spellCheck={false}

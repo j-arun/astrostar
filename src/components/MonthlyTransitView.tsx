@@ -734,7 +734,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       .map(p => ({
         body_name: p.body_name,
         rashi_name: p.rashi_name,
-        degree_sputa: p.degree_sputa
+        degree_sputa: p.degree_sputa,
+        house_number: p.house_number,
+        is_retrograde: p.is_retrograde
       }));
 
     const ctx: VedicHouseContext = {
@@ -934,7 +936,9 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       .map(p => ({
         body_name: p.body_name,
         rashi_name: p.rashi_name,
-        degree_sputa: p.degree_sputa
+        degree_sputa: p.degree_sputa,
+        house_number: p.house_number,
+        is_retrograde: p.is_retrograde
       }));
 
     const ctx: VedicHouseContext = {
@@ -2491,6 +2495,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           selectedYear={selectedYear}
           activeDashaHierarchy={activeDashaHierarchy}
           flattenedD1={natalD1Placements}
+          flattenedD9={activeRecord.placements.filter((p: any) => p.chart_type === 'D9')}
           transitPlacements={transitPlacements}
           monthlyMoonSpans={monthlyMoonSpans}
           monthlyGrahaSpans={monthlyGrahaSpans}

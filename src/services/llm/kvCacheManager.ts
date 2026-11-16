@@ -254,14 +254,178 @@ export function buildDefaultD1Block(context: VedicHouseContext): string {
   ].join('\n');
 }
 
+const SIGN_LIST_EN = [
+  'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
+  'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'
+];
+
+function getCleanSignIndex(signName?: string): number {
+  const s = cleanSign(signName).toLowerCase();
+  const idx = SIGN_LIST_EN.findIndex(item => item.toLowerCase() === s || s.startsWith(item.toLowerCase().slice(0, 4)));
+  return idx >= 0 ? idx + 1 : 0; // 1..12, 0 if unknown
+}
+
+function parseDegreeMinutes(deg?: string): number | null {
+  if (!deg) return null;
+  const m = String(deg).match(/(\d{1,2})\s*[°:]\s*(\d{1,2})?/);
+  if (!m) {
+    const f = parseFloat(String(deg));
+    return isNaN(f) ? null : Math.round(f * 60);
+  }
+  const d = parseInt(m[1], 10);
+  const mins = m[2] ? parseInt(m[2], 10) : 0;
+  return d * 60 + mins;
+}
+
+function getD9DignityTag(planetClean: string, signIdx: number): string {
+  if (!signIdx) return '';
+  const p = planetClean.toLowerCase();
+  if (p === 'sun') {
+    if (signIdx === 1) return '[Exalted]';
+    if (signIdx === 7) return '[Debilitated]';
+    if (signIdx === 5) return '[Own]';
+  } else if (p === 'moon') {
+    if (signIdx === 2) return '[Exalted]';
+    if (signIdx === 8) return '[Debilitated]';
+    if (signIdx === 4) return '[Own]';
+  } else if (p === 'mars') {
+    if (signIdx === 10) return '[Exalted]';
+    if (signIdx === 4) return '[Debilitated]';
+    if (signIdx === 1 || signIdx === 8) return '[Own]';
+  } else if (p === 'mercury') {
+    if (signIdx === 6) return '[Exalted/Own]';
+    if (signIdx === 12) return '[Debilitated]';
+    if (signIdx === 3) return '[Own]';
+  } else if (p === 'jupiter') {
+    if (signIdx === 4) return '[Exalted]';
+    if (signIdx === 10) return '[Debilitated]';
+    if (signIdx === 9 || signIdx === 12) return '[Own]';
+  } else if (p === 'venus') {
+    if (signIdx === 12) return '[Exalted]';
+    if (signIdx === 6) return '[Debilitated]';
+    if (signIdx === 2 || signIdx === 7) return '[Own]';
+  } else if (p === 'saturn') {
+    if (signIdx === 7) return '[Exalted]';
+    if (signIdx === 1) return '[Debilitated]';
+    if (signIdx === 10 || signIdx === 11) return '[Own]';
+  }
+  return '';
+}
+
+function computeParasharaD9FromD1(
+  flattenedD1?: VedicHouseContext['flattenedNatalD1']
+): Array<{
+  body_name: string;
+  rashi_name: string;
+  degree_sputa?: string;
+  house_number?: number;
+  is_retrograde?: boolean;
+}> {
+  if (!flattenedD1 || flattenedD1.length === 0) return [];
+
+  const fireStart = 1; // Aries
+  const earthStart = 10; // Capricorn
+  const airStart = 7; // Libra
+  const waterStart = 4; // Cancer
+
+  const rawItems: Array<{
+    body_name: string;
+    d9SignIdx: number;
+    rashi_name: string;
+    degree_sputa?: string;
+    is_retrograde?: boolean;
+  }> = [];
+
+  for (const p of flattenedD1) {
+    const sIdx = getCleanSignIndex(p.rashi_name);
+    if (!sIdx) continue;
+    const totalMins = parseDegreeMinutes(p.degree_sputa);
+    const clampedMins = totalMins !== null ? Math.max(0, Math.min(1799, totalMins)) : 0;
+    const navPada = Math.min(8, Math.floor(clampedMins / 200));
+    const mod4 = (sIdx - 1) % 4;
+    const startIdx = mod4 === 0 ? fireStart : mod4 === 1 ? earthStart : mod4 === 2 ? airStart : waterStart;
+    const d9SignIdx = ((startIdx - 1 + navPada) % 12) + 1;
+    rawItems.push({
+      body_name: p.body_name,
+      d9SignIdx,
+      rashi_name: SIGN_LIST_EN[d9SignIdx - 1],
+      degree_sputa: p.degree_sputa,
+      is_retrograde: p.is_retrograde
+    });
+  }
+
+  const lagnaEntry = rawItems.find(x => cleanPlanet(x.body_name).toLowerCase() === 'lagna');
+  const d9LagnaIdx = lagnaEntry ? lagnaEntry.d9SignIdx : 0;
+
+  return rawItems.map(item => ({
+    body_name: item.body_name,
+    rashi_name: item.rashi_name,
+    degree_sputa: item.degree_sputa,
+    house_number: d9LagnaIdx ? ((item.d9SignIdx - d9LagnaIdx + 12) % 12) + 1 : undefined,
+    is_retrograde: item.is_retrograde
+  }));
+}
+
+export function formatD9PlacementsSummary(context: VedicHouseContext): {
+  d9LagnaSign: string;
+  d9SummaryLine: string;
+  hasData: boolean;
+} {
+  const sourceD9 =
+    context.flattenedNatalD9 && context.flattenedNatalD9.length > 0
+      ? context.flattenedNatalD9
+      : computeParasharaD9FromD1(context.flattenedNatalD1);
+
+  if (!sourceD9 || sourceD9.length === 0) {
+    return {
+      d9LagnaSign: '',
+      d9SummaryLine: 'D9 placements unavailable in current chart payload.',
+      hasData: false
+    };
+  }
+
+  const d1SignMap = new Map<string, number>();
+  (context.flattenedNatalD1 || []).forEach(p => {
+    const key = cleanPlanet(p.body_name).toLowerCase();
+    const sIdx = getCleanSignIndex(p.rashi_name);
+    if (key && sIdx) d1SignMap.set(key, sIdx);
+  });
+
+  const lagnaRow = sourceD9.find(p => cleanPlanet(p.body_name).toLowerCase() === 'lagna');
+  const d9LagnaIdx = lagnaRow ? getCleanSignIndex(lagnaRow.rashi_name) : 0;
+  const d9LagnaSign = d9LagnaIdx ? SIGN_LIST_EN[d9LagnaIdx - 1] : '';
+
+  const formatted = sourceD9.map(p => {
+    const pName = cleanPlanet(p.body_name);
+    const sIdx = getCleanSignIndex(p.rashi_name);
+    const sName = sIdx ? SIGN_LIST_EN[sIdx - 1] : cleanSign(p.rashi_name);
+    const hNum = p.house_number || (d9LagnaIdx && sIdx ? ((sIdx - d9LagnaIdx + 12) % 12) + 1 : undefined);
+    const hTag = hNum ? ` H${hNum}` : '';
+    const rTag = p.is_retrograde ? '[R]' : '';
+    const d1Idx = d1SignMap.get(pName.toLowerCase());
+    const vargottamaTag = pName.toLowerCase() !== 'lagna' && d1Idx && sIdx && d1Idx === sIdx ? '[Vargottama]' : '';
+    const dignityTag = pName.toLowerCase() !== 'lagna' ? getD9DignityTag(pName, sIdx) : '';
+    const degTag = cleanDegree(p.degree_sputa);
+    const degPart = degTag ? ` ${degTag}` : '';
+    return `${pName}:${sName}${hTag}${rTag}${vargottamaTag}${dignityTag}${degPart}`;
+  });
+
+  return {
+    d9LagnaSign,
+    d9SummaryLine: formatted.join(' | '),
+    hasData: true
+  };
+}
+
 export function buildDefaultD9Block(context: VedicHouseContext): string {
-  const d9 = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
-    ? context.flattenedNatalD9.map(p => `${cleanPlanet(p.body_name)}:${cleanSign(p.rashi_name)} ${cleanDegree(p.degree_sputa)}`).join(' | ')
-    : 'Standard D9 Navamsha dignity and planetary strength baseline align with natal grid.';
-  return [
-    `## NATAL D9 NAVAMSHA CHART (FIXED DIVISIONAL STRENGTH)`,
-    `D9: ${d9}`
-  ].join('\n');
+  const { d9LagnaSign, d9SummaryLine } = formatD9PlacementsSummary(context);
+  const d1Lagna = cleanSign(context.natalLagnaSignName);
+  const lines = [`## NATAL D9 NAVAMSHA CHART (FIXED DIVISIONAL STRENGTH)`];
+  if (d9LagnaSign) {
+    lines.push(`D9_Lagna:${d9LagnaSign}${d1Lagna ? ` (from D1 Lagna:${d1Lagna})` : ''}`);
+  }
+  lines.push(`D9: ${d9SummaryLine}`);
+  return lines.join('\n');
 }
 
 export function buildDefaultRulesBlock(mode: 'v2' | 'v3' = 'v3'): string {
@@ -333,6 +497,11 @@ export function hashKvString(str: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+export function isStalePlaceholderD9Override(val?: string): boolean {
+  if (!val) return false;
+  return val.includes('Standard D9 Navamsha dignity and planetary strength baseline align with natal grid');
+}
+
 export function buildKvCacheSystemPrefix(
   context: VedicHouseContext,
   mode: 'v2' | 'v3' = 'v3',
@@ -352,7 +521,10 @@ export function buildKvCacheSystemPrefix(
 } {
   const effectiveOverrides = overrides ?? (typeof window !== 'undefined' ? loadKvCacheConfig().overrides : {});
   const d1Chart = (effectiveOverrides.d1Chart && effectiveOverrides.d1Chart.trim()) || buildDefaultD1Block(context);
-  const d9Chart = (effectiveOverrides.d9Chart && effectiveOverrides.d9Chart.trim()) || buildDefaultD9Block(context);
+  const rawD9Override = effectiveOverrides.d9Chart?.trim();
+  const d9Chart = (rawD9Override && !isStalePlaceholderD9Override(rawD9Override))
+    ? rawD9Override
+    : buildDefaultD9Block(context);
   const rules = (effectiveOverrides.rules && effectiveOverrides.rules.trim()) || buildDefaultRulesBlock(mode);
   const delivery = (effectiveOverrides.delivery && effectiveOverrides.delivery.trim()) || buildDefaultDeliveryBlock(mode, outputKind);
 

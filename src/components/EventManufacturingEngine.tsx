@@ -113,6 +113,7 @@ interface EventManufacturingEngineProps {
     endDate: string;
   };
   flattenedD1: any[];
+  flattenedD9?: any[];
   transitPlacements: any[];
   monthlyMoonSpans: any[];
   monthlyGrahaSpans?: any[];
@@ -216,6 +217,7 @@ export const EventManufacturingEngine: React.FC<EventManufacturingEngineProps> =
   selectedYear,
   activeDashaHierarchy,
   flattenedD1,
+  flattenedD9,
   transitPlacements,
   monthlyMoonSpans,
   monthlyGrahaSpans,
@@ -1803,6 +1805,7 @@ Return ONLY a valid JSON object matching this schema:
 
       {/* 100% PRIVATE SCREEN PREDICTION COPILOT (OLLAMA / LOCAL LLM ONLY - ZERO PII TO PUBLIC CLOUDS) */}
       <PrivatePredictionChatbot
+        personId={personId}
         personName={activeProfile?.person_name || 'Native'}
         natalLagnaIdx={natalLagnaIdx}
         natalRashiIdx={natalRashiIdx}
@@ -1815,6 +1818,8 @@ Return ONLY a valid JSON object matching this schema:
         manifestedEvents={manufacturedEvents}
         adChamberDynamics={adChamberDynamics}
         vedicSpecialEvents={vedicSpecialEvents}
+        flattenedD1={flattenedD1}
+        flattenedD9={flattenedD9}
       />
 
       {/* MODAL: RAW PROMPT INSPECTOR (EYE ICON) */}

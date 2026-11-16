@@ -279,7 +279,9 @@ export const PredictionStudio: React.FC<PredictionStudioProps> = ({
       .map((p: any) => ({
         body_name: p.body_name,
         rashi_name: p.rashi_name,
-        degree_sputa: p.degree_sputa
+        degree_sputa: p.degree_sputa,
+        house_number: p.house_number,
+        is_retrograde: p.is_retrograde
       }));
   }, [activeRecord]);
 

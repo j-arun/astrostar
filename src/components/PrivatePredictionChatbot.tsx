@@ -45,9 +45,11 @@ import { KvCachePreflightModal } from './KvCachePreflightModal';
 import {
   isKvCacheEnabledForEngine,
   loadKvCacheConfig,
-  buildDefaultRulesBlock,
-  buildDefaultDeliveryBlock
+  buildKvCacheSystemPrefix
 } from '../services/llm/kvCacheManager';
+import { VedicHouseContext } from '../services/llm/types';
+import storedPersonsData from '../data/stored_persons.json';
+import { sampleNatalPlacements } from '../data/horoscopeData';
 
 export interface ChatMessage {
   id: string;
@@ -63,6 +65,7 @@ export interface ChatMessage {
 }
 
 export interface PrivatePredictionChatbotProps {
+  personId?: string;
   personName: string;
   natalLagnaIdx: number;
   natalRashiIdx: number;
@@ -82,6 +85,8 @@ export interface PrivatePredictionChatbotProps {
   adChamberDynamics?: ADChamberDynamics;
   vedicSpecialEvents?: VedicWindowAnalysis;
   nativeAge?: number;
+  flattenedD1?: any[];
+  flattenedD9?: any[];
 }
 
 /**
@@ -269,6 +274,7 @@ export const RichFormattedText: React.FC<{ text: string }> = ({ text }) => {
 };
 
 export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> = ({
+  personId = '001ME',
   personName,
   natalLagnaIdx,
   natalRashiIdx,
@@ -281,7 +287,9 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
   manifestedEvents,
   adChamberDynamics,
   vedicSpecialEvents,
-  nativeAge = 40
+  nativeAge = 40,
+  flattenedD1,
+  flattenedD9
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [userInput, setUserInput] = useState<string>('');
@@ -580,12 +588,53 @@ Ask me specific questions comparing personal situations, like:
           .join('\n\n')
           .slice(0, 7600);
 
+        const storedPerson = (storedPersonsData as any)[personId] || (storedPersonsData as any)['001ME'];
+        const storedPlacements: any[] = storedPerson?.placements || sampleNatalPlacements;
+        const resolvedD1 =
+          flattenedD1 && flattenedD1.length > 0
+            ? flattenedD1
+            : storedPlacements.filter((p: any) => !p.chart_type || p.chart_type === 'D1');
+        const resolvedD9 =
+          flattenedD9 && flattenedD9.length > 0
+            ? flattenedD9
+            : storedPlacements.filter((p: any) => p.chart_type === 'D9');
+
+        const kvContextForChat: VedicHouseContext = {
+          matchedRules: [],
+          natalOccupants: [],
+          transitOccupants: [],
+          natalLagnaSignName: screenContextSnapshot.natalLagna,
+          natalMoonSignName: screenContextSnapshot.natalMoon,
+          activeDasha: activeDashaHierarchy,
+          selectedMonth,
+          selectedYear,
+          flattenedNatalD1: resolvedD1.map((p: any) => ({
+            body_name: p.body_name,
+            rashi_name: p.rashi_name,
+            degree_sputa: p.degree_sputa,
+            nakshatra_name: p.nakshatra_name,
+            pada: p.pada,
+            house_number: p.house_number,
+            is_retrograde: p.is_retrograde
+          })),
+          flattenedNatalD9: resolvedD9.map((p: any) => ({
+            body_name: p.body_name,
+            rashi_name: p.rashi_name,
+            degree_sputa: p.degree_sputa,
+            house_number: p.house_number,
+            is_retrograde: p.is_retrograde
+          })),
+          natalJanmaStar: {
+            nakshatra_name: storedPerson?.profile?.birth_star || 'Anuradha',
+            pada: storedPerson?.profile?.birth_star_pada || 2,
+            rashi_name: screenContextSnapshot.natalMoon,
+            rashi_index: natalRashiIdx
+          }
+        };
+
         const staticKvSystem = [
-          kvCfg.overrides?.d1Chart?.trim() ||
-            `## NATAL BASELINE\nNative: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})\nLagna: ${screenContextSnapshot.natalLagna} | Natal Moon: ${screenContextSnapshot.natalMoon}`,
-          kvCfg.overrides?.d9Chart?.trim() || '',
-          kvCfg.overrides?.rules?.trim() || buildDefaultRulesBlock('v3'),
-          kvCfg.overrides?.delivery?.trim() || buildDefaultDeliveryBlock('v3', 'qa_chat'),
+          `Native: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})`,
+          buildKvCacheSystemPrefix(kvContextForChat, 'v3', kvCfg.overrides, 'qa_chat').systemPrompt,
           languageDirective
         ]
           .filter(Boolean)

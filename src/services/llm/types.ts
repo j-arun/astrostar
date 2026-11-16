@@ -248,6 +248,8 @@ export interface VedicHouseContext {
     body_name: string;
     rashi_name: string;
     degree_sputa?: string;
+    house_number?: number;
+    is_retrograde?: boolean;
   }>;
   monthlyMoonSpans?: Array<{
     startDay: number;

@@ -20,6 +20,7 @@ import {
   isKvCacheEnabledForEngine,
   buildKvCacheSystemPrefix,
   buildEphemeralsOnlyPrompt,
+  formatD9PlacementsSummary,
   KvCacheConfig
 } from './kvCacheManager';
 
@@ -561,8 +562,9 @@ function buildVedicPromptCompact(
         ? context.natalOccupants.map(o => `${toCleanEnglishPlanet(o.body_name)}:${cleanTargetSign || 'Natal'} ${formatDegreeCompact(o.degree_sputa)} ${formatNakshatraCompact(o.nakshatra_name)}`).join(' | ')
         : 'Empty Bhava');
 
-  const natalD9Table = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
-    ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)}:${toCleanEnglishSign(p.rashi_name)} ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
+  const natalD9Summary = formatD9PlacementsSummary(context);
+  const natalD9Table = natalD9Summary.hasData
+    ? `${natalD9Summary.d9LagnaSign ? `D9 Lagna:${natalD9Summary.d9LagnaSign} | ` : ''}${natalD9Summary.d9SummaryLine}`
     : 'Standard D9 alignments align with natal grid';
 
   // 2. All-Graha Gochara Transits
@@ -795,8 +797,9 @@ export function buildVedicPromptV1(context: VedicHouseContext, providerName: str
     : '  None (Empty Bhava)';
 
   // 2. Flattened Natal D9 Navamsha
-  const natalD9Table = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
-    ? context.flattenedNatalD9.map(p => `${toCleanEnglishPlanet(p.body_name)} — ${toCleanEnglishSign(p.rashi_name)} — ${formatDegreeCompact(p.degree_sputa)}`).join(' | ')
+  const natalD9SummaryV2 = formatD9PlacementsSummary(context);
+  const natalD9Table = natalD9SummaryV2.hasData
+    ? `${natalD9SummaryV2.d9LagnaSign ? `D9 Lagna: ${natalD9SummaryV2.d9LagnaSign} | ` : ''}${natalD9SummaryV2.d9SummaryLine}`
     : 'Standard D9 alignments align with natal grid';
 
   // 3. Complete All-Graha Gochara Transits (Legacy Hybrid: Includes Lagna House & Moon House)

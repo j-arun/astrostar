@@ -224,6 +224,10 @@ export interface VedicHouseContext {
     pratyantardasha: string;
     startDate: string;
     endDate: string;
+    mdStartDate?: string;
+    mdEndDate?: string;
+    adStartDate?: string;
+    adEndDate?: string;
   };
   selectedMonth: number; // 0..11
   selectedYear: number;

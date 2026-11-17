@@ -1,0 +1,362 @@
+import { createServer } from 'vite';
+import type { VedicHouseContext } from '../src/services/llm/types';
+
+interface TestMonthSpec {
+  year: number;
+  monthIndex: number; // 0-indexed (10 = November)
+  label: string;
+}
+
+const TEST_MONTHS: TestMonthSpec[] = [
+  { year: 2025, monthIndex: 7, label: 'August 2025' },
+  { year: 2026, monthIndex: 3, label: 'April 2026' },
+  { year: 2026, monthIndex: 9, label: 'October 2026' },
+  { year: 2026, monthIndex: 10, label: 'November 2026' },
+  { year: 2026, monthIndex: 11, label: 'December 2026' }
+];
+
+const RASHI_META = [
+  { index: 1, eng: 'Mesham (Aries)' },
+  { index: 2, eng: 'Rishabam (Taurus)' },
+  { index: 3, eng: 'Mithunam (Gemini)' },
+  { index: 4, eng: 'Katakam (Cancer)' },
+  { index: 5, eng: 'Simham (Leo)' },
+  { index: 6, eng: 'Kanni (Virgo)' },
+  { index: 7, eng: 'Thulaam (Libra)' },
+  { index: 8, eng: 'Vrischigam (Scorpio)' },
+  { index: 9, eng: 'Dhanus (Sagittarius)' },
+  { index: 10, eng: 'Makaram (Capricorn)' },
+  { index: 11, eng: 'Kumbam (Aquarius)' },
+  { index: 12, eng: 'Meenam (Pisces)' }
+];
+
+function resolveSignIdx(signName: string, fallback = 9): number {
+  const s = (signName || '').toLowerCase();
+  const keys = [
+    ['mesham', 'aries'],
+    ['rishab', 'taurus'],
+    ['mithun', 'gemini'],
+    ['katak', 'kadag', 'cancer'],
+    ['simha', 'leo'],
+    ['kanni', 'virgo'],
+    ['thula', 'libra'],
+    ['vrisch', 'scorpio'],
+    ['dhanu', 'sagittarius'],
+    ['makar', 'capricorn'],
+    ['kumbh', 'aquarius'],
+    ['meen', 'pisces']
+  ];
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i].some(k => s.includes(k))) return i + 1;
+  }
+  return fallback;
+}
+
+async function main() {
+  const printMonth = process.argv.includes('--print-nov') ? 10 : -1;
+
+  const server = await createServer({
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+    logLevel: 'silent'
+  });
+
+  try {
+    const horoscopeMod = await server.ssrLoadModule('/src/data/horoscopeData.ts');
+    const ephemerisMod = await server.ssrLoadModule('/src/data/transitEphemeris.ts');
+    const dashaMod = await server.ssrLoadModule('/src/data/dashaCalculator.ts');
+    const parasharaMod = await server.ssrLoadModule('/src/data/parasharaCalculations.ts');
+    const eventsMod = await server.ssrLoadModule('/src/services/vedicEventsEngine.ts');
+    const builderMod = await server.ssrLoadModule('/src/services/eventManufacturingBuilder.ts');
+    const promptMod = await server.ssrLoadModule('/src/services/llm/originalSourcePrompt.ts');
+
+    const { samplePersonMaster, sampleNatalPlacements } = horoscopeMod;
+    const { getGrahaTransitPosition, calculateMonthlyMoonSpans, RASHI_LIST_META } = ephemerisMod;
+    const { getVimshottariDashaForDate } = dashaMod;
+    const { computeSarvashtakavarga } = parasharaMod;
+    const { analyzeVedicWindowEvents } = eventsMod;
+    const { buildEventManufacturingSnapshot } = builderMod;
+    const { buildOriginalSourcePrompt, validateOriginalSourcePrompt } = promptMod;
+
+    const natalLagnaIdx = resolveSignIdx(samplePersonMaster.birth_lagna, 9);
+    const natalRashiIdx = resolveSignIdx(samplePersonMaster.birth_rashi, 8);
+
+    const flattenedD1 = sampleNatalPlacements
+      .filter((p: any) => p.chart_type === 'D1')
+      .map((p: any) => {
+        const sIdx = resolveSignIdx(p.rashi_name, 9);
+        return {
+          body_name: p.body_name,
+          rashi_name: p.rashi_name,
+          degree_sputa: p.degree_sputa,
+          nakshatra_name: p.nakshatra_name,
+          pada: p.pada,
+          house_number: ((sIdx - natalLagnaIdx + 12) % 12) + 1,
+          is_retrograde: p.is_retrograde
+        };
+      });
+
+    const flattenedD9 = sampleNatalPlacements
+      .filter((p: any) => p.chart_type === 'D9')
+      .map((p: any) => ({
+        body_name: p.body_name,
+        rashi_name: p.rashi_name,
+        degree_sputa: p.degree_sputa,
+        house_number: p.house_number,
+        is_retrograde: p.is_retrograde
+      }));
+
+    const savResult = computeSarvashtakavarga(natalLagnaIdx, undefined, flattenedD1);
+
+    let baselineStaticBlock: string | null = null;
+    const allFailures: string[] = [];
+
+    for (const spec of TEST_MONTHS) {
+      const { year, monthIndex, label } = spec;
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const monthStr = String(monthIndex + 1).padStart(2, '0');
+      const startDateStr = `${year}-${monthStr}-01`;
+      const endDateStr = `${year}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
+      const evalDate = new Date(Date.UTC(year, monthIndex, 15, 12, 0, 0));
+      const evalDateStr = evalDate.toISOString().slice(0, 10);
+
+      const activeDasha = getVimshottariDashaForDate(evalDateStr);
+
+      const grahaKeys = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu'];
+      const transitPlacements = grahaKeys.map(k =>
+        getGrahaTransitPosition(k, evalDate, natalLagnaIdx, natalRashiIdx)
+      );
+
+      const monthlyMoonSpans = calculateMonthlyMoonSpans(year, monthIndex, natalLagnaIdx);
+
+      // Replicate monthlyGrahaSpans computation from MonthlyTransitView
+      const monthlyGrahaSpans: any[] = [];
+      for (const gKey of grahaKeys) {
+        let currSign = -1;
+        let currRetro = false;
+        let currMotion: 'Normal' | 'Vakra' | 'Adisara' = 'Normal';
+        let spanStart = 1;
+        let samplePos: any = null;
+        const trackAdisaraSplit = gKey === 'Jupiter' || gKey === 'Saturn';
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dt = new Date(Date.UTC(year, monthIndex, d, 12, 0, 0));
+          const pos = getGrahaTransitPosition(gKey, dt, natalLagnaIdx, natalRashiIdx);
+          const posMotion: 'Normal' | 'Vakra' | 'Adisara' =
+            pos.motion_type || (pos.is_retrograde ? 'Vakra' : 'Normal');
+          const motionChanged = trackAdisaraSplit
+            ? posMotion !== currMotion
+            : !!pos.is_retrograde !== currRetro;
+          if (currSign === -1) {
+            currSign = pos.transit_rashi_index;
+            currRetro = !!pos.is_retrograde;
+            currMotion = posMotion;
+            spanStart = 1;
+            samplePos = pos;
+          } else if (pos.transit_rashi_index !== currSign || motionChanged) {
+            const signDef = RASHI_LIST_META.find((s: any) => s.index === currSign) || RASHI_LIST_META[0];
+            monthlyGrahaSpans.push({
+              graha_key: gKey,
+              graha_name: samplePos?.graha_name || gKey,
+              graha_tamil: samplePos?.graha_tamil || gKey,
+              sign_index: currSign,
+              sign_name: signDef.eng,
+              sign_tamil: signDef.tamil,
+              start_day: spanStart,
+              end_day: d - 1,
+              is_retrograde: currRetro,
+              motion_type: currMotion,
+              is_exalted: false,
+              is_own_sign: false,
+              is_custom: false
+            });
+            currSign = pos.transit_rashi_index;
+            currRetro = !!pos.is_retrograde;
+            currMotion = posMotion;
+            spanStart = d;
+            samplePos = pos;
+          }
+        }
+        if (currSign !== -1) {
+          const signDef = RASHI_LIST_META.find((s: any) => s.index === currSign) || RASHI_LIST_META[0];
+          monthlyGrahaSpans.push({
+            graha_key: gKey,
+            graha_name: samplePos?.graha_name || gKey,
+            graha_tamil: samplePos?.graha_tamil || gKey,
+            sign_index: currSign,
+            sign_name: signDef.eng,
+            sign_tamil: signDef.tamil,
+            start_day: spanStart,
+            end_day: daysInMonth,
+            is_retrograde: currRetro,
+            motion_type: currMotion,
+            is_exalted: false,
+            is_own_sign: false,
+            is_custom: false
+          });
+        }
+      }
+
+      const vedicSpecialEvents = analyzeVedicWindowEvents({
+        startDateStr,
+        endDateStr,
+        natalLagnaIdx,
+        natalRashiIdx,
+        flattenedNatalD1: flattenedD1.map((np: any) => ({
+          body_name: np.body_name,
+          rashi_name: np.rashi_name
+        })),
+        overrides: {},
+        priorTailDays: 3
+      });
+
+      const eventManufacturingSuperset = buildEventManufacturingSnapshot({
+        selectedMonth: monthIndex,
+        selectedYear: year,
+        natalLagnaIdx,
+        natalRashiIdx,
+        activeDashaHierarchy: activeDasha,
+        flattenedD1,
+        transitPlacements,
+        monthlyMoonSpans,
+        monthlyGrahaSpans,
+        vedicSpecialEvents
+      });
+
+      const context: VedicHouseContext = {
+        isComprehensiveMonthly: true,
+        activeDomainFilter: 'all',
+        isEventActive: false,
+        activationScore: 0,
+        matchedRules: [],
+        natalOccupants: [],
+        transitOccupants: [],
+        allTransitPlacements: transitPlacements.map((t: any) => ({
+          graha_key: t.graha_key,
+          graha_name: t.graha_name,
+          graha_tamil: t.graha_tamil,
+          transit_rashi_index: t.transit_rashi_index,
+          transit_rashi_name: t.transit_rashi_name,
+          transit_rashi_tamil: t.transit_rashi_tamil,
+          house_from_lagna: ((t.transit_rashi_index - natalLagnaIdx + 12) % 12) + 1,
+          house_from_moon: ((t.transit_rashi_index - natalRashiIdx + 12) % 12) + 1,
+          degree_sputa: t.degree_sputa,
+          degree_in_sign_float: t.degree_in_sign_float,
+          nakshatra_name: t.graha_pada_chara?.nakshatra_name || 'N/A',
+          nakshatra_lord: t.graha_pada_chara?.nakshatra_lord || '',
+          pada: t.graha_pada_chara?.pada || 1,
+          is_retrograde: t.is_retrograde,
+          motion_type: t.motion_type || (t.is_retrograde ? 'Vakra' : 'Normal'),
+          motion_description: t.motion_description,
+          sav_points: savResult.savTotalPoints[t.transit_rashi_index] || 28,
+          is_custom: false
+        })),
+        natalLagnaSignName: RASHI_META[natalLagnaIdx - 1].eng,
+        natalMoonSignName: RASHI_META[natalRashiIdx - 1].eng,
+        activeDasha,
+        selectedMonth: monthIndex,
+        selectedYear: year,
+        flattenedNatalD1: flattenedD1,
+        flattenedNatalD9: flattenedD9,
+        monthlyMoonSpans,
+        vedicSpecialEvents,
+        natalJanmaStar: {
+          nakshatra_name: samplePersonMaster.birth_star,
+          pada: samplePersonMaster.birth_star_pada,
+          rashi_name: 'Scorpio',
+          rashi_index: natalRashiIdx
+        },
+        ashtakavargaPayload: {
+          targetHousePoints: 0,
+          targetHouseStrength: 'All-House Distribution',
+          savPointsDistribution: savResult.allHousesOverview
+        },
+        eventManufacturingSuperset
+      };
+
+      const result = buildOriginalSourcePrompt(context);
+
+      if (printMonth === monthIndex) {
+        console.log('===== FULL NOVEMBER 2026 ORIGINAL SOURCE PROMPT =====');
+        console.log(result.fullPrompt);
+        console.log('=====================================================');
+      }
+
+      // 1. Static block byte-identity check
+      if (baselineStaticBlock === null) {
+        baselineStaticBlock = result.staticBlock;
+      } else if (result.staticBlock !== baselineStaticBlock) {
+        allFailures.push(`[${label}] Static block is NOT byte-identical across months!`);
+      }
+
+      // 2. Full automated validator check (Taras, ChandraBala, D9 Nodes, AD Chamber, Dasha dates, Ephemeris facts, Combust, Bounds)
+      const val = validateOriginalSourcePrompt(result, context);
+      if (!val.valid) {
+        val.errors.forEach((e: string) => allFailures.push(`[${label}] ${e}`));
+      }
+
+      // 3. Spot-checks specifically targeting Fix List items 1..7 on November 2026
+      if (year === 2026 && monthIndex === 10) {
+        const txt = result.fullPrompt;
+        const assertContains = (needle: string | RegExp, desc: string) => {
+          const ok = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
+          if (!ok) allFailures.push(`[November 2026 FixCheck] Missing/Wrong ${desc}`);
+        };
+        const assertNotContains = (needle: string | RegExp, desc: string) => {
+          const hit = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
+          if (hit) allFailures.push(`[November 2026 FixCheck] Unexpected ${desc}`);
+        };
+
+        // Fix 1: ChandraBala Fav / - in [LUNAR]
+        assertContains('ChandraBala: Fav', 'ChandraBala: Fav on favorable Moon spans');
+        assertContains('ChandraBala: -', 'ChandraBala: - on unfavorable Moon spans');
+
+        // Fix 2: Per-nakshatra Tara matching Janma Star Anuradha
+        assertContains(/Swati P\d+ d1-\d+ \(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
+        assertContains(/Vishakha P\d+ d\d+-\d+ \(Parama Mitra T9\)/, 'Vishakha (Parama Mitra T9)');
+        assertContains(/Anuradha P\d+ d20-\d+ \(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
+        assertContains(/Mercury \| Libra.*Vishakha P1 d1-2 \(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
+        assertContains(/Mercury \| Libra.*Vishakha P1 d25-27 \(Parama Mitra T9\).*Vishakha P3 d30 \(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
+        assertContains(/Pushya P\d+ \(Janma T1\).*Ashlesha P\d+ \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
+        assertNotContains(/\(\s*\)/, 'empty parentheses in [D1] nakshatra names');
+
+        // Fix 3: AD Chamber uses "natal Saturn @" and "T:Moon (L2/M3)" + "T:Rahu (L3/M4)"
+        assertContains(/AD_CHAMBER:\s+natal Saturn @ Cancer/, 'AD_CHAMBER natal Saturn @ Cancer');
+        assertContains('T:Moon (L2/M3)', 'T:Moon (L2/M3) in AD_CHAMBER Ruled');
+        assertContains('T:Rahu (L3/M4)', 'T:Rahu (L3/M4) in AD_CHAMBER Ruled');
+
+        // Fix 4: D9 Node Exaltation removal
+        assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9]');
+        assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9]');
+
+        // Fix 5: Ephemeris-computed Combust date range for Mercury
+        assertContains('Combust d1-9', 'Mercury data-computed Combust d1-9');
+
+        // Fix 6: Dasha MD/AD/PD start..end dates from timeline table
+        assertContains('MD Venus 2013-04-02..2033-04-02', 'MD Venus start..end dates');
+        assertContains('AD Saturn 2026-01-31..2029-04-02', 'AD Saturn start..end dates');
+        assertContains('PD Mercury 2026-08-02..2027-01-13', 'PD Mercury start..end dates');
+
+        // Fix 7: Per-segment MD Venus dignity (no combined slash)
+        assertContains('Libra L11/M12 (Swakshetra) d1-5; Virgo L10/M11 (Neecha) d6-22; Libra L11/M12 (Swakshetra) d23-30', 'MD Venus per-segment dignity');
+      }
+
+      console.log(`PASS check candidate: ${label} (${result.meta.lineCount} lines, ~${result.meta.estTokens} tokens)`);
+    }
+
+    if (allFailures.length > 0) {
+      console.error(`\nOriginal Source Prompt Regression FAILED with ${allFailures.length} mismatch(es):`);
+      allFailures.forEach((f, idx) => console.error(`  ${idx + 1}. ${f}`));
+      process.exit(1);
+    }
+
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
+  } finally {
+    await server.close();
+  }
+}
+
+main().catch(err => {
+  console.error('Regression script crashed:', err);
+  process.exit(1);
+});

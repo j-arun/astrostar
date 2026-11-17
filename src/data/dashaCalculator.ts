@@ -11,6 +11,10 @@ export interface DynamicDashaHierarchy {
   startDate: string;
   endDate: string;
   totalDays: number;
+  mdStartDate?: string;
+  mdEndDate?: string;
+  adStartDate?: string;
+  adEndDate?: string;
 }
 
 const LORDS = [
@@ -216,33 +220,60 @@ export function calculateVimshottariTimelineForProfile(profile?: {
   return intervals;
 }
 
+function resolveMdAndAdSpan(
+  timeline: [string, string, string, string, string][],
+  matchIdx: number
+): { mdStartDate: string; mdEndDate: string; adStartDate: string; adEndDate: string } {
+  const [md, ad] = timeline[matchIdx];
+  let mdFirst = matchIdx;
+  let mdLast = matchIdx;
+  while (mdFirst > 0 && timeline[mdFirst - 1][0] === md) mdFirst--;
+  while (mdLast + 1 < timeline.length && timeline[mdLast + 1][0] === md) mdLast++;
+
+  let adFirst = matchIdx;
+  let adLast = matchIdx;
+  while (adFirst > mdFirst && timeline[adFirst - 1][0] === md && timeline[adFirst - 1][1] === ad) adFirst--;
+  while (adLast < mdLast && timeline[adLast + 1][0] === md && timeline[adLast + 1][1] === ad) adLast++;
+
+  return {
+    mdStartDate: timeline[mdFirst][3],
+    mdEndDate: timeline[mdLast][4],
+    adStartDate: timeline[adFirst][3],
+    adEndDate: timeline[adLast][4]
+  };
+}
+
 export function getVimshottariDashaForDate(
   dateStr: string,
   customTimeline?: [string, string, string, string, string][],
   profile?: any
 ): DynamicDashaHierarchy {
   // 1. Try finding in customTimeline if provided
-  let match = customTimeline && customTimeline.length > 0
-    ? customTimeline.find(([md, ad, pd, start, end]) => dateStr >= start && dateStr <= end)
-    : undefined;
+  let usedTimeline: [string, string, string, string, string][] = customTimeline || [];
+  let matchIdx = customTimeline && customTimeline.length > 0
+    ? customTimeline.findIndex(([, , , start, end]) => dateStr >= start && dateStr <= end)
+    : -1;
 
-  // 2. If no match in custom timeline, check the full universal timeline
-  if (!match) {
-    const fullTimeline = getFullVimshottariTimeline();
-    match = fullTimeline.find(([md, ad, pd, start, end]) => dateStr >= start && dateStr <= end);
+  // 2. If no match in custom timeline, check the profile or full universal timeline
+  if (matchIdx === -1) {
+    usedTimeline = profile ? calculateVimshottariTimelineForProfile(profile) : getFullVimshottariTimeline();
+    matchIdx = usedTimeline.findIndex(([, , , start, end]) => dateStr >= start && dateStr <= end);
   }
 
-  if (match) {
+  if (matchIdx !== -1) {
+    const match = usedTimeline[matchIdx];
     const d1 = new Date(match[3]);
     const d2 = new Date(match[4]);
     const days = Math.max(1, Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)));
+    const spans = resolveMdAndAdSpan(usedTimeline, matchIdx);
     return {
       mahadasha: match[0],
       antardasha: match[1],
       pratyantardasha: match[2],
       startDate: match[3],
       endDate: match[4],
-      totalDays: days
+      totalDays: days,
+      ...spans
     };
   }
 
@@ -253,7 +284,11 @@ export function getVimshottariDashaForDate(
     pratyantardasha: "Mercury (Budha)",
     startDate: "2026-08-03",
     endDate: "2027-01-14",
-    totalDays: 164
+    totalDays: 164,
+    mdStartDate: "2013-04-02",
+    mdEndDate: "2033-04-02",
+    adStartDate: "2023-12-03",
+    adEndDate: "2027-02-02"
   };
 }
 

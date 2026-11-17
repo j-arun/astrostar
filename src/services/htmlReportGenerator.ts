@@ -7,7 +7,8 @@ import {
   KvCacheConfig,
   loadKvCacheConfig,
   buildKvCacheSystemPrefix,
-  buildEphemeralsOnlyPrompt
+  buildEphemeralsOnlyPrompt,
+  resolveEngineProfile
 } from './llm/kvCacheManager';
 import { buildVedicPrompt, PREFERRED_VEDIC_14B_MODEL } from './llm/adapters';
 
@@ -138,7 +139,10 @@ export function buildVedicHtmlContent(
   const kvCfg: Partial<KvCacheConfig> = options?.kvConfigSnapshot || (typeof window !== 'undefined' ? loadKvCacheConfig() : {});
   const kvOverrides: KvCacheBlockOverrides | undefined = options?.kvOverrides || kvCfg.overrides;
   const kvMode: 'v2' | 'v3' = telemetry.promptVersion === 'v2' ? 'v2' : 'v3';
-  const kvPrefix = buildKvCacheSystemPrefix(context, kvMode, kvOverrides, 'json_report');
+  const engineProfile = resolveEngineProfile(
+    narrative.isPrivateLocal || narrative.providerUsed === 'local_qwen' ? 'local_qwen' : narrative.providerUsed
+  );
+  const kvPrefix = buildKvCacheSystemPrefix(context, kvMode, kvOverrides, 'json_report', engineProfile);
   const ephemeralsData = buildEphemeralsOnlyPrompt(context, telemetry.promptVersion, 2800);
   const splitFromPromptSent = extractKvAndEphemeralPartsFromPrompt(narrative.promptSent);
   const kvCacheActive = Boolean(
@@ -153,7 +157,7 @@ export function buildVedicHtmlContent(
     ? narrative.promptSent.trim()
     : (() => {
         try {
-          return buildVedicPrompt(context, engineDisplayName, telemetry.promptVersion);
+          return buildVedicPrompt(context, engineDisplayName, telemetry.promptVersion, engineProfile);
         } catch {
           return `[KV CACHE SYSTEM PREFIX]\n${effectiveKvSystemText}\n\n[EPHEMERIS SPAN]\n${effectiveEphemeralsText}`;
         }
@@ -1357,11 +1361,11 @@ export function buildVedicHtmlContent(
       </div>` : ''}
     </section>
 
-    <!-- SECTION 8: DYNAMIC EPHEMERALS SPAN PROMPT (TRANSITS, DASHA & INQUIRY <= 2K) -->
+    <!-- SECTION 8: DYNAMIC EPHEMERALS SPAN PROMPT (TRANSITS, DASHA & INQUIRY <= 2.8K) -->
     <section class="section">
       <div class="section-header">
-        <h2 class="section-title">8. EPHEMERAL SPAN PROMPT (&le; 2K DYNAMIC EPHEMERIS + INQUIRY)</h2>
-        <span class="section-subtitle">${effectiveEphemeralsText.length.toLocaleString()} chars (~${effectiveEphemeralsTokens.toLocaleString()} tokens &bull; ${effectiveEphemeralsTokens <= 2000 ? 'Within 2,000 Token Cap' : 'Compact Ephemeris Span'})</span>
+        <h2 class="section-title">8. EPHEMERAL SPAN PROMPT (&le; 2.8K DYNAMIC EPHEMERIS + INQUIRY)</h2>
+        <span class="section-subtitle">${effectiveEphemeralsText.length.toLocaleString()} chars (~${effectiveEphemeralsTokens.toLocaleString()} tokens &bull; ${effectiveEphemeralsTokens <= 2800 ? 'Within 2,800 Token Cap' : 'Compact Ephemeris Span'})</span>
       </div>
       <div class="part-card">
         <div class="part-header">

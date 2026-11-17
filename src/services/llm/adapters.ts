@@ -15,19 +15,15 @@ import {
   PredictedSpecificEvent
 } from './types';
 import {
-  loadKvCacheConfig,
-  mapProviderToKvSlot,
-  isKvCacheEnabledForEngine,
-  buildKvCacheSystemPrefix,
-  buildEphemeralsOnlyPrompt,
   buildDefaultD1Block,
   buildDefaultD9Block,
   buildDefaultRulesBlock,
   buildDefaultDeliveryBlock,
   buildHierarchicalEphemerisSections,
   formatD9PlacementsSummary,
-  KvCacheConfig
-} from './kvCacheManager';
+  resolveEngineProfile,
+  PromptEngineProfile
+} from './vedicPromptHelpers';
 
 function cleanEnglishMultiline(text: string): string {
   if (!text) return '';
@@ -527,18 +523,20 @@ const formatNakshatraCompact = (nak?: string, pada?: number): string => {
  */
 function buildVedicPromptCompact(
   context: VedicHouseContext,
-  _providerName: string,
-  mode: 'v2' | 'v3'
+  providerName: string,
+  mode: 'v2' | 'v3',
+  engineProfileOverride?: PromptEngineProfile
 ): string {
   const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
   const periodLabel = context.isMultiYearPrediction
     ? `${context.timelineStartDate}..${context.timelineEndDate}`
     : `${monthName} ${context.selectedYear}`;
+  const engineProfile = engineProfileOverride || resolveEngineProfile(providerName);
 
   const d1Block = buildDefaultD1Block(context, mode);
   const d9Block = buildDefaultD9Block(context);
   const rulesBlock = buildDefaultRulesBlock(mode);
-  const deliveryBlock = buildDefaultDeliveryBlock(mode, 'json_report');
+  const deliveryBlock = buildDefaultDeliveryBlock(mode, engineProfile);
   const ephem = buildHierarchicalEphemerisSections(context, mode);
 
   const singleHouseRules = !context.isComprehensiveMonthly && context.houseNumber && context.matchedRules.length > 0
@@ -566,8 +564,8 @@ function buildVedicPromptCompact(
   const taskInstruction = context.isMultiYearPrediction
     ? `Synthesize continuous Vedic prediction (${periodLabel}) tested against lived experience across concrete events & Moon timing.`
     : context.isComprehensiveMonthly
-    ? `Synthesize multi-paragraph Vedic evaluation for ${monthName} ${context.selectedYear} across all 5 core domains (career_job, love_romance, health_vitality, finance_wealth, family_home) + correlatedGateEvents.`
-    : `Synthesize multi-paragraph Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains + correlatedGateEvents.`;
+    ? `Synthesize monthly Vedic evaluation for ${monthName} ${context.selectedYear} across all 5 core domains (career_job, love_romance, health_vitality, finance_wealth, family_home), predictedSpecificEvents & correlatedGateEvents.`
+    : `Synthesize Vedic analysis for House ${context.houseNumber} and all 5 supplementary domains + predictedSpecificEvents + correlatedGateEvents.`;
 
   return [
     `Role: Senior Vedic Astrologer & Parashara/Jaimini Quantitative Synthesis Engine (${context.isMultiYearPrediction ? 'multi-period timeline' : 'monthly transit'} synthesis).`,
@@ -586,12 +584,20 @@ function buildVedicPromptCompact(
   ].filter(Boolean).join('\n\n');
 }
 
-export function buildVedicPromptV3(context: VedicHouseContext, providerName: string): string {
-  return buildVedicPromptCompact(context, providerName, 'v3');
+export function buildVedicPromptV3(
+  context: VedicHouseContext,
+  providerName: string,
+  engineProfileOverride?: PromptEngineProfile
+): string {
+  return buildVedicPromptCompact(context, providerName, 'v3', engineProfileOverride);
 }
 
-export function buildVedicPromptV2(context: VedicHouseContext, providerName: string): string {
-  return buildVedicPromptCompact(context, providerName, 'v2');
+export function buildVedicPromptV2(
+  context: VedicHouseContext,
+  providerName: string,
+  engineProfileOverride?: PromptEngineProfile
+): string {
+  return buildVedicPromptCompact(context, providerName, 'v2', engineProfileOverride);
 }
 
 /**
@@ -686,7 +692,8 @@ Synthesize analysis in plain English and return a raw JSON object with: promptVe
 export function buildVedicPrompt(
   context: VedicHouseContext,
   providerName: string,
-  versionOverride?: AstroPromptVersion
+  versionOverride?: AstroPromptVersion,
+  engineProfileOverride?: PromptEngineProfile
 ): string {
   // If user provided a customized prompt override in the interactive studio, respect it directly!
   if (context.customPromptOverride && context.customPromptOverride.trim().length > 0) {
@@ -698,67 +705,11 @@ export function buildVedicPrompt(
     return buildVedicPromptV1(context, providerName);
   }
   if (activeVer === 'v2') {
-    return buildVedicPromptV2(context, providerName);
+    return buildVedicPromptV2(context, providerName, engineProfileOverride);
   }
-  return buildVedicPromptV3(context, providerName);
+  return buildVedicPromptV3(context, providerName, engineProfileOverride);
 }
 
-/**
- * Resolves KV Cache configuration for the requested engine and splits the request into:
- * - Static System KV Prefix (D1 + D9 + Rules + Generic Delivery Contract)
- * - Dynamic Ephemeris + Inquiry Prompt (<= 2,000 tokens)
- * When KV Cache is disabled (or a manual customPromptOverride is supplied), returns the unified single prompt.
- */
-export function prepareKvAwarePrompt(
-  context: VedicHouseContext,
-  providerId: LLMProviderId | string,
-  providerName: string,
-  outputKind: 'json_report' | 'qa_chat' = 'json_report',
-  kvConfigOverride?: KvCacheConfig
-): {
-  useKvCache: boolean;
-  systemPrompt?: string;
-  userPrompt: string;
-  systemHash?: string;
-  systemTokensEst: number;
-  ephemeralsTokensEst: number;
-  kvConfig: KvCacheConfig;
-  promptVersion: AstroPromptVersion;
-} {
-  const kvConfig = kvConfigOverride || loadKvCacheConfig();
-  const slot = mapProviderToKvSlot(String(providerId));
-  const activeVer = resolveEffectivePromptVersion(context);
-  const hasManualOverride = Boolean(context.customPromptOverride && context.customPromptOverride.trim().length > 0);
-  const kvEnabled = !hasManualOverride && activeVer !== 'v1' && (
-    context.useKvCache !== undefined ? context.useKvCache : isKvCacheEnabledForEngine(slot, kvConfig)
-  );
-
-  if (kvEnabled) {
-    const mode: 'v2' | 'v3' = activeVer === 'v2' ? 'v2' : 'v3';
-    const sys = buildKvCacheSystemPrefix(context, mode, kvConfig.overrides, outputKind);
-    const eph = buildEphemeralsOnlyPrompt(context, activeVer, 2800);
-    return {
-      useKvCache: true,
-      systemPrompt: sys.systemPrompt,
-      userPrompt: eph.ephemeralsPrompt,
-      systemHash: sys.systemHash,
-      systemTokensEst: sys.systemTokensEst,
-      ephemeralsTokensEst: eph.tokensEst,
-      kvConfig,
-      promptVersion: activeVer
-    };
-  }
-
-  const fullPrompt = buildVedicPrompt(context, providerName);
-  return {
-    useKvCache: false,
-    userPrompt: fullPrompt,
-    systemTokensEst: 0,
-    ephemeralsTokensEst: Math.round(fullPrompt.length / 4),
-    kvConfig,
-    promptVersion: activeVer
-  };
-}
 
 /**
  * Deterministic Parashara Fallback Synthesizer
@@ -1488,19 +1439,157 @@ export async function purgeOllamaMemory(model?: string, endpoint = 'http://local
   }
 }
 
+function isPlaceholderStub(val: any): boolean {
+  if (val === null || val === undefined) return true;
+  if (typeof val !== 'string') return false;
+  const s = val.trim();
+  if (s.length === 0) return true;
+  if (/^(?:p\d+|z\d+|string|tbd|n\/a|none|null|placeholder|todo|\.\.\.)$/i.test(s)) return true;
+  if (/^<(?:paragraph|zone|string|[^>]{2,40})>$/i.test(s)) return true;
+  if (/^(?:2-3 crisp sentences on|detailed paragraph \d+ covering|primary vulnerable body system|secondary stress or nervous)/i.test(s)) return true;
+  return false;
+}
+
+function cleanScenarioText(val: any, fallbackVal: string): string {
+  if (val === undefined || val === null) return fallbackVal;
+  if (Array.isArray(val)) {
+    const joined = val
+      .map(v => (typeof v === 'string' ? v.trim() : extractReadableProse(v, '')))
+      .filter(v => v && !isPlaceholderStub(v))
+      .join(' ');
+    return joined.length > 0 ? joined : fallbackVal;
+  }
+  const str = typeof val === 'string' ? val.trim() : extractReadableProse(val, '');
+  if (!str || isPlaceholderStub(str)) return fallbackVal;
+  return str;
+}
+
+function normalizeScenarioStringList(rawVal: any, fallbackList?: string[], splitCommas = false): string[] | undefined {
+  let items: string[] = [];
+  if (Array.isArray(rawVal)) {
+    items = rawVal.map(x => (typeof x === 'string' ? x.trim() : extractReadableProse(x, '')));
+  } else if (typeof rawVal === 'string' && rawVal.trim().length > 0) {
+    items = splitCommas
+      ? rawVal.split(/[,;\n]+/).map(s => s.trim())
+      : rawVal.split(/\n{2,}/).map(s => s.trim());
+  }
+  const valid = items.filter(x => x.length > 0 && !isPlaceholderStub(x));
+  return valid.length > 0 ? valid : fallbackList;
+}
+
 function mergeScenarios(
-  parsedScenarios: any[],
+  parsedScenariosRaw: any,
   fallbackScenarios: import('./types').SupplementaryDomainScenario[]
 ): import('./types').SupplementaryDomainScenario[] {
-  if (!Array.isArray(parsedScenarios) || parsedScenarios.length === 0) {
+  let parsedScenarios: any[] = [];
+  if (Array.isArray(parsedScenariosRaw)) {
+    parsedScenarios = parsedScenariosRaw;
+  } else if (parsedScenariosRaw && typeof parsedScenariosRaw === 'object') {
+    parsedScenarios = Object.entries(parsedScenariosRaw).map(([key, val]) => {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        return { id: key, ...val };
+      }
+      if (Array.isArray(val)) {
+        return { id: key, detailedParagraphs: val };
+      }
+      return { id: key, summary: val !== null && val !== undefined ? String(val) : '' };
+    });
+  }
+
+  if (parsedScenarios.length === 0) {
     return fallbackScenarios;
   }
+
+  const aliasMap: Record<string, string[]> = {
+    career_job: ['career_job', 'career', 'work', 'job', 'profession'],
+    love_romance: ['love_romance', 'love', 'romance', 'relationship', 'marriage'],
+    health_vitality: ['health_vitality', 'health', 'vitality', 'body', 'wellness'],
+    finance_wealth: ['finance_wealth', 'finance', 'wealth', 'money', 'cashflow'],
+    family_home: ['family_home', 'family', 'home', 'domestic', 'property']
+  };
+
   return fallbackScenarios.map(fallbackItem => {
-    const matched = parsedScenarios.find((p: any) => p && p.id === fallbackItem.id);
+    const aliases = aliasMap[fallbackItem.id] || [fallbackItem.id];
+    const matched = parsedScenarios.find((p: any) => {
+      if (!p || typeof p !== 'object') return false;
+      const pid = String(p.id || p.domain || p.category || '').toLowerCase().trim();
+      const ptitle = String(p.title || '').toLowerCase();
+      return (
+        aliases.some(a => pid === a || pid.includes(a)) ||
+        aliases.some(a => ptitle.includes(a))
+      );
+    });
     if (!matched) return fallbackItem;
+
+    const candidateParaSources = [
+      matched.detailedParagraphs,
+      matched.paragraphs,
+      matched.details,
+      matched.notes,
+      matched.points,
+      matched.bullets,
+      matched.narrative,
+      matched.analysis,
+      matched.summary
+    ];
+    let mergedParagraphs: string[] | undefined;
+    for (const src of candidateParaSources) {
+      const parsedList = normalizeScenarioStringList(src, undefined, false);
+      if (parsedList && parsedList.length > 0) {
+        mergedParagraphs = parsedList;
+        break;
+      }
+    }
+    if (!mergedParagraphs || mergedParagraphs.length === 0) {
+      mergedParagraphs = fallbackItem.detailedParagraphs;
+    }
+
+    let mergedHealthDetails = fallbackItem.healthDetails;
+    if (matched.healthDetails || matched.vulnerableZones || matched.anatomicalZones || matched.zones || fallbackItem.healthDetails) {
+      const mhd = matched.healthDetails || {};
+      const fhd = fallbackItem.healthDetails || { vulnerableZones: [], mentalTranquilityAndStress: '', holisticRemedies: '' };
+      mergedHealthDetails = {
+        ...fhd,
+        ...mhd,
+        vulnerableZones:
+          normalizeScenarioStringList(
+            mhd.vulnerableZones ?? mhd.anatomicalZones ?? mhd.zones ?? matched.vulnerableZones ?? matched.anatomicalZones ?? matched.zones,
+            fhd.vulnerableZones,
+            true
+          ) || fhd.vulnerableZones,
+        mentalTranquilityAndStress: cleanScenarioText(mhd.mentalTranquilityAndStress ?? mhd.stress, fhd.mentalTranquilityAndStress),
+        holisticRemedies: cleanScenarioText(mhd.holisticRemedies ?? mhd.remedies, fhd.holisticRemedies)
+      };
+    }
+
+    const mergedFinanceDetails = (matched.financeDetails || fallbackItem.financeDetails)
+      ? {
+          ...(fallbackItem.financeDetails || { liquidityVsOutflow: '', windfallAndSpeculation: '', debtAndAssetFinancing: '' }),
+          ...(matched.financeDetails || {}),
+          liquidityVsOutflow: cleanScenarioText(matched.financeDetails?.liquidityVsOutflow, fallbackItem.financeDetails?.liquidityVsOutflow || ''),
+          windfallAndSpeculation: cleanScenarioText(matched.financeDetails?.windfallAndSpeculation, fallbackItem.financeDetails?.windfallAndSpeculation || ''),
+          debtAndAssetFinancing: cleanScenarioText(matched.financeDetails?.debtAndAssetFinancing, fallbackItem.financeDetails?.debtAndAssetFinancing || '')
+        }
+      : undefined;
+
+    const mergedFamilyDetails = (matched.familyDetails || fallbackItem.familyDetails)
+      ? {
+          ...(fallbackItem.familyDetails || { domesticAmbiance: '', maternalWellbeing: '', propertyAndRelocation: '' }),
+          ...(matched.familyDetails || {}),
+          domesticAmbiance: cleanScenarioText(matched.familyDetails?.domesticAmbiance, fallbackItem.familyDetails?.domesticAmbiance || ''),
+          maternalWellbeing: cleanScenarioText(matched.familyDetails?.maternalWellbeing, fallbackItem.familyDetails?.maternalWellbeing || ''),
+          propertyAndRelocation: cleanScenarioText(matched.familyDetails?.propertyAndRelocation, fallbackItem.familyDetails?.propertyAndRelocation || '')
+        }
+      : undefined;
+
     return {
       ...fallbackItem,
       ...matched,
+      id: fallbackItem.id,
+      verdict: cleanScenarioText(matched.verdict ?? matched.summary, fallbackItem.verdict),
+      timingWindow: cleanScenarioText(matched.timingWindow ?? matched.timing, fallbackItem.timingWindow),
+      astrologicalReasoning: cleanScenarioText(matched.astrologicalReasoning ?? matched.reasoning, fallbackItem.astrologicalReasoning),
+      practicalGuidance: cleanScenarioText(matched.practicalGuidance ?? matched.guidance ?? matched.remedy, fallbackItem.practicalGuidance),
       employmentStatusInference: matched.employmentStatusInference || fallbackItem.employmentStatusInference,
       jobSearchAnalysis: matched.jobSearchAnalysis || fallbackItem.jobSearchAnalysis,
       newJobAcquisition: matched.newJobAcquisition || fallbackItem.newJobAcquisition,
@@ -1508,12 +1597,10 @@ function mergeScenarios(
       crushStatusInference: matched.crushStatusInference || fallbackItem.crushStatusInference,
       romanceAtmosphere: matched.romanceAtmosphere || fallbackItem.romanceAtmosphere,
       manifestationPath: matched.manifestationPath || fallbackItem.manifestationPath,
-      financeDetails: matched.financeDetails || fallbackItem.financeDetails,
-      healthDetails: matched.healthDetails || fallbackItem.healthDetails,
-      familyDetails: matched.familyDetails || fallbackItem.familyDetails,
-      detailedParagraphs: (Array.isArray(matched.detailedParagraphs) && matched.detailedParagraphs.length > 0)
-        ? matched.detailedParagraphs
-        : fallbackItem.detailedParagraphs
+      financeDetails: mergedFinanceDetails,
+      healthDetails: mergedHealthDetails,
+      familyDetails: mergedFamilyDetails,
+      detailedParagraphs: mergedParagraphs
     };
   });
 }
@@ -1607,11 +1694,13 @@ export function extractReadableProse(val: any, fallbackVal: string = ''): string
 
   // Strip accidental outer curly braces or quotes
   const cleaned = trimmed.replace(/^\{+/, '').replace(/\}+$/, '').trim();
-  return cleaned.length > 0 ? cleaned : fallbackVal;
+  if (!cleaned || isPlaceholderStub(cleaned)) return fallbackVal;
+  return cleaned;
 }
 
 function sanitizeCleanField(val: any, fallbackVal: string): string {
-  return extractReadableProse(val, fallbackVal);
+  const res = extractReadableProse(val, fallbackVal);
+  return isPlaceholderStub(res) ? fallbackVal : res;
 }
 
 function repairTruncatedJson(str: string): string {
@@ -1756,14 +1845,19 @@ function normalizeCorrelatedGateEvents(
     return fallbackList;
   }
   const normalized: CorrelatedManufacturedEvent[] = parsedList
-    .filter((item: any) => item && typeof item === 'object' && (item.title || item.narrative))
+    .filter((item: any) => {
+      if (!item || typeof item !== 'object') return false;
+      const t = item.title || item.event || item.eventTitle;
+      const n = item.narrative || item.description || item.prediction;
+      return Boolean((t && !isPlaceholderStub(t)) || (n && !isPlaceholderStub(n)));
+    })
     .map((item: any, idx: number) => {
       const rawScore = Number(item.probabilityScore ?? item.probability ?? item.score ?? 65);
       const prob = Math.max(
         5,
         Math.min(99, Math.round(rawScore <= 1 && rawScore > 0 ? rawScore * 100 : isNaN(rawScore) ? 65 : rawScore))
       );
-      const rawMoonDates = item.moonWindowDates ? String(item.moonWindowDates).trim() : '';
+      const rawMoonDates = item.moonWindowDates || item.moonDates || item.dates ? String(item.moonWindowDates || item.moonDates || item.dates).trim() : '';
       const hasValidMoonDates =
         rawMoonDates.length > 0 &&
         !/^(none|null|n\/a|-)$/i.test(rawMoonDates) &&
@@ -1774,18 +1868,20 @@ function normalizeCorrelatedGateEvents(
           : hasValidMoonDates;
       const latencyStatus: 'acute_moon_triggered' | 'dormant_latent' =
         !hasMoon || item.latencyStatus === 'dormant_latent' ? 'dormant_latent' : 'acute_moon_triggered';
+      const titleVal = cleanScenarioText(item.title ?? item.event ?? item.eventTitle, `Correlated Event ${idx + 1}`);
+      const narrativeVal = cleanScenarioText(item.narrative ?? item.description ?? item.prediction, titleVal);
       return {
         id: String(item.id || `superset-evt-${idx + 1}`),
-        title: String(item.title || `Correlated Event ${idx + 1}`),
-        portfolio: String(item.portfolio || 'Life'),
+        title: titleVal,
+        portfolio: String(item.portfolio || item.category || 'Life'),
         probabilityScore: prob,
         isHighProbability: typeof item.isHighProbability === 'boolean' ? item.isHighProbability : prob >= 60,
         latencyStatus,
         hasMoonSupport: hasMoon,
         moonWindowDates: hasMoon && hasValidMoonDates ? rawMoonDates : undefined,
-        correlatedHousesAndLordships: String(item.correlatedHousesAndLordships || item.housesAndLordships || 'Correlated Bhava Lordship'),
-        nakshatraGateTrigger: String(item.nakshatraGateTrigger || item.gateTrigger || 'Active Nakshatra Entry Gate'),
-        narrative: String(item.narrative || item.description || ''),
+        correlatedHousesAndLordships: cleanScenarioText(item.correlatedHousesAndLordships ?? item.housesAndLordships ?? item.houses, 'Correlated Bhava Lordship'),
+        nakshatraGateTrigger: cleanScenarioText(item.nakshatraGateTrigger ?? item.gateTrigger ?? item.trigger, 'Active Nakshatra Entry Gate'),
+        narrative: narrativeVal,
         source: 'superset_major_llm' as const
       };
     })
@@ -1806,8 +1902,30 @@ function normalizePredictedSpecificEvents(
   if (!Array.isArray(parsedList) || parsedList.length === 0) {
     return fallbackList;
   }
-  const valid = parsedList.filter((item: any) => item && typeof item === 'object' && (item.eventTitle || item.concreteImplication));
-  return valid.length > 0 ? valid : fallbackList;
+  const normalized: PredictedSpecificEvent[] = parsedList
+    .filter((item: any) => {
+      if (!item || typeof item !== 'object') return false;
+      const title = item.eventTitle || item.title || item.event || item.prediction;
+      const imp = item.concreteImplication || item.implication || item.description || item.outcome;
+      return Boolean((title && !isPlaceholderStub(title)) || (imp && !isPlaceholderStub(imp)));
+    })
+    .map((item: any, idx: number) => {
+      const rawScore = Number(item.likelihoodScore ?? item.probabilityScore ?? item.confidence ?? 0.78);
+      const normalizedScore = rawScore > 1 ? Math.min(0.99, rawScore / 100) : Math.max(0.05, Math.min(0.99, isNaN(rawScore) ? 0.78 : rawScore));
+      const eventTitle = cleanScenarioText(item.eventTitle ?? item.title ?? item.event ?? item.prediction, `Astrological Event ${idx + 1}`);
+      return {
+        category: item.category || 'career_milestone',
+        categoryLabel: cleanScenarioText(item.categoryLabel ?? item.category, 'Specific Prediction'),
+        eventTitle,
+        likelihood: cleanScenarioText(item.likelihood, `${Math.round(normalizedScore * 100)}% Likely`),
+        likelihoodScore: normalizedScore,
+        projectedWindow: cleanScenarioText(item.projectedWindow ?? item.timingWindow ?? item.dates ?? item.window, 'Mid-Month Window'),
+        astrologicalTrigger: cleanScenarioText(item.astrologicalTrigger ?? item.trigger ?? item.houses, 'Active Gochara & Dasha Trigger'),
+        concreteImplication: cleanScenarioText(item.concreteImplication ?? item.implication ?? item.description ?? item.outcome, eventTitle),
+        preventiveRemedy: cleanScenarioText(item.preventiveRemedy ?? item.remedy ?? item.guidance, 'Align key actions with favorable Moon windows.')
+      };
+    });
+  return normalized.length > 0 ? normalized : fallbackList;
 }
 
 function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThreePartNarrative): any {
@@ -1823,8 +1941,30 @@ function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThree
   const p1 = root.part1_probabilityAndScope ?? root.part1 ?? root.event_probability_and_scope ?? root.eventProbabilityAndScope ?? root.probability_and_scope ?? root.probabilityAndScope ?? root['Part 1: Event Probability & Scope'] ?? root['Part 1'];
   const p2 = root.part2_financialAndResources ?? root.part2 ?? root.financial_and_resources ?? root.financialAndResources ?? root['Part 2: Financial & Resource Sources'] ?? root['Part 2'];
   const p3 = root.part3_microTimingWindow ?? root.part3 ?? root.micro_timing_window ?? root.microTimingWindow ?? root['Part 3: Micro-Timing Window'] ?? root['Part 3'];
-  const sum = root.summarySentence ?? root.summary ?? root.overview;
-  const supersetNote = root.supersetSynthesisNote ?? root.superset_synthesis_note;
+  const sum = root.summarySentence ?? root.summary ?? root.overview ?? root.verdict;
+  const supersetNote = root.supersetSynthesisNote ?? root.superset_synthesis_note ?? root.synthesisNote;
+
+  const rawSpecific =
+    root.predictedSpecificEvents ??
+    root.predicted_specific_events ??
+    root.specificEvents ??
+    root.specific_events ??
+    root.keyPredictions ??
+    root.key_predictions ??
+    root.majorEvents ??
+    root.major_events ??
+    ((root.correlatedGateEvents || root.correlated_gate_events || root.gateEvents || root.gate_events)
+      ? root.events
+      : undefined);
+  const rawCorrelated =
+    root.correlatedGateEvents ??
+    root.correlated_gate_events ??
+    root.gateEvents ??
+    root.gate_events ??
+    root.portfolioEvents ??
+    root.portfolio_events ??
+    root.events ??
+    root.manifestedEvents;
 
   return {
     ...fallback,
@@ -1836,11 +1976,8 @@ function buildNormalizedResult(parsed: any, fallback: import('./types').LLMThree
     supersetSynthesisNote: supersetNote
       ? sanitizeCleanField(supersetNote, fallback.supersetSynthesisNote || '')
       : fallback.supersetSynthesisNote,
-    correlatedGateEvents: normalizeCorrelatedGateEvents(
-      root.correlatedGateEvents || root.events || root.manifestedEvents,
-      fallback.correlatedGateEvents
-    ),
-    predictedSpecificEvents: normalizePredictedSpecificEvents(root.predictedSpecificEvents, fallback.predictedSpecificEvents)
+    correlatedGateEvents: normalizeCorrelatedGateEvents(rawCorrelated, fallback.correlatedGateEvents),
+    predictedSpecificEvents: normalizePredictedSpecificEvents(rawSpecific, fallback.predictedSpecificEvents)
   };
 }
 
@@ -1908,24 +2045,20 @@ export class QwenLocalAdapter implements ILLMAdapter {
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
     const targetModel = context.selectedLocalModel || 'qwen2.5:7b-instruct';
-    const prepared = prepareKvAwarePrompt(context, 'local_qwen', targetModel, 'json_report');
-    const prompt = prepared.userPrompt;
-    const promptLogText = prepared.useKvCache
-      ? `[SYSTEM KV CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
-      : prepared.userPrompt;
+    const prompt = buildVedicPrompt(context, targetModel, undefined, 'local_private');
+    const estimatedInputTokens = Math.round(prompt.length / 4);
     const endpoint = 'http://localhost:11434/api/generate';
 
     const requestBody: Record<string, any> = {
       model: targetModel,
       prompt,
-      ...(prepared.useKvCache && prepared.systemPrompt ? { system: prepared.systemPrompt } : {}),
       stream: false,
       format: 'json',
-      keep_alive: prepared.useKvCache ? (prepared.kvConfig.privateOllama.keepAlive || '30m') : '5m',
+      keep_alive: '5m',
       options: {
         temperature: 0.3,
-        num_predict: 3200,
-        num_ctx: 8192
+        num_predict: 3600,
+        num_ctx: 10240
       }
     };
 
@@ -2005,11 +2138,11 @@ export class QwenLocalAdapter implements ILLMAdapter {
           endpointUsed: endpoint,
           connectionStatus: 'connected_live',
           isPrivateLocal: true,
-          promptSent: promptLogText,
+          promptSent: prompt,
           rawRequestBody: requestBody,
           rawResponseBody: json,
           httpStatus: res.status,
-          memoryPurged: !prepared.useKvCache,
+          memoryPurged: true,
           ollamaStats: {
             model: json.model || targetModel,
             totalDurationMs: json.total_duration ? Math.round(json.total_duration / 1e6) : undefined,
@@ -2019,21 +2152,15 @@ export class QwenLocalAdapter implements ILLMAdapter {
           },
           tokenTelemetry: (typeof json.prompt_eval_count === 'number' || typeof json.eval_count === 'number')
             ? {
-                inputTokens: json.prompt_eval_count ?? prepared.ephemeralsTokensEst,
+                inputTokens: json.prompt_eval_count ?? estimatedInputTokens,
                 outputTokens: json.eval_count ?? Math.round((json.response || '').length / 4),
-                totalTokens: (json.prompt_eval_count ?? prepared.ephemeralsTokensEst) + (json.eval_count ?? Math.round((json.response || '').length / 4)),
-                systemTokens: prepared.systemTokensEst,
-                cachedTokens: prepared.useKvCache ? prepared.systemTokensEst : 0,
-                kvCacheUsed: prepared.useKvCache,
+                totalTokens: (json.prompt_eval_count ?? estimatedInputTokens) + (json.eval_count ?? Math.round((json.response || '').length / 4)),
                 source: 'api_reported'
               }
             : {
-                inputTokens: prepared.ephemeralsTokensEst,
+                inputTokens: estimatedInputTokens,
                 outputTokens: Math.round((json.response || '').length / 4),
-                totalTokens: prepared.ephemeralsTokensEst + Math.round((json.response || '').length / 4),
-                systemTokens: prepared.systemTokensEst,
-                cachedTokens: prepared.useKvCache ? prepared.systemTokensEst : 0,
-                kvCacheUsed: prepared.useKvCache,
+                totalTokens: estimatedInputTokens + Math.round((json.response || '').length / 4),
                 source: 'char_estimated'
               }
         };
@@ -2115,8 +2242,6 @@ export function buildBatchNarrativeFromRawResponse(
     executionTimeMs: number;
     requestBody?: any;
     rawResponseBody?: any;
-    kvCacheUsed?: boolean;
-    systemTokens?: number;
     ollamaStats?: {
       model?: string;
       totalDurationMs?: number;
@@ -2154,25 +2279,19 @@ export function buildBatchNarrativeFromRawResponse(
     rawRequestBody: meta.requestBody,
     rawResponseBody: meta.rawResponseBody,
     httpStatus: 200,
-    memoryPurged: !meta.kvCacheUsed,
+    memoryPurged: true,
     ollamaStats: meta.ollamaStats || { model: meta.modelTag },
     tokenTelemetry: (typeof meta.ollamaStats?.promptEvalCount === 'number' || typeof meta.ollamaStats?.evalCount === 'number')
       ? {
           inputTokens: meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4),
           outputTokens: meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4),
           totalTokens: (meta.ollamaStats?.promptEvalCount ?? Math.round(meta.promptSent.length / 4)) + (meta.ollamaStats?.evalCount ?? Math.round((rawResponseText || '').length / 4)),
-          systemTokens: meta.systemTokens,
-          cachedTokens: meta.kvCacheUsed ? meta.systemTokens : 0,
-          kvCacheUsed: Boolean(meta.kvCacheUsed),
           source: 'api_reported'
         }
       : {
           inputTokens: Math.round(meta.promptSent.length / 4),
           outputTokens: Math.round((rawResponseText || '').length / 4),
           totalTokens: Math.round(meta.promptSent.length / 4) + Math.round((rawResponseText || '').length / 4),
-          systemTokens: meta.systemTokens,
-          cachedTokens: meta.kvCacheUsed ? meta.systemTokens : 0,
-          kvCacheUsed: Boolean(meta.kvCacheUsed),
           source: 'char_estimated'
         }
   };
@@ -2187,11 +2306,8 @@ export class GeminiStudioAdapter implements ILLMAdapter {
 
   async generateReasoning(context: VedicHouseContext): Promise<LLMThreePartNarrative> {
     const startMs = Date.now();
-    const prepared = prepareKvAwarePrompt(context, 'gemini_pro', 'Google Gemini Pro', 'json_report');
-    const prompt = prepared.userPrompt;
-    const promptLogText = prepared.useKvCache
-      ? `[SYSTEM KV CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
-      : prepared.userPrompt;
+    const prompt = buildVedicPrompt(context, 'Google Gemini Pro', undefined, 'cloud');
+    const estimatedInputTokens = Math.round(prompt.length / 4);
     const endpoint = '/api/llm/gemini';
 
     const geminiKey = (
@@ -2208,7 +2324,6 @@ export class GeminiStudioAdapter implements ILLMAdapter {
     const requestBody: any = {
       model: geminiModel,
       prompt,
-      ...(prepared.useKvCache && prepared.systemPrompt ? { systemInstruction: prepared.systemPrompt } : {}),
       apiKey: geminiKey || undefined
     };
 
@@ -2266,34 +2381,29 @@ ${parsed.part3_microTimingWindow}
           endpointUsed: `Google Gemini Cloud API (${json.model || geminiModel})`,
           connectionStatus: 'connected_live',
           isPrivateLocal: false,
-          promptSent: promptLogText,
+          promptSent: prompt,
           rawRequestBody: requestBody,
           rawResponseBody: json,
           httpStatus: res.status,
           tokenTelemetry: json.usageMetadata
             ? {
-                inputTokens: Number(json.usageMetadata.promptTokenCount ?? prepared.ephemeralsTokensEst),
+                inputTokens: Number(json.usageMetadata.promptTokenCount ?? estimatedInputTokens),
                 outputTokens: Number(
                   (json.usageMetadata.candidatesTokenCount ?? 0) + (json.usageMetadata.thoughtsTokenCount ?? 0) ||
                     Math.round((json.text || '').length / 4)
                 ),
                 totalTokens: Number(
                   json.usageMetadata.totalTokenCount ??
-                    (Number(json.usageMetadata.promptTokenCount ?? prepared.ephemeralsTokensEst) +
+                    (Number(json.usageMetadata.promptTokenCount ?? estimatedInputTokens) +
                       Number(json.usageMetadata.candidatesTokenCount ?? Math.round((json.text || '').length / 4)) +
                       Number(json.usageMetadata.thoughtsTokenCount ?? 0))
                 ),
-                cachedTokens: Number(json.usageMetadata.cachedContentTokenCount ?? 0),
-                systemTokens: prepared.systemTokensEst,
-                kvCacheUsed: prepared.useKvCache,
                 source: 'api_reported'
               }
             : {
-                inputTokens: prepared.ephemeralsTokensEst,
+                inputTokens: estimatedInputTokens,
                 outputTokens: Math.round((json.text || '').length / 4),
-                totalTokens: prepared.ephemeralsTokensEst + Math.round((json.text || '').length / 4),
-                systemTokens: prepared.systemTokensEst,
-                kvCacheUsed: prepared.useKvCache,
+                totalTokens: estimatedInputTokens + Math.round((json.text || '').length / 4),
                 source: 'char_estimated'
               }
         };
@@ -2376,11 +2486,8 @@ async function callClaudeProxy(
     customModel = 'claude-haiku-5-5';
   }
 
-  const prepared = prepareKvAwarePrompt(context, providerId, modelDisplayName, 'json_report');
-  const prompt = prepared.userPrompt;
-  const promptLogText = prepared.useKvCache
-    ? `[SYSTEM EPHEMERAL CACHE ~${prepared.systemTokensEst} tok | hash=${prepared.systemHash}]\n${prepared.systemPrompt}\n\n[EPHEMERIS PROMPT <=2K (~${prepared.ephemeralsTokensEst} tok)]\n${prepared.userPrompt}`
-    : prepared.userPrompt;
+  const prompt = buildVedicPrompt(context, modelDisplayName, undefined, 'cloud');
+  const estimatedInputTokens = Math.round(prompt.length / 4);
   const endpoint = '/api/llm/claude';
   const customKey = context.anthropicApiKey || (typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_api_key') : null) || '';
 
@@ -2389,7 +2496,6 @@ async function callClaudeProxy(
   const requestBody: any = {
     model: customModel,
     prompt,
-    ...(prepared.useKvCache && prepared.systemPrompt ? { system: prepared.systemPrompt, usePromptCache: true } : {}),
     apiKey: customKey ? customKey.trim() : undefined,
     thinkingMode,
     maxTokens: 16000
@@ -2454,7 +2560,7 @@ ${parsed.part3_microTimingWindow}
         endpointUsed: `Anthropic Claude Cloud API (${json.model || customModel})`,
         connectionStatus: 'connected_live',
         isPrivateLocal: false,
-        promptSent: promptLogText,
+        promptSent: prompt,
         rawRequestBody: requestBody,
         rawResponseBody: json,
         httpStatus: res.status,
@@ -2472,18 +2578,12 @@ ${parsed.part3_microTimingWindow}
                 Number(json.usage.cache_creation_input_tokens ?? 0) +
                 Number(json.usage.cache_read_input_tokens ?? 0) +
                 Number(json.usage.output_tokens ?? Math.round(rawText.length / 4)),
-              cachedTokens: Number(json.usage.cache_read_input_tokens ?? 0),
-              cacheCreationTokens: Number(json.usage.cache_creation_input_tokens ?? 0),
-              systemTokens: prepared.systemTokensEst,
-              kvCacheUsed: prepared.useKvCache,
               source: 'api_reported'
             }
           : {
-              inputTokens: prepared.ephemeralsTokensEst,
+              inputTokens: estimatedInputTokens,
               outputTokens: Math.round(rawText.length / 4),
-              totalTokens: prepared.ephemeralsTokensEst + Math.round(rawText.length / 4),
-              systemTokens: prepared.systemTokensEst,
-              kvCacheUsed: prepared.useKvCache,
+              totalTokens: estimatedInputTokens + Math.round(rawText.length / 4),
               source: 'char_estimated'
             }
       };

@@ -6,7 +6,8 @@ import {
   loadKvCacheConfig,
   saveKvCacheConfig,
   syncKvCacheConfigToServer,
-  buildKvCacheSystemPrefix
+  buildKvCacheSystemPrefix,
+  resolveEngineProfile
 } from '../services/llm/kvCacheManager';
 import { VedicHouseContext } from '../services/llm/types';
 
@@ -67,7 +68,9 @@ export const KvCachePreflightModal: React.FC<KvCachePreflightModalProps> = ({
           const { systemPrompt, systemHash } = buildKvCacheSystemPrefix(
             context,
             context.promptVersion === 'v2' ? 'v2' : 'v3',
-            updated.overrides
+            updated.overrides,
+            'json_report',
+            resolveEngineProfile(engineSlot)
           );
           const warmRes = await fetch('/api/llm/kv-cache/warm', {
             method: 'POST',

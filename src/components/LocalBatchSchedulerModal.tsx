@@ -217,7 +217,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
     if (!isOpen) return '';
     try {
       const ctx = buildContextForSelectedMonth();
-      return buildVedicPrompt({ ...ctx, promptVersion: activePromptVer }, modelTag || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M', activePromptVer);
+      return buildVedicPrompt({ ...ctx, promptVersion: activePromptVer }, modelTag || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M', activePromptVer, 'local_private');
     } catch {
       return '';
     }

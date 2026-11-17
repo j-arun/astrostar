@@ -640,33 +640,59 @@ export function buildDefaultRulesBlock(mode: 'v2' | 'v3' = 'v3'): string {
   return lawBlock.join('\n');
 }
 
+export type PromptEngineProfile = 'cloud' | 'local_private';
+
+export function resolveEngineProfile(providerOrSlot?: string): PromptEngineProfile {
+  const s = String(providerOrSlot || '').toLowerCase();
+  if (s.includes('local') || s.includes('ollama') || s.includes('qwen') || s.includes('privateollama')) {
+    return 'local_private';
+  }
+  return 'cloud';
+}
+
 export function buildDefaultDeliveryBlock(
   mode: 'v2' | 'v3' = 'v3',
-  outputKind: 'json_report' | 'qa_chat' = 'json_report'
+  outputKind: 'json_report' | 'qa_chat' = 'json_report',
+  engineProfile: PromptEngineProfile = 'cloud'
 ): string {
   const isDualFold = mode !== 'v2';
   const verTag = isDualFold ? 'V3' : 'V2';
+  const isLocal = engineProfile === 'local_private';
+
   if (outputKind === 'qa_chat') {
     return [
       `## 3. DELIVERY & RESPONSE CONTRACT`,
       `- Answer strictly from the fixed D1/D9 charts in system context plus the monthly Ephemeris & Question in the user prompt.`,
       `- Apply ${isDualFold ? 'Dual-Fold reasoning (House from Lagna = concrete event; House from Moon = mental experience) plus Pre-Computed Aspects & Double-Transit synthesis' : 'Moon-relative Gochara reasoning plus Pre-Computed Aspects'}.`,
       `- When comparing two user scenarios, include a Markdown comparison table (| Scenario | Alignment Probability | Key Transit Mechanisms |) with percentage likelihoods and a decisive verdict.`,
-      `- Output clean structured Markdown headings (###, ####), bullet lists, and bold dates/planets in English.`
+      `- Output clean structured Markdown headings (###, ####), bullet lists, and bold dates/planets in English.${isLocal ? '\n- Be direct, date-specific, and event-focused—avoid repetitive filler.' : ''}`
     ].join('\n');
   }
+
+  const profileDirective = isLocal
+    ? `LOCAL PRIVATE MODEL EXECUTION DISCIPLINE:
+- NEVER echo short template hints, generic shorthand codes, field type labels, or placeholder instructions as output values. Replace EVERY single field and array item with genuine predictions derived from this chart and ephemeris.
+- Concise Event-First Style: You do NOT need bloated essays—write crisp, high-signal 2–4 sentence paragraphs in "part1–3" and "detailedParagraphs", and invest your precision into naming exact dates, houses (${isDualFold ? 'L#/M#' : 'M#'}), Pre-Computed Aspects, Double-Transit shifts, concrete "predictedSpecificEvents", concrete anatomical "vulnerableZones", and sharp "correlatedGateEvents" (8–14+ cards spanning active portfolios).`
+    : `Replace every JSON slot below with rich multi-paragraph astrological synthesis grounded in exact houses (${isDualFold ? 'L#/M#' : 'M#'}), pre-computed aspects, Double-Transit overlaps, Dasha lords, and 10–18+ "correlatedGateEvents".`;
+
+  const pHint1 = isLocal ? '2-3 crisp sentences on transit & Dasha triggers' : 'Detailed paragraph 1 covering core Dasha & Gochara triggers';
+  const pHint2 = isLocal ? '2-3 crisp sentences on aspect, Moon window & practical outcome' : 'Detailed paragraph 2 covering aspect intersections, house lords & Moon windows';
+  const pHint3 = isLocal ? 'Optional 2-sentence risk or timing caveat' : 'Detailed paragraph 3 covering D9 dignity nuances & risk/opportunity timing';
+  const zHint1 = 'Primary vulnerable body system from 6th/8th/Gate seat (e.g. Stomach & digestion)';
+  const zHint2 = 'Secondary stress or nervous/sleep area (e.g. Feet/sleep tension)';
 
   return [
     `## 3. DELIVERY & JSON OUTPUT CONTRACT`,
     `End "summarySentence" with a crisp 1-line summary naming the top active Slow-Planet Ingress/Adisara/Double-Transit, Parivartana, Neecha Bhanga & Station triggers plus likely events.`,
-    `Return ONLY raw valid JSON matching this exact schema (no markdown fences or outside commentary):`,
-    `{"promptVer":"${verTag}","summarySentence":"Plain English synthesis ending with 1-liner of active Slow-Planet Ingress/Adisara/Double-Transit, Parivartana, Neecha Bhanga & Station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(${isDualFold ? 'Lagna L# + Moon M# Gochara' : 'Moon Gochara'},Aspects,Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/6th/9th/11th & slow-planet aspect analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"Month DD - DD, YYYY","overallConfidence":0.85,"supplementaryScenarios":[`,
-    `{"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"string","confidenceScore":0.85,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"10th/6th/Dasha/Double-Transit","practicalGuidance":"string","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"string","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha"},"jobSearchAnalysis":{"momentum":"string","pastStruggleVsCurrentPhase":"string","timingAuspiciousness":"string"},"newJobAcquisition":{"jobTypeAndMood":"string","workplaceAtmosphere":"string","comparisonWithCurrentRole":"string"},"existingJobPhase":{"currentPhaseNature":"string","retentionVsExitAdvice":"string"},"detailedParagraphs":["p1","p2","p3"]},`,
-    `{"id":"love_romance","title":"Love, Romance, Relationship & Interpersonal Horizon","verdict":"string","confidenceScore":0.78,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"5th/7th/Venus/Dasha","practicalGuidance":"string","crushStatusInference":{"existingCrushTrajectory":"string","newCrushProbability":"High|Moderate|Low","newCrushDetails":"string"},"romanceAtmosphere":{"emotionalWeather":"string","chemistryRating":82},"manifestationPath":{"outcomeType":"classical_traditional_marriage|living_together_modern|exploratory_flutter|platonic_delayed","outcomeLabel":"string","manifestationLikelihood":"string","astrologicalPathReasoning":"string"},"detailedParagraphs":["p1","p2","p3"]},`,
-    `{"id":"health_vitality","title":"Health & Physical Vitality","verdict":"string","confidenceScore":0.76,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"6th/8th/Saturn/Mars","practicalGuidance":"string","healthDetails":{"vulnerableZones":["z1","z2"],"mentalTranquilityAndStress":"string","holisticRemedies":"string"},"detailedParagraphs":["p1","p2"]},`,
-    `{"id":"finance_wealth","title":"Wealth, Cashflow & Assets","verdict":"string","confidenceScore":0.84,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"2nd/4th/6th/11th & Jupiter/Saturn Aspects","practicalGuidance":"string","financeDetails":{"liquidityVsOutflow":"string","windfallAndSpeculation":"string","debtAndAssetFinancing":"string"},"detailedParagraphs":["p1","p2"]},`,
-    `{"id":"family_home","title":"Domestic Peace & Family Harmony","verdict":"string","confidenceScore":0.88,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"4th/Moon/Dasha","practicalGuidance":"string","familyDetails":{"domesticAmbiance":"string","maternalWellbeing":"string","propertyAndRelocation":"string"},"detailedParagraphs":["p1","p2"]}`,
-    `],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"string","eventTitle":"string","likelihood":"string","likelihoodScore":0.82,"projectedWindow":"Month DD - DD, YYYY","astrologicalTrigger":"${isDualFold ? 'Lagna L# + Moon M# Gochara, Aspects & Dasha' : 'Moon Gochara, Aspects & Dasha'}","concreteImplication":"string","preventiveRemedy":"string"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"string","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"Mon DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"house lordship + aspect/AD chamber + gate + timing"}]}`
+    profileDirective,
+    `Return ONLY raw valid JSON matching this structure (no markdown fences or outside commentary):`,
+    `{"promptVer":"${verTag}","summarySentence":"Plain English synthesis ending with 1-liner of active Slow-Planet Ingress/Adisara/Double-Transit, Parivartana, Neecha Bhanga & Station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"Natal D1/D9 baseline verdict","transitDeliveryScore":0.78,"transitDeliveryVerdict":"Transit fruition via ${isDualFold ? 'Lagna L# + Moon M# Gochara' : 'Moon Gochara'}, Aspects, Vakra/Adisara & SAV","synthesisVerdict":"Combined natal promise vs monthly delivery verdict"},"part1_probabilityAndScope":"${isLocal ? 'Concise 2-paragraph factual scope, Slow-Planet/Double-Transit & Gate event probabilities.' : 'Multi-paragraph plain English scope, Slow-Planet/Double-Transit & Gate event probabilities.'}","part2_financialAndResources":"${isLocal ? 'Concise 2-paragraph factual analysis covering 2nd/4th/6th/9th/11th & slow-planet aspects.' : 'Multi-paragraph plain English capital, 2nd/4th/6th/9th/11th & slow-planet aspect analysis.'}","part3_microTimingWindow":"${isLocal ? 'Concise 2-paragraph favorable vs Chandrashtama lunar timing windows.' : 'Multi-paragraph plain English favorable vs cautionary lunar timing windows.'}","peakDateRange":"Month DD - DD, YYYY","overallConfidence":0.85,"supplementaryScenarios":[`,
+    `{"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"Clear career verdict","confidenceScore":0.85,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"10th/6th, Dasha & Double-Transit drivers","practicalGuidance":"Actionable career advice","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"Status label","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha basis"},"jobSearchAnalysis":{"momentum":"Momentum assessment","pastStruggleVsCurrentPhase":"Past vs current contrast","timingAuspiciousness":"Best interview/offer dates"},"newJobAcquisition":{"jobTypeAndMood":"Likely role environment","workplaceAtmosphere":"Team/leadership tone","comparisonWithCurrentRole":"Upgrade or lateral shift"},"existingJobPhase":{"currentPhaseNature":"Current role dynamics","retentionVsExitAdvice":"Hold vs transition guidance"},"detailedParagraphs":["${pHint1}","${pHint2}","${pHint3}"]},`,
+    `{"id":"love_romance","title":"Love, Romance, Relationship & Interpersonal Horizon","verdict":"Clear relationship verdict","confidenceScore":0.78,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"5th/7th, Venus & Dasha drivers","practicalGuidance":"Actionable relationship advice","crushStatusInference":{"existingCrushTrajectory":"Trajectory with current interest","newCrushProbability":"High|Moderate|Low","newCrushDetails":"Specific social/transit trigger"},"romanceAtmosphere":{"emotionalWeather":"Emotional tone","chemistryRating":82},"manifestationPath":{"outcomeType":"classical_traditional_marriage|living_together_modern|exploratory_flutter|platonic_delayed","outcomeLabel":"Path label","manifestationLikelihood":"Percentage and condition","astrologicalPathReasoning":"5th/7th/D9/Dasha rationale"},"detailedParagraphs":["${pHint1}","${pHint2}","${pHint3}"]},`,
+    `{"id":"health_vitality","title":"Health & Physical Vitality","verdict":"Clear health verdict","confidenceScore":0.76,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"6th/8th/1st, Saturn/Mars & Gate seat","practicalGuidance":"Actionable wellness advice","healthDetails":{"vulnerableZones":["${zHint1}","${zHint2}"],"mentalTranquilityAndStress":"Moon/4th/Chandrashtama stress note","holisticRemedies":"Specific diet/sleep/pacing remedy"},"detailedParagraphs":["${pHint1}","${pHint2}"]},`,
+    `{"id":"finance_wealth","title":"Wealth, Cashflow & Assets","verdict":"Clear financial verdict","confidenceScore":0.84,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"2nd/4th/6th/11th & Jupiter/Saturn aspect drivers","practicalGuidance":"Actionable capital advice","financeDetails":{"liquidityVsOutflow":"Inflow vs expense balance","windfallAndSpeculation":"5th/8th/11th windfall or PF/tax view","debtAndAssetFinancing":"6th/4th loan or property asset view"},"detailedParagraphs":["${pHint1}","${pHint2}"]},`,
+    `{"id":"family_home","title":"Domestic Peace & Family Harmony","verdict":"Clear domestic verdict","confidenceScore":0.88,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"4th/Moon/Jupiter & Dasha drivers","practicalGuidance":"Actionable family advice","familyDetails":{"domesticAmbiance":"Home atmosphere","maternalWellbeing":"Mother/elders outlook","propertyAndRelocation":"Real estate, vehicle or travel shift"},"detailedParagraphs":["${pHint1}","${pHint2}"]}`,
+    `],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"Readable category name","eventTitle":"Specific predicted real-world event","likelihood":"High|Moderate|Likely (score%)","likelihoodScore":0.82,"projectedWindow":"Month DD - DD, YYYY","astrologicalTrigger":"${isDualFold ? 'Lagna L# + Moon M# Gochara, Aspects & Dasha' : 'Moon Gochara, Aspects & Dasha'}","concreteImplication":"Exact practical consequence for the native","preventiveRemedy":"Targeted preventive or timing action"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"Specific event title","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"Mon DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"House lordship + aspect/AD chamber + gate + exact Moon window"}]}`
   ].join('\n');
 }
 
@@ -688,7 +714,8 @@ export function buildKvCacheSystemPrefix(
   context: VedicHouseContext,
   mode: 'v2' | 'v3' = 'v3',
   overrides?: KvCacheBlockOverrides,
-  outputKind: 'json_report' | 'qa_chat' = 'json_report'
+  outputKind: 'json_report' | 'qa_chat' = 'json_report',
+  engineProfile: PromptEngineProfile = 'cloud'
 ): {
   systemPrompt: string;
   sections: {
@@ -708,7 +735,7 @@ export function buildKvCacheSystemPrefix(
     ? rawD9Override
     : buildDefaultD9Block(context);
   const rules = (effectiveOverrides.rules && effectiveOverrides.rules.trim()) || buildDefaultRulesBlock(mode);
-  const delivery = (effectiveOverrides.delivery && effectiveOverrides.delivery.trim()) || buildDefaultDeliveryBlock(mode, outputKind);
+  const delivery = (effectiveOverrides.delivery && effectiveOverrides.delivery.trim()) || buildDefaultDeliveryBlock(mode, outputKind, engineProfile);
 
   const systemPrompt = [d1Chart, d9Chart, rules, delivery].join('\n\n');
   return {

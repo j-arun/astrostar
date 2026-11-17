@@ -2382,28 +2382,29 @@ function localBatchPlugin(env: Record<string, string>): Plugin {
               activeContextPayload,
               mode,
               effectiveKvCfg.overrides || {},
-              'json_report'
+              'json_report',
+              'local_private'
             );
-            const ephRes = kvMod.buildEphemeralsOnlyPrompt(activeContextPayload, activePromptVer, 2000);
+            const ephRes = kvMod.buildEphemeralsOnlyPrompt(activeContextPayload, activePromptVer, 2800);
             systemPromptText = sysRes.systemPrompt;
             systemTokensEst = sysRes.systemTokensEst;
             prompt = ephRes.ephemeralsPrompt;
           } else {
-            prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, activePromptVer);
+            prompt = adaptersMod.buildVedicPrompt(activeContextPayload, state.modelTag, activePromptVer, 'local_private');
           }
 
           state.promptChars = prompt.length;
           state.promptTokensEst = Math.round(prompt.length / 4);
 
-          const primaryNumCtx = 8192;
-          const primaryNumPredict = 3200;
+          const primaryNumCtx = 10240;
+          const primaryNumPredict = 3600;
           const keepAliveSetting = useKvCache ? (effectiveKvCfg?.privateOllama?.keepAlive || '30m') : '2m';
 
-          pushLog(`[BATCH INFO] Endpoint: ${state.ollamaEndpoint} | stream=true | num_ctx=${primaryNumCtx} | num_predict=${primaryNumPredict} | keep_alive=${keepAliveSetting} | timeout=UNLIMITED`);
+          pushLog(`[BATCH INFO] Endpoint: ${state.ollamaEndpoint} | stream=true | profile=local_private | num_ctx=${primaryNumCtx} | num_predict=${primaryNumPredict} | keep_alive=${keepAliveSetting} | timeout=UNLIMITED`);
           if (useKvCache) {
-            pushLog(`[BATCH KV CACHE] System Prefix (~${systemTokensEst} tokens cached in KV) | Ephemeris Prompt (${prompt.length} chars, ~${state.promptTokensEst} tokens <= 2K). Evaluating in Ollama...`);
+            pushLog(`[BATCH KV CACHE] System Prefix (~${systemTokensEst} tokens cached in KV) | Ephemeris Prompt (${prompt.length} chars, ~${state.promptTokensEst} tokens <= 2.8K). Evaluating in Ollama...`);
           } else {
-            pushLog(`[BATCH PROMPT] Built ${activePromptVer.toUpperCase()} unified prompt: ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
+            pushLog(`[BATCH PROMPT] Built ${activePromptVer.toUpperCase()} local-private unified prompt: ${prompt.length} chars (~${state.promptTokensEst} tokens). Evaluating prefill in Ollama...`);
           }
 
           const targetUrl = new URL(state.ollamaEndpoint);

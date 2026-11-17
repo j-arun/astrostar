@@ -50,7 +50,8 @@ import {
   buildDefaultD9Block,
   buildDefaultRulesBlock,
   buildDefaultDeliveryBlock,
-  isStalePlaceholderD9Override
+  isStalePlaceholderD9Override,
+  resolveEngineProfile
 } from '../services/llm/kvCacheManager';
 
 interface SettingsStudioProps {
@@ -362,13 +363,18 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
       };
       persistKvUpdate(nextCfg);
 
+      const slotProfile = resolveEngineProfile(slot);
+      const slotPrefix = slotProfile === 'cloud'
+        ? kvPrefixPreview
+        : buildKvCacheSystemPrefix(previewContext, kvMode, nextCfg.overrides, 'json_report', slotProfile);
+
       const res = await fetch('/api/llm/kv-cache/warm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slot,
-          systemPrompt: kvPrefixPreview.systemPrompt,
-          systemHash: kvPrefixPreview.systemHash,
+          systemPrompt: slotPrefix.systemPrompt,
+          systemHash: slotPrefix.systemHash,
           config: nextCfg,
           apiKey:
             slot === 'geminiPro'
@@ -398,7 +404,7 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
           ...nextCfg[slot],
           enabled: true,
           primedAt: new Date().toISOString(),
-          primedHash: kvPrefixPreview.systemHash,
+          primedHash: slotPrefix.systemHash,
           ...(typeof data.promptEvalCount === 'number' ? { promptEvalCount: data.promptEvalCount } : {}),
           ...(typeof data.cacheCreationTokens === 'number' ? { cacheCreationTokens: data.cacheCreationTokens } : {}),
           ...(typeof data.cacheReadTokens === 'number' ? { cacheReadTokens: data.cacheReadTokens } : {}),

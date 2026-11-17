@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { X, Copy, Check, Activity, Download, Layers, Calendar } from 'lucide-react';
+import { X, Copy, Check, Activity, Download, Layers, Calendar, Cpu, Sparkles } from 'lucide-react';
 import { VedicHouseContext } from '../services/llm/types';
-import { buildOriginalSourcePrompt } from '../services/llm/originalSourcePrompt';
+import {
+  buildOriginalSourcePrompt,
+  OriginalSourceVariant
+} from '../services/llm/originalSourcePrompt';
 
 interface OriginalSourcePromptModalProps {
   isOpen: boolean;
@@ -20,16 +23,26 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
   selectedMonthName,
   selectedYear
 }) => {
+  const [variant, setVariant] = useState<OriginalSourceVariant>('baseline');
   const [activeTab, setActiveTab] = useState<PromptTab>('full');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const generated = useMemo(() => {
+  const generatedPair = useMemo(() => {
     if (!isOpen) return null;
     const ctx = buildContextForSelectedMonth();
-    return buildOriginalSourcePrompt(ctx);
+    return {
+      baseline: buildOriginalSourcePrompt(ctx, 'baseline'),
+      compact: buildOriginalSourcePrompt(ctx, 'compact')
+    };
   }, [isOpen, buildContextForSelectedMonth, selectedMonthName, selectedYear]);
 
-  if (!isOpen || !generated) return null;
+  if (!isOpen || !generatedPair) return null;
+
+  const generated = variant === 'compact' ? generatedPair.compact : generatedPair.baseline;
+  const savedTokens = Math.max(
+    0,
+    generatedPair.baseline.meta.estTokens - generatedPair.compact.meta.estTokens
+  );
 
   const displayedText =
     activeTab === 'static'
@@ -44,7 +57,6 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), 2200);
     } catch {
-      // Fallback copy via temporary textarea
       const ta = document.createElement('textarea');
       ta.value = textToCopy;
       ta.style.position = 'fixed';
@@ -59,7 +71,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
   };
 
   const handleDownloadTxt = () => {
-    const slug = `${selectedYear}_${selectedMonthName.toLowerCase()}_original_source.txt`;
+    const slug = `${selectedYear}_${selectedMonthName.toLowerCase()}_original_source_${variant}.txt`;
     const blob = new Blob([generated.fullPrompt], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -106,7 +118,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
               type="button"
               onClick={handleDownloadTxt}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
-              title="Download Original Source prompt as .txt"
+              title="Download active Original Source prompt as .txt"
             >
               <Download className="w-3.5 h-3.5 text-emerald-400" />
               <span>.txt</span>
@@ -139,7 +151,55 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
           </div>
         </div>
 
-        {/* Sub-toolbar: View Tabs & Telemetry */}
+        {/* Version Bar: Two Supported Models Only */}
+        <div className="px-5 py-2.5 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setVariant('baseline'); setCopiedKey(null); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                variant === 'baseline'
+                  ? 'bg-sky-500/20 text-sky-200 border-sky-400/50 shadow-sm'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-sky-400" />
+              <span>Baseline (14B Private)</span>
+              <span className="ml-1 font-mono text-[10px] opacity-80">
+                ~{generatedPair.baseline.meta.estTokens.toLocaleString()} tok
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setVariant('compact'); setCopiedKey(null); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                variant === 'compact'
+                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/50 shadow-sm'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Compact (Gemini / Claude)</span>
+              <span className="ml-1 font-mono text-[10px] opacity-80">
+                ~{generatedPair.compact.meta.estTokens.toLocaleString()} tok
+              </span>
+              {savedTokens > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-300 font-mono text-[10px]">
+                  -{savedTokens.toLocaleString()} tok
+                </span>
+              )}
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-400">
+            {variant === 'baseline'
+              ? 'Explicit labels & spaced pipes for quantized local 14B models (zero underscores or blank lines)'
+              : 'Dense pipe format & collapsed pada runs for frontier models (zero loss, max token savings)'}
+          </span>
+        </div>
+
+        {/* Sub-toolbar: Section Tabs & Telemetry */}
         <div className="px-5 py-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button
@@ -205,7 +265,12 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
         {/* Footer */}
         <div className="px-5 py-3 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
           <span>
-            Rules R0–R5 loaded from <code className="text-emerald-300">src/services/llm/originalSourceRules.txt</code> (edit to append R6, R7...)
+            Rules R0–R5 loaded from{' '}
+            <code className="text-emerald-300">
+              {variant === 'baseline'
+                ? 'src/services/llm/originalSourceRulesBaseline.txt'
+                : 'src/services/llm/originalSourceRules.txt'}
+            </code>
           </span>
           <button
             type="button"
@@ -219,3 +284,4 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
     </div>
   );
 };
+

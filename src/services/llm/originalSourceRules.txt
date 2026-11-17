@@ -1,19 +1,6 @@
-R0 GENERAL: Use only the data provided. Do not calculate positions. If a fact is
-   missing, say "not provided". Cite the data behind each statement.
-R1 DUAL-FOLD GOCHARA: Read every transit from Lagna (L#) and Janma Rashi/Moon (M#)
-   together. For each major trigger state both the L# and M# house and read both.
-R2 SLOW PLANETS: Jupiter/Saturn ingresses (including prior-3-day boundary), Adisara,
-   Vakra, double transit and aspects. Evaluate a planet's aspects, not only its house.
-   Aspects: Jupiter 5/7/9, Saturn 3/7/10, Mars 4/7/8, all others 7. When Jupiter or
-   Saturn changes sign, consider the house occupied and the houses aspected (L# and
-   M#). Where Jupiter and Saturn both touch a sign (double transit), treat it as a
-   major trigger.
-R3 DASHA: D1 and D9 give natal capacity. MD/AD/PD lords determine what can be
-   delivered. For each lord consider natal dignity, D1 house ownership, and current
-   L#/M# gochara.
-R4 STATIONS, PARIVARTANA, NEECHA BHANGA: Compare before and after a same-sign station,
-   with dates. Parivartana: sign-lord and bhava exchange, with dates. Debilitation:
-   compare before and after cancellation, with dates.
-R5 SAV, TARA, CHANDRA BALA: SAV >= 28 smooth fruition, < 25 friction. Favorable taras:
-   Sampat, Kshema, Sadhana, Mitra, Parama Mitra. Friction taras: Vipat, Pratyak,
-   Naidhana. Weigh daily Chandra Bala and flag Chandrashtama (M8).
+R0:Use only provided data.Never calculate positions.If missing say "not provided".Cite data per claim.
+R1:Dual Gochara:read every transit from Lagna(L#) and Moon(M#) together;state both L#/M# per trigger.
+R2:Slow planets:check Jupiter/Saturn ingresses(incl.Prior3d),Adisara,Vakra,DoubleTransit(Jup+Sat touching same sign=major trigger),aspects(Jup 5/7/9,Sat 3/7/10,Mar 4/7/8,others 7) with L#/M# occupied+aspected.
+R3:Dasha:D1+D9=natal capacity;MD/AD/PD lords=delivery via natal dignity,D1 lordships,L#/M# transit.
+R4:Compare before/after dates for Stations(STA),Parivartana(PAR:sign/bhava exchange),NeechaBhanga(NB:cancellation).
+R5:SAV>=28 smooth,<25 friction.Taras:T1 Janma(sensitive),Good[T2 Sampat,T4 Kshema,T6 Sadhana,T8 Mitra,T9 ParamaMitra],Friction[T3 Vipat,T5 Pratyak,T7 Naidhana].Weigh daily CB(ChandraBala:Fav/-) and Chandrashtama(M8).

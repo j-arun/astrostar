@@ -108,7 +108,10 @@ async function main() {
 
     const savResult = computeSarvashtakavarga(natalLagnaIdx, undefined, flattenedD1);
 
-    let baselineStaticBlock: string | null = null;
+    const staticBlockByVariant: Record<'baseline' | 'compact', string | null> = {
+      baseline: null,
+      compact: null
+    };
     const allFailures: string[] = [];
 
     for (const spec of TEST_MONTHS) {
@@ -274,74 +277,94 @@ async function main() {
         eventManufacturingSuperset
       };
 
-      const result = buildOriginalSourcePrompt(context);
+      const baselineRes = buildOriginalSourcePrompt(context, 'baseline');
+      const compactRes = buildOriginalSourcePrompt(context, 'compact');
 
-      if (printMonth === monthIndex) {
-        console.log('===== FULL NOVEMBER 2026 ORIGINAL SOURCE PROMPT =====');
-        console.log(result.fullPrompt);
-        console.log('=====================================================');
+      if (compactRes.meta.charCount >= baselineRes.meta.charCount) {
+        allFailures.push(`[${label}] Compact (${compactRes.meta.charCount} chars) is not smaller than Baseline (${baselineRes.meta.charCount} chars)`);
       }
 
-      // 1. Static block byte-identity check
-      if (baselineStaticBlock === null) {
-        baselineStaticBlock = result.staticBlock;
-      } else if (result.staticBlock !== baselineStaticBlock) {
-        allFailures.push(`[${label}] Static block is NOT byte-identical across months!`);
+      for (const variant of ['baseline', 'compact'] as const) {
+        const result = variant === 'baseline' ? baselineRes : compactRes;
+
+        if (printMonth === monthIndex) {
+          console.log(`===== NOVEMBER 2026 ORIGINAL SOURCE [${variant.toUpperCase()}] (${result.meta.lineCount} lines, ${result.meta.charCount} chars, ~${result.meta.estTokens} tok) =====`);
+          console.log(result.fullPrompt);
+          console.log('=====================================================');
+        }
+
+        // 1. Static block byte-identity check per variant
+        if (staticBlockByVariant[variant] === null) {
+          staticBlockByVariant[variant] = result.staticBlock;
+        } else if (result.staticBlock !== staticBlockByVariant[variant]) {
+          allFailures.push(`[${label} / ${variant}] Static block is NOT byte-identical across months!`);
+        }
+
+        // 2. Full automated validator check
+        const val = validateOriginalSourcePrompt(result, context, variant);
+        if (!val.valid) {
+          val.errors.forEach((e: string) => allFailures.push(`[${label} / ${variant}] ${e}`));
+        }
+
+        // 3. Spot-checks specifically targeting Fix List items 1..7 on November 2026
+        if (year === 2026 && monthIndex === 10) {
+          const txt = result.fullPrompt;
+          const assertContains = (needle: string | RegExp, desc: string) => {
+            const ok = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
+            if (!ok) allFailures.push(`[November 2026 / ${variant}] Missing/Wrong ${desc}`);
+          };
+          const assertNotContains = (needle: string | RegExp, desc: string) => {
+            const hit = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
+            if (hit) allFailures.push(`[November 2026 / ${variant}] Unexpected ${desc}`);
+          };
+
+          assertNotContains(/\(\s*\)/, 'empty parentheses in [D1] nakshatra names');
+          assertNotContains(/^Ketu\|.*Exalted/m, 'Ketu Exalted in [D9]');
+          assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9] (spaced)');
+          assertNotContains(/^Rahu\|.*Exalted/m, 'Rahu Exalted in [D9]');
+          assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9] (spaced)');
+          assertContains('Combust d1-9', 'Mercury data-computed Combust d1-9');
+          assertContains('MD Venus 2013-04-02..2033-04-02', 'MD Venus start..end dates');
+          assertContains('AD Saturn 2026-01-31..2029-04-02', 'AD Saturn start..end dates');
+          assertContains('PD Mercury 2026-08-02..2027-01-13', 'PD Mercury start..end dates');
+
+          if (variant === 'baseline') {
+            assertContains('ChandraBala: Fav', 'ChandraBala: Fav on favorable Moon spans');
+            assertContains('ChandraBala: -', 'ChandraBala: - on unfavorable Moon spans');
+            assertContains(/Swati P3 d1-2 \(Mitra T8\), Swati P4 d3-6 \(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
+            assertContains(/Vishakha P1 d7-9 \(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
+            assertContains(/Anuradha P1 d20-22 \(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
+            assertContains(/Mercury \| Libra .*Vishakha P1 d1-2 \(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
+            assertContains(/Mercury \| Libra .*Vishakha P1 d25-27 \(Parama Mitra T9\)/, 'Mercury d25-27 Vishakha (Parama Mitra T9)');
+            assertContains(/Pushya P2 \(Janma T1\) -> Ashlesha P3 \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
+            assertContains('ADCHAMBER: natal Saturn @ Cancer (L8/M9)', 'ADCHAMBER natal Saturn @ Cancer');
+            assertContains('L2/M3 Capricorn (T: Moon)', 'T: Moon in ADCHAMBER Ruled');
+            assertContains('L3/M4 Aquarius (T: Rahu', 'T: Rahu in ADCHAMBER Ruled');
+            assertContains('Libra L11/M12 (Swakshetra) d1-5; Virgo L10/M11 (Neecha) d6-22; Libra L11/M12 (Swakshetra) d23-30', 'MD Venus per-segment dignity');
+            assertContains('STATION Mercury Retrograde -> Direct Libra L11/M12 2026-11-14', 'STATION explicit event');
+            assertContains('NEECHABHANGA Venus Virgo L10/M11 2026-11-06..2026-11-13', 'NEECHABHANGA explicit event');
+          } else {
+            assertContains('CB:Fav', 'CB:Fav on favorable Moon spans');
+            assertContains('CB:-', 'CB:- on unfavorable Moon spans');
+            assertContains(/Swati P3 d1-2\/P4 d3-6\(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
+            assertContains(/Vishakha P1 d7-9\/P2 d10-12\/P3 d13-16\(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
+            assertContains(/Anuradha P1 d20-22\/P2 d23-25\/P3 d26-29\/P4 d30\(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
+            assertContains(/Mercury\|Libra.*Vishakha P1 d1-2\(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
+            assertContains(/Mercury\|Libra.*Vishakha P1 d25-27\/P2 d28-29\/P3 d30\(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
+            assertContains(/Pushya P2\(Janma T1\)->Ashlesha P3\(Sampat T2\)/, 'Lunar Pushya (Janma T1)->Ashlesha (Sampat T2)');
+            assertContains(/ADCHAMBER:natal Saturn@Cancer\(L8\/M9\)/, 'ADCHAMBER natal Saturn@Cancer');
+            assertContains('L2/M3 Capricorn(T:Moon)', 'T:Moon in ADCHAMBER Ruled');
+            assertContains('L3/M4 Aquarius(T:Rahu', 'T:Rahu in ADCHAMBER Ruled');
+            assertContains('Libra L11/M12(Swakshetra) d1-5;Virgo L10/M11(Neecha) d6-22;Libra L11/M12(Swakshetra) d23-30', 'MD Venus per-segment dignity');
+            assertContains('STA Mercury R->D Libra L11/M12 11-14', 'STA compact event');
+            assertContains('NB Venus Virgo L10/M11 11-06..11-13', 'NB compact event');
+          }
+        }
       }
 
-      // 2. Full automated validator check (Taras, ChandraBala, D9 Nodes, AD Chamber, Dasha dates, Ephemeris facts, Combust, Bounds)
-      const val = validateOriginalSourcePrompt(result, context);
-      if (!val.valid) {
-        val.errors.forEach((e: string) => allFailures.push(`[${label}] ${e}`));
-      }
-
-      // 3. Spot-checks specifically targeting Fix List items 1..7 on November 2026
-      if (year === 2026 && monthIndex === 10) {
-        const txt = result.fullPrompt;
-        const assertContains = (needle: string | RegExp, desc: string) => {
-          const ok = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
-          if (!ok) allFailures.push(`[November 2026 FixCheck] Missing/Wrong ${desc}`);
-        };
-        const assertNotContains = (needle: string | RegExp, desc: string) => {
-          const hit = typeof needle === 'string' ? txt.includes(needle) : needle.test(txt);
-          if (hit) allFailures.push(`[November 2026 FixCheck] Unexpected ${desc}`);
-        };
-
-        // Fix 1: ChandraBala Fav / - in [LUNAR]
-        assertContains('ChandraBala: Fav', 'ChandraBala: Fav on favorable Moon spans');
-        assertContains('ChandraBala: -', 'ChandraBala: - on unfavorable Moon spans');
-
-        // Fix 2: Per-nakshatra Tara matching Janma Star Anuradha
-        assertContains(/Swati P\d+ d1-\d+ \(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
-        assertContains(/Vishakha P\d+ d\d+-\d+ \(Parama Mitra T9\)/, 'Vishakha (Parama Mitra T9)');
-        assertContains(/Anuradha P\d+ d20-\d+ \(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
-        assertContains(/Mercury \| Libra.*Vishakha P1 d1-2 \(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
-        assertContains(/Mercury \| Libra.*Vishakha P1 d25-27 \(Parama Mitra T9\).*Vishakha P3 d30 \(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
-        assertContains(/Pushya P\d+ \(Janma T1\).*Ashlesha P\d+ \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
-        assertNotContains(/\(\s*\)/, 'empty parentheses in [D1] nakshatra names');
-
-        // Fix 3: AD Chamber uses "natal Saturn @" and "T:Moon (L2/M3)" + "T:Rahu (L3/M4)"
-        assertContains(/AD_CHAMBER:\s+natal Saturn @ Cancer/, 'AD_CHAMBER natal Saturn @ Cancer');
-        assertContains('T:Moon (L2/M3)', 'T:Moon (L2/M3) in AD_CHAMBER Ruled');
-        assertContains('T:Rahu (L3/M4)', 'T:Rahu (L3/M4) in AD_CHAMBER Ruled');
-
-        // Fix 4: D9 Node Exaltation removal
-        assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9]');
-        assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9]');
-
-        // Fix 5: Ephemeris-computed Combust date range for Mercury
-        assertContains('Combust d1-9', 'Mercury data-computed Combust d1-9');
-
-        // Fix 6: Dasha MD/AD/PD start..end dates from timeline table
-        assertContains('MD Venus 2013-04-02..2033-04-02', 'MD Venus start..end dates');
-        assertContains('AD Saturn 2026-01-31..2029-04-02', 'AD Saturn start..end dates');
-        assertContains('PD Mercury 2026-08-02..2027-01-13', 'PD Mercury start..end dates');
-
-        // Fix 7: Per-segment MD Venus dignity (no combined slash)
-        assertContains('Libra L11/M12 (Swakshetra) d1-5; Virgo L10/M11 (Neecha) d6-22; Libra L11/M12 (Swakshetra) d23-30', 'MD Venus per-segment dignity');
-      }
-
-      console.log(`PASS check candidate: ${label} (${result.meta.lineCount} lines, ~${result.meta.estTokens} tokens)`);
+      console.log(
+        `PASS check candidate: ${label} | Baseline: ${baselineRes.meta.lineCount}L, ${baselineRes.meta.charCount}c (~${baselineRes.meta.estTokens}t) | Compact: ${compactRes.meta.lineCount}L, ${compactRes.meta.charCount}c (~${compactRes.meta.estTokens}t)`
+      );
     }
 
     if (allFailures.length > 0) {
@@ -350,7 +373,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS (${TEST_MONTHS.length * 2} CHECKS) PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
   } finally {
     await server.close();
   }

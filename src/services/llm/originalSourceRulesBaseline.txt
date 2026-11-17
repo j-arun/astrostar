@@ -1,0 +1,6 @@
+R0 GENERAL: Use only the data provided. Do not calculate positions. If a fact is missing, say "not provided". Cite the data behind each statement.
+R1 DUAL-FOLD GOCHARA: Read every transit from Lagna (L#) and Janma Rashi/Moon (M#) together. State both L# and M# for each trigger.
+R2 SLOW PLANETS: Check Jupiter/Saturn ingresses (including Prior-3-Day boundary), Adisara, Vakra, Double Transit (Jupiter and Saturn touching the same sign), and aspects (Jupiter 5/7/9, Saturn 3/7/10, Mars 4/7/8, all others 7) using both occupied and aspected houses (L# and M#).
+R3 DASHA: D1 and D9 give natal capacity. MD/AD/PD lords govern delivery via natal dignity, D1 lordships, and current L#/M# gochara.
+R4 STATIONS, PARIVARTANA, NEECHA BHANGA: Compare before and after dates for same-sign Stations, Parivartana sign/bhava exchanges, and Neecha Bhanga cancellation windows.
+R5 SAV, TARA, CHANDRA BALA: SAV >= 28 smooth fruition, < 25 friction. Favorable Taras: Sampat (T2), Kshema (T4), Sadhana (T6), Mitra (T8), Parama Mitra (T9). Friction Taras: Vipat (T3), Pratyak (T5), Naidhana (T7); Janma (T1) is sensitive. Weigh daily ChandraBala (Fav/-) and flag Chandrashtama (M8).

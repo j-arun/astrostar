@@ -265,7 +265,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
         {/* Footer */}
         <div className="px-5 py-3 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
           <span>
-            Rules R0–R5 loaded from{' '}
+            Rules {variant === 'baseline' ? 'R0–R6' : 'R0–R5'} loaded from{' '}
             <code className="text-emerald-300">
               {variant === 'baseline'
                 ? 'src/services/llm/originalSourceRulesBaseline.txt'

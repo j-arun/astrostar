@@ -350,7 +350,7 @@ export default function SettingsStudio({ activePersonId = '001ME', onNavigateToR
   }, [previewContext, kvMode, kvConfig.overrides]);
 
   const kvEphemerisPreview = useMemo(() => {
-    return buildEphemeralsOnlyPrompt(previewContext, selectedVersion, 2000);
+    return buildEphemeralsOnlyPrompt(previewContext, selectedVersion, 2800);
   }, [previewContext, selectedVersion]);
 
   const handlePrimeEngineKvCache = async (slot: KvCacheEngineSlot) => {

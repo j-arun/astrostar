@@ -225,14 +225,208 @@ function cleanInlineText(text?: string): string {
     .replace(/\b(?:Sani|Shani|Shaneeshwara)\b/gi, 'Saturn')
     .replace(/\b(?:Budha|Budhan)\b/gi, 'Mercury')
     .replace(/\b(?:Surya|Suryan|Suriyan|Ravi)\b/gi, 'Sun')
-    .replace(/\b(?:Chandra|Chandran|Soma)\b/gi, 'Moon');
+    .replace(/\b(?:Chandra|Chandran|Soma)\b/gi, 'Moon')
+    .replace(/\b(Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)\s*\(\s*\1\s*\)/gi, '$1');
   return res.replace(/[ \t]+/g, ' ').trim();
 }
 
-export function buildDefaultD1Block(context: VedicHouseContext): string {
+const SIGN_LIST_EN = [
+  'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
+  'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'
+];
+
+const OWNED_SIGN_INDICES: Record<string, number[]> = {
+  Sun: [5],
+  Moon: [4],
+  Mars: [1, 8],
+  Mercury: [3, 6],
+  Jupiter: [9, 12],
+  Venus: [2, 7],
+  Saturn: [10, 11]
+};
+
+export function getCleanSignIndex(signName?: string): number {
+  const s = cleanSign(signName).toLowerCase();
+  const idx = SIGN_LIST_EN.findIndex(item => item.toLowerCase() === s || s.startsWith(item.toLowerCase().slice(0, 4)));
+  return idx >= 0 ? idx + 1 : 0; // 1..12, 0 if unknown
+}
+
+export function getOwnedHousesTag(planetClean: string, lagnaIdx: number, moonIdx: number, isDualFold: boolean): string {
+  const signs = OWNED_SIGN_INDICES[planetClean];
+  if (!signs || signs.length === 0 || !lagnaIdx || !moonIdx) return '';
+  const lList = signs.map(s => `L${((s - lagnaIdx + 12) % 12) + 1}`).join(',');
+  const mList = signs.map(s => `M${((s - moonIdx + 12) % 12) + 1}`).join(',');
+  return isDualFold ? `${lList}(${mList})` : mList;
+}
+
+export function buildOwnedHousesMatrix(lagnaIdx: number, moonIdx: number, isDualFold: boolean): string {
+  const ordered = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+  return ordered
+    .map(p => `${p}:${getOwnedHousesTag(p, lagnaIdx, moonIdx, isDualFold)}`)
+    .join(' | ');
+}
+
+export function getParasharaAspectEntries(
+  planetClean: string,
+  sourceSignIdx: number,
+  lagnaIdx: number,
+  moonIdx: number
+): Array<{ offset: number; label: string; targetSignIdx: number; targetSign: string; hLagna: number; hMoon: number }> {
+  if (!sourceSignIdx || sourceSignIdx < 1 || sourceSignIdx > 12) return [];
+  const p = planetClean.toLowerCase();
+  const defs: Array<{ offset: number; label: string }> = [];
+  if (p === 'jupiter') {
+    defs.push({ offset: 5, label: '5th' }, { offset: 7, label: '7th' }, { offset: 9, label: '9th' });
+  } else if (p === 'saturn') {
+    defs.push({ offset: 3, label: '3rd' }, { offset: 7, label: '7th' }, { offset: 10, label: '10th' });
+  } else if (p === 'mars') {
+    defs.push({ offset: 4, label: '4th' }, { offset: 7, label: '7th' }, { offset: 8, label: '8th' });
+  } else if (p === 'rahu' || p === 'ketu') {
+    defs.push({ offset: 5, label: '5th' }, { offset: 7, label: '7th' }, { offset: 9, label: '9th' });
+  } else {
+    defs.push({ offset: 7, label: '7th' });
+  }
+
+  return defs.map(d => {
+    const tIdx = ((sourceSignIdx - 1 + (d.offset - 1)) % 12) + 1;
+    const hL = lagnaIdx ? ((tIdx - lagnaIdx + 12) % 12) + 1 : tIdx;
+    const hM = moonIdx ? ((tIdx - moonIdx + 12) % 12) + 1 : tIdx;
+    return {
+      offset: d.offset,
+      label: d.label,
+      targetSignIdx: tIdx,
+      targetSign: SIGN_LIST_EN[tIdx - 1],
+      hLagna: hL,
+      hMoon: hM
+    };
+  });
+}
+
+export function formatParasharaAspects(
+  planetClean: string,
+  sourceSignIdx: number,
+  lagnaIdx: number,
+  moonIdx: number,
+  isDualFold: boolean
+): string {
+  const entries = getParasharaAspectEntries(planetClean, sourceSignIdx, lagnaIdx, moonIdx);
+  return entries
+    .map(e => `${e.label}->${e.targetSign}(${isDualFold ? `L${e.hLagna}/M${e.hMoon}` : `M${e.hMoon}`})`)
+    .join(', ');
+}
+
+export function computeDoubleTransitWindows(
+  context: VedicHouseContext,
+  lagnaIdx: number,
+  moonIdx: number,
+  isDualFold: boolean
+): string[] {
+  const monthShort = (MONTH_NAMES[context.selectedMonth] || 'Mon').slice(0, 3);
+  const daysInMonth = new Date(context.selectedYear, context.selectedMonth + 1, 0).getDate();
+
+  const resolveSpanSignIdx = (signName?: string, grahaKey?: string): number => {
+    const byName = getCleanSignIndex(signName);
+    if (byName) return byName;
+    const tr = (context.allTransitPlacements || []).find(t => cleanPlanet(t.graha_key) === grahaKey);
+    return tr?.transit_rashi_index || getCleanSignIndex(tr?.transit_rashi_name);
+  };
+
+  let jSpans = (context.monthlyMotionSpans || [])
+    .filter(s => cleanPlanet(s.grahaKey) === 'Jupiter')
+    .map(s => ({
+      signIdx: resolveSpanSignIdx(s.signName, 'Jupiter'),
+      startDay: s.startDay,
+      endDay: s.endDay,
+      motion: s.motionType === 'Adisara' ? 'ADISARA' : s.isRetrograde ? 'VAKRA' : 'DIR'
+    }))
+    .filter(s => s.signIdx > 0);
+
+  let sSpans = (context.monthlyMotionSpans || [])
+    .filter(s => cleanPlanet(s.grahaKey) === 'Saturn')
+    .map(s => ({
+      signIdx: resolveSpanSignIdx(s.signName, 'Saturn'),
+      startDay: s.startDay,
+      endDay: s.endDay,
+      motion: s.motionType === 'Adisara' ? 'ADISARA' : s.isRetrograde ? 'VAKRA' : 'DIR'
+    }))
+    .filter(s => s.signIdx > 0);
+
+  if (jSpans.length === 0) {
+    const jt = (context.allTransitPlacements || []).find(t => cleanPlanet(t.graha_key) === 'Jupiter');
+    const jIdx = jt ? (jt.transit_rashi_index || getCleanSignIndex(jt.transit_rashi_name)) : 0;
+    if (jIdx) {
+      jSpans = [{
+        signIdx: jIdx,
+        startDay: 1,
+        endDay: daysInMonth,
+        motion: jt?.motion_type === 'Adisara' ? 'ADISARA' : jt?.is_retrograde ? 'VAKRA' : 'DIR'
+      }];
+    }
+  }
+  if (sSpans.length === 0) {
+    const st = (context.allTransitPlacements || []).find(t => cleanPlanet(t.graha_key) === 'Saturn');
+    const sIdx = st ? (st.transit_rashi_index || getCleanSignIndex(st.transit_rashi_name)) : 0;
+    if (sIdx) {
+      sSpans = [{
+        signIdx: sIdx,
+        startDay: 1,
+        endDay: daysInMonth,
+        motion: st?.motion_type === 'Adisara' ? 'ADISARA' : st?.is_retrograde ? 'VAKRA' : 'DIR'
+      }];
+    }
+  }
+
+  if (jSpans.length === 0 || sSpans.length === 0) return [];
+
+  const getTouches = (planet: 'Jupiter' | 'Saturn', sIdx: number) => {
+    const list: Array<{ signIdx: number; tag: string }> = [{ signIdx: sIdx, tag: 'Occupied' }];
+    for (const asp of getParasharaAspectEntries(planet, sIdx, lagnaIdx, moonIdx)) {
+      list.push({ signIdx: asp.targetSignIdx, tag: `${asp.label}-Asp` });
+    }
+    return list;
+  };
+
+  const results: string[] = [];
+  const seen = new Set<string>();
+  for (const js of jSpans) {
+    for (const ss of sSpans) {
+      const wStart = Math.max(js.startDay, ss.startDay);
+      const wEnd = Math.min(js.endDay, ss.endDay);
+      if (wStart > wEnd) continue;
+      const winLabel = wStart === wEnd ? `${monthShort} ${wStart}` : `${monthShort} ${wStart}–${wEnd}`;
+      const jTouches = getTouches('Jupiter', js.signIdx);
+      const sTouches = getTouches('Saturn', ss.signIdx);
+
+      const hits: string[] = [];
+      for (const jt of jTouches) {
+        const st = sTouches.find(x => x.signIdx === jt.signIdx);
+        if (!st) continue;
+        const hL = ((jt.signIdx - lagnaIdx + 12) % 12) + 1;
+        const hM = ((jt.signIdx - moonIdx + 12) % 12) + 1;
+        const coord = isDualFold ? `L${hL}/M${hM}` : `M${hM}`;
+        hits.push(`${SIGN_LIST_EN[jt.signIdx - 1]}(${coord}: Jup ${jt.tag}[${js.motion}] + Sat ${st.tag}[${ss.motion}])`);
+      }
+      if (hits.length > 0) {
+        const line = `- ${winLabel}: ${hits.join(' | ')}`;
+        if (!seen.has(line)) {
+          seen.add(line);
+          results.push(line);
+        }
+      }
+    }
+  }
+  return results;
+}
+
+export function buildDefaultD1Block(context: VedicHouseContext, mode: 'v2' | 'v3' = 'v3'): string {
+  const isDualFold = mode !== 'v2';
   const lagna = cleanSign(context.natalLagnaSignName) || 'Ascendant';
   const moon = cleanSign(context.natalMoonSignName || context.natalJanmaStar?.rashi_name) || 'Moon Sign';
+  const lagnaIdx = getCleanSignIndex(lagna) || 9;
+  const moonIdx = getCleanSignIndex(moon) || 8;
   const jStar = cleanStar(context.natalJanmaStar?.nakshatra_name || 'Anuradha', context.natalJanmaStar?.pada || 2);
+  const lordshipMatrix = buildOwnedHousesMatrix(lagnaIdx, moonIdx, isDualFold);
+
   const d1 = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
     ? context.flattenedNatalD1.map(p =>
         `${cleanPlanet(p.body_name)}:${cleanSign(p.rashi_name)} H${p.house_number || '?'} ${cleanDegree(p.degree_sputa)} ${cleanStar(p.nakshatra_name, p.pada)}${p.is_retrograde ? '[R]' : ''}`
@@ -246,23 +440,13 @@ export function buildDefaultD1Block(context: VedicHouseContext): string {
   const karakas = `Career:H10,Sun,Mercury,Mars | Wealth:H2,H11,Jupiter | Home:H4,Moon | Love/Progeny:H5,H7,Venus | Health:H1,H6,Saturn`;
 
   return [
-    `## NATAL D1 CHART (FIXED BIRTH PROMISE)`,
+    `## 1. NATAL PROMISE & DIVISIONAL BASELINE (FIXED)`,
     `Lagna:${lagna} | JanmaRashi:${moon} | JanmaStar:${jStar}`,
+    `HouseLordships: ${lordshipMatrix}`,
     `D1: ${d1}`,
     `SAV_BASELINE: ${savBaseline}`,
     `BHAVA_KARAKAS: ${karakas}`
   ].join('\n');
-}
-
-const SIGN_LIST_EN = [
-  'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
-  'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'
-];
-
-function getCleanSignIndex(signName?: string): number {
-  const s = cleanSign(signName).toLowerCase();
-  const idx = SIGN_LIST_EN.findIndex(item => item.toLowerCase() === s || s.startsWith(item.toLowerCase().slice(0, 4)));
-  return idx >= 0 ? idx + 1 : 0; // 1..12, 0 if unknown
 }
 
 function parseDegreeMinutes(deg?: string): number | null {
@@ -432,28 +616,26 @@ export function buildDefaultRulesBlock(mode: 'v2' | 'v3' = 'v3'): string {
   const isDualFold = mode !== 'v2';
   const lawBlock = isDualFold
     ? [
-        `## INTERPRETATION & REASONING RULES`,
-        `1. TWO-FOLD GOCHARA LAW: Every transit planet acts simultaneously across BOTH Lagna (L#) and Janma Rashi / Moon (M#):`,
-        `   - LAGNA FOLD (L# from Ascendant): Determines the OBJECTIVE LIVED EVENT & D1 BHAVA EXECUTION (which concrete life house, lordship & physical reality occurs) and modulates active D1 Lagna house strength via transits, aspects, lord placement & SAV.`,
-        `   - MOON FOLD (M# from Janma Rashi): Determines PSYCHOLOGICAL SYNTHESIS & MENTAL FRUITION (how the mind feels, perceives & handles that event via Chandra/Tara Bala & Moon-house distance).`,
-        `2. DUAL SYNTHESIS REQUIRED: Bind BOTH folds for every major transit, station, Parivartana & Neecha Bhanga ([Lagna lived event] + [Moon mental experience]).`,
-        `3. NATAL PROMISE & D1 STRENGTH: D1/D9 from Lagna set inherent natal capacity; transits + SAV actively strengthen or pressure D1 Lagna houses and judge sky fruitfulness.`,
-        `4. DASHA SANCTION: Vimshottari MD/AD/PD lords commission delivery; evaluate D1 house lordships plus both L# and M# transit states.`,
-        `5. SAV & MOTION: SAV >=28=effortless fruition, <25=resistance; Vakra=unconventional/non-linear karmic settling; Adisara=urgent/accelerated execution.`,
-        `6. TARA & CHANDRA BALA: Weigh favorable (Sampat,Kshema,Sadhana,Mitra,Parama Mitra) vs friction (Vipat,Pratyak,Naidhana) taras; flag Chandrashtama (8th Moon).`,
-        `7. STATIONS, PARIVARTANA & NEECHA BHANGA: For same-sign Retrograde<->Direct stations contrast BEFORE (stalled/internal/audit) vs AFTER (external release) using exact dates; for Parivartana analyze BOTH Sign-Lord exchange AND Bhava exchange with exact dates; for Debilitation/Neecha Bhanga explain initial test vs cancellation reversal; end "summarySentence" with a crisp 1-line summary naming active triggers & likely events.`,
-        `8. SUPERSET GATE CORRELATION & STRICT MOON TIMING: Correlate major Houses/Lordships with AD Chamber & 3 Nakshatra Gates. Mark "hasMoonSupport":true ONLY if Moon transits OR casts a 7th direct aspect onto involved sign(s) INSIDE the active event date window; put all Moon-supported events FIRST (sorted descending by probabilityScore), followed by background effort events ("hasMoonSupport":false,"latencyStatus":"dormant_latent","moonWindowDates":null).`,
-        `9. LANGUAGE: Strict fluent English only (signs Aries..Pisces; planets Sun..Ketu; zero Tamil/Sanskrit terms).`
+        `## 2. MANDATORY REASONING HIERARCHY (ORDERED BY PREDICTIVE WEIGHT)`,
+        `RULE 1 — DUAL-FOLD GOCHARA (LAGNA + MOON): Every transit operates simultaneously across Lagna (L#=objective physical event, D1 Bhava execution & house strength modulation) AND Janma Rashi/Moon (M#=psychological perception, emotional stress/relief & mental fruition). Bind BOTH folds together for every major trigger ([Lagna event] + [Moon mental experience]).`,
+        `RULE 2 — TIER 1 DRIVERS: SLOW-PLANET INGRESSES, ADISARA, DOUBLE TRANSIT & PRE-COMPUTED ASPECTS (CRITICAL): Never judge a planet solely by the house it occupies—explicitly evaluate its pre-computed Aspects (Jupiter 5th/7th/9th, Saturn 3rd/7th/10th, Mars 4th/7th/8th, others 7th):`,
+        `   - Whenever Jupiter or Saturn crosses a sign boundary (including prior-3-day boundary carry-over) under Adisara (urgent, impatient execution) or Vakra (contrarian karmic audit/reversal), treat BOTH its occupied L#/M# house AND its aspected L#/M# houses (especially ACTIVE DOUBLE-TRANSIT intersections where Jupiter & Saturn jointly touch a sign) as headline turning points.`,
+        `   - For Finance & Wealth (part2_financialAndResources & finance_wealth), explicitly synthesize direct 2nd/4th/9th/11th occupancy PLUS any slow-planet 5th/7th/9th/3rd/10th aspects hitting 2nd(cash), 4th(assets/property), 6th(debt/service), 8th(joint/PF), or 11th(gains) from Lagna or Moon, honoring Jupiter as Chart Lagna/4th Lord & Dhana Karaka.`,
+        `RULE 3 — TIER 2 DRIVERS: VIMSHOTTARI DASHA & NATAL PROMISE: D1/D9 set inherent natal capacity; MD/AD/PD lords commission what is deliverable—weigh each lord's natal dignity, D1 house ownerships & current L#/M# Gochara.`,
+        `RULE 4 — TIER 3 DRIVERS: STATIONS, PARIVARTANA & NEECHA BHANGA: Contrast same-sign Stations BEFORE (stalled/internal audit) vs AFTER (external release) with dates; analyze Parivartana across Sign-Lord & Bhava exchange with dates; contrast Debilitation/Neecha Bhanga initial test vs cancellation reversal with dates.`,
+        `RULE 5 — SAV, TARA & CHANDRA BALA: SAV >=28=smooth fruition, <25=friction; weigh favorable (Sampat,Kshema,Sadhana,Mitra,Parama Mitra) vs friction (Vipat,Pratyak,Naidhana) taras and daily Chandra Bala, flagging Chandrashtama (M8) cautions.`,
+        `RULE 6 — SUPERSET GATE CORRELATION & STRICT MOON TIMING: Correlate Tier 1–3 drivers & Bhava lordships with AD Chamber & 3 Nakshatra Gates in "supersetSynthesisNote" (2-4 sentences) and "correlatedGateEvents" (10-18+ cards spanning ALL 7 portfolios Work,Money,Love,Health,Life,Friends,Trip—including Slow-Planet Boundary Ingresses/Adisara/Double-Transit, 3 Gates, AD Chamber & Parivartana/Neecha Bhanga/Stations). Mark "hasMoonSupport":true and cite "moonWindowDates" ONLY when Moon transits OR casts a 7th aspect onto involved sign(s) INSIDE that event's active date window; place ALL Moon-supported cards FIRST (descending by probabilityScore), followed by "hasMoonSupport":false ("latencyStatus":"dormant_latent","moonWindowDates":null).`,
+        `RULE 7 — LANGUAGE & PROSE PURITY: Strict fluent English only (signs Aries..Pisces; planets Sun..Ketu; zero Tamil/Sanskrit terms). part1_probabilityAndScope, part2_financialAndResources & part3_microTimingWindow MUST be plain multi-paragraph English strings (no nested JSON or markdown fences).`
       ]
     : [
-        `## INTERPRETATION & REASONING RULES`,
-        `1. MOON-ONLY GOCHARA: Evaluate all transits exclusively from Janma Rashi (Moon Sign); never reckon transits from Lagna or estimate D1 Lagna house strength using transits.`,
-        `2. NATAL PROMISE VS TRANSIT: D1 and D9 from Lagna define fixed natal capacity & lordships; Gochara from Moon measures what is fruitfully possible now.`,
-        `3. KARAKATWAS & DASHA: MD/AD/PD lords define who is commissioned to deliver; evaluate D1 house lordships plus Moon-relative Gochara.`,
-        `4. SAV & MOTION: SAV >=28=effortless fruition, <25=resistance; Vakra=karmic review; Adisara=accelerated push.`,
-        `5. STATIONS, PARIVARTANA & NEECHA BHANGA: Contrast before vs after stations using exact dates, cover Parivartana sign & bhava exchange, and Neecha Bhanga cancellation reversal.`,
-        `6. STRICT MOON TIMING & CARDS: Mark "hasMoonSupport":true ONLY when Moon transits/7th-aspects inside the active window; sort Moon-supported events FIRST.`,
-        `7. LANGUAGE: Strict fluent English only (signs Aries..Pisces; planets Sun..Ketu; zero Tamil/Sanskrit terms).`
+        `## 2. MANDATORY REASONING HIERARCHY (MOON-ONLY GOCHARA)`,
+        `RULE 1 — MOON-ONLY GOCHARA: Evaluate all transits exclusively from Janma Rashi (Moon Sign); never reckon transits from Lagna or estimate D1 Lagna house strength using transits.`,
+        `RULE 2 — TIER 1 DRIVERS: SLOW-PLANET INGRESSES, ADISARA, DOUBLE TRANSIT & PRE-COMPUTED ASPECTS (CRITICAL): Explicitly evaluate occupied AND pre-computed Moon-relative aspected houses (Jupiter 5th/7th/9th, Saturn 3rd/7th/10th, Mars 4th/7th/8th) including prior-3-day boundary shifts, Adisara acceleration, and Double-Transit overlaps. In Finance, cover 2nd/4th/9th/11th occupancy AND slow-planet aspects onto 2nd/4th/6th/8th/11th.`,
+        `RULE 3 — NATAL PROMISE & DASHA: D1/D9 define fixed capacity & lordships; MD/AD/PD lords commission delivery across their ruled D1 houses + Moon-relative Gochara.`,
+        `RULE 4 — STATIONS, PARIVARTANA & NEECHA BHANGA: Contrast before vs after stations with exact dates, cover Parivartana sign & bhava exchange, and Neecha Bhanga reversal.`,
+        `RULE 5 — SAV, TARA & CHANDRA BALA: SAV >=28=smooth fruition, <25=friction; weigh Taras and flag Chandrashtama (M8) dates.`,
+        `RULE 6 — STRICT MOON TIMING & CARDS: Cover Slow-Planet Ingresses/Adisara/Double-Transit, 3 Gates & Special Yogas across all 7 portfolios; mark "hasMoonSupport":true ONLY when Moon transits/7th-aspects inside the active window; sort Moon-supported cards FIRST.`,
+        `RULE 7 — LANGUAGE & PROSE PURITY: Strict fluent English only (signs Aries..Pisces; planets Sun..Ketu; zero Tamil/Sanskrit terms).`
       ];
   return lawBlock.join('\n');
 }
@@ -466,25 +648,25 @@ export function buildDefaultDeliveryBlock(
   const verTag = isDualFold ? 'V3' : 'V2';
   if (outputKind === 'qa_chat') {
     return [
-      `## DELIVERY & RESPONSE CONTRACT`,
+      `## 3. DELIVERY & RESPONSE CONTRACT`,
       `- Answer strictly from the fixed D1/D9 charts in system context plus the monthly Ephemeris & Question in the user prompt.`,
-      `- Apply ${isDualFold ? 'Dual-Fold reasoning (House from Lagna = concrete event; House from Moon = mental experience)' : 'Moon-relative Gochara reasoning'}.`,
+      `- Apply ${isDualFold ? 'Dual-Fold reasoning (House from Lagna = concrete event; House from Moon = mental experience) plus Pre-Computed Aspects & Double-Transit synthesis' : 'Moon-relative Gochara reasoning plus Pre-Computed Aspects'}.`,
       `- When comparing two user scenarios, include a Markdown comparison table (| Scenario | Alignment Probability | Key Transit Mechanisms |) with percentage likelihoods and a decisive verdict.`,
       `- Output clean structured Markdown headings (###, ####), bullet lists, and bold dates/planets in English.`
     ].join('\n');
   }
 
   return [
-    `## DELIVERY & JSON OUTPUT CONTRACT`,
-    `PROSE RULE: part1_probabilityAndScope, part2_financialAndResources, part3_microTimingWindow MUST be plain-text multi-paragraph English strings (zero nested JSON/code fences).`,
-    `Return ONLY raw valid JSON matching this schema:`,
-    `{"promptVer":"${verTag}","summarySentence":"Plain English synthesis ending with 1-liner of active Parivartana/Neecha Bhanga/station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(${isDualFold ? 'Lagna L# + Moon M# Gochara' : 'Moon Gochara'},Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/9th/11th analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"Month DD - DD, YYYY","overallConfidence":0.85,"supplementaryScenarios":[`,
-    `{"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"string","confidenceScore":0.85,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"10th/6th/Dasha","practicalGuidance":"string","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"string","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha"},"jobSearchAnalysis":{"momentum":"string","pastStruggleVsCurrentPhase":"string","timingAuspiciousness":"string"},"newJobAcquisition":{"jobTypeAndMood":"string","workplaceAtmosphere":"string","comparisonWithCurrentRole":"string"},"existingJobPhase":{"currentPhaseNature":"string","retentionVsExitAdvice":"string"},"detailedParagraphs":["p1","p2","p3"]},`,
+    `## 3. DELIVERY & JSON OUTPUT CONTRACT`,
+    `End "summarySentence" with a crisp 1-line summary naming the top active Slow-Planet Ingress/Adisara/Double-Transit, Parivartana, Neecha Bhanga & Station triggers plus likely events.`,
+    `Return ONLY raw valid JSON matching this exact schema (no markdown fences or outside commentary):`,
+    `{"promptVer":"${verTag}","summarySentence":"Plain English synthesis ending with 1-liner of active Slow-Planet Ingress/Adisara/Double-Transit, Parivartana, Neecha Bhanga & Station triggers & likely events.","natalPromiseVsTransitDelivery":{"natalPromiseScore":0.85,"natalPromiseVerdict":"string","transitDeliveryScore":0.78,"transitDeliveryVerdict":"string(${isDualFold ? 'Lagna L# + Moon M# Gochara' : 'Moon Gochara'},Aspects,Vakra/Adisara,SAV)","synthesisVerdict":"string"},"part1_probabilityAndScope":"Multi-paragraph plain English scope & event probabilities.","part2_financialAndResources":"Multi-paragraph plain English capital, 2nd/4th/6th/9th/11th & slow-planet aspect analysis.","part3_microTimingWindow":"Multi-paragraph plain English favorable vs cautionary lunar timing windows.","peakDateRange":"Month DD - DD, YYYY","overallConfidence":0.85,"supplementaryScenarios":[`,
+    `{"id":"career_job","title":"Career, Job Search & Professional Standing","verdict":"string","confidenceScore":0.85,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"10th/6th/Dasha/Double-Transit","practicalGuidance":"string","employmentStatusInference":{"status":"currently_serving|actively_seeking|sabbatical_unemployed","label":"string","indicatorColor":"green|yellow|amber|red","confidence":0.86,"inferenceReasoning":"10th/6th & Dasha"},"jobSearchAnalysis":{"momentum":"string","pastStruggleVsCurrentPhase":"string","timingAuspiciousness":"string"},"newJobAcquisition":{"jobTypeAndMood":"string","workplaceAtmosphere":"string","comparisonWithCurrentRole":"string"},"existingJobPhase":{"currentPhaseNature":"string","retentionVsExitAdvice":"string"},"detailedParagraphs":["p1","p2","p3"]},`,
     `{"id":"love_romance","title":"Love, Romance, Relationship & Interpersonal Horizon","verdict":"string","confidenceScore":0.78,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"5th/7th/Venus/Dasha","practicalGuidance":"string","crushStatusInference":{"existingCrushTrajectory":"string","newCrushProbability":"High|Moderate|Low","newCrushDetails":"string"},"romanceAtmosphere":{"emotionalWeather":"string","chemistryRating":82},"manifestationPath":{"outcomeType":"classical_traditional_marriage|living_together_modern|exploratory_flutter|platonic_delayed","outcomeLabel":"string","manifestationLikelihood":"string","astrologicalPathReasoning":"string"},"detailedParagraphs":["p1","p2","p3"]},`,
     `{"id":"health_vitality","title":"Health & Physical Vitality","verdict":"string","confidenceScore":0.76,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"6th/8th/Saturn/Mars","practicalGuidance":"string","healthDetails":{"vulnerableZones":["z1","z2"],"mentalTranquilityAndStress":"string","holisticRemedies":"string"},"detailedParagraphs":["p1","p2"]},`,
-    `{"id":"finance_wealth","title":"Wealth, Cashflow & Assets","verdict":"string","confidenceScore":0.84,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"2nd/4th/11th","practicalGuidance":"string","financeDetails":{"liquidityVsOutflow":"string","windfallAndSpeculation":"string","debtAndAssetFinancing":"string"},"detailedParagraphs":["p1","p2"]},`,
+    `{"id":"finance_wealth","title":"Wealth, Cashflow & Assets","verdict":"string","confidenceScore":0.84,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"2nd/4th/6th/11th & Jupiter/Saturn Aspects","practicalGuidance":"string","financeDetails":{"liquidityVsOutflow":"string","windfallAndSpeculation":"string","debtAndAssetFinancing":"string"},"detailedParagraphs":["p1","p2"]},`,
     `{"id":"family_home","title":"Domestic Peace & Family Harmony","verdict":"string","confidenceScore":0.88,"timingWindow":"Month DD - DD, YYYY","astrologicalReasoning":"4th/Moon/Dasha","practicalGuidance":"string","familyDetails":{"domesticAmbiance":"string","maternalWellbeing":"string","propertyAndRelocation":"string"},"detailedParagraphs":["p1","p2"]}`,
-    `],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"string","eventTitle":"string","likelihood":"string","likelihoodScore":0.82,"projectedWindow":"Month DD - DD, YYYY","astrologicalTrigger":"${isDualFold ? 'Lagna L# + Moon M# Gochara & Dasha' : 'Moon Gochara & Dasha'}","concreteImplication":"string","preventiveRemedy":"string"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"string","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"Mon DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"house lordship + AD chamber + gate + timing"}]}`
+    `],"predictedSpecificEvents":[{"category":"visa_immigration|financial_pf|property_asset|career_milestone|health_alert","categoryLabel":"string","eventTitle":"string","likelihood":"string","likelihoodScore":0.82,"projectedWindow":"Month DD - DD, YYYY","astrologicalTrigger":"${isDualFold ? 'Lagna L# + Moon M# Gochara, Aspects & Dasha' : 'Moon Gochara, Aspects & Dasha'}","concreteImplication":"string","preventiveRemedy":"string"}],"supersetSynthesisNote":"2-4 sentence synthesis correlating House/Lordships, AD Chamber, 3 Gates & Moon windows.","correlatedGateEvents":[{"id":"corr-work-1","title":"string","portfolio":"Work|Money|Love|Health|Life|Friends|Trip","probabilityScore":84,"isHighProbability":true,"latencyStatus":"acute_moon_triggered|dormant_latent","hasMoonSupport":true,"moonWindowDates":"Mon DD-DD","correlatedHousesAndLordships":"Lagna H#/Moon H#(Sign,Lord)+AD link","nakshatraGateTrigger":"Gate name, transits & perspective","narrative":"house lordship + aspect/AD chamber + gate + timing"}]}`
   ].join('\n');
 }
 
@@ -520,7 +702,7 @@ export function buildKvCacheSystemPrefix(
   systemTokensEst: number;
 } {
   const effectiveOverrides = overrides ?? (typeof window !== 'undefined' ? loadKvCacheConfig().overrides : {});
-  const d1Chart = (effectiveOverrides.d1Chart && effectiveOverrides.d1Chart.trim()) || buildDefaultD1Block(context);
+  const d1Chart = (effectiveOverrides.d1Chart && effectiveOverrides.d1Chart.trim()) || buildDefaultD1Block(context, mode);
   const rawD9Override = effectiveOverrides.d9Chart?.trim();
   const d9Chart = (rawD9Override && !isStalePlaceholderD9Override(rawD9Override))
     ? rawD9Override
@@ -539,156 +721,335 @@ export function buildKvCacheSystemPrefix(
 }
 
 /**
+ * Shared hierarchical Ephemeris (Tier 1 - Tier 5) builder used by both KV Ephemerals & Unified Prompts.
+ * Eliminates 4x ingress repetition, surfaces pre-computed Parashara aspects & Double-Transit overlaps,
+ * and trims verbose candidate boilerplate while retaining 100% of dates, houses, lords, and Moon windows.
+ */
+export function buildHierarchicalEphemerisSections(
+  context: VedicHouseContext,
+  mode: AstroPromptVersion = 'v3'
+): {
+  horizonLine: string;
+  tier1Dasha: string;
+  tier2SlowAndDoubleTransit: string;
+  tier3FastAndSpecial: string;
+  tier4LunarAndSav: string;
+  tier5Superset: string;
+  inquiryBlock: string;
+} {
+  const isDualFold = mode !== 'v2';
+  const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
+  const monthShort = monthName.slice(0, 3);
+  const daysInMonth = new Date(context.selectedYear, context.selectedMonth + 1, 0).getDate();
+  const mNumStr = String(context.selectedMonth + 1).padStart(2, '0');
+  const tailNote = context.vedicSpecialEvents?.priorTailStartDate ? ` + Prior-3D Boundary ${context.vedicSpecialEvents.priorTailStartDate}` : '';
+  const periodLabel = context.isMultiYearPrediction
+    ? `${context.timelineStartDate}..${context.timelineEndDate}`
+    : `${monthName} ${context.selectedYear}`;
+
+  const lagnaIdx = getCleanSignIndex(context.natalLagnaSignName) || 9;
+  const moonIdx = getCleanSignIndex(context.natalMoonSignName || context.natalJanmaStar?.rashi_name) || 8;
+  const allTransits = context.allTransitPlacements || [];
+  const taraMap = new Map<string, string>();
+  (context.taraBalaTransitPlanets || []).forEach(tb => {
+    taraMap.set(cleanPlanet(tb.graha_key), `${tb.taraName}(T${tb.taraNumber}:${tb.quality})`);
+  });
+
+  // Horizon
+  const horizonLine = context.isMultiYearPrediction
+    ? `## HORIZON: ${periodLabel} | Multi-Year Continuous Synthesis`
+    : context.isComprehensiveMonthly || !context.houseNumber
+      ? `## HORIZON: ${monthName} ${context.selectedYear} (${context.selectedYear}-${mNumStr}-01..${String(daysInMonth).padStart(2, '0')}${tailNote}) | Full 12-House Synthesis`
+      : `## HORIZON: ${periodLabel} | House ${context.houseNumber} (${cleanSign(context.rashiName)}) Score:${(context.activationScore ?? 0).toFixed(2)}`;
+
+  // Tier 1: Vimshottari Dasha Triad
+  const dashaSummary = context.dashaDeliveryReport
+    ? `Overall Delivery: ${(context.dashaDeliveryReport.overallIndex * 100).toFixed(0)}% (${context.dashaDeliveryReport.status}) | MD:${cleanPlanet(context.activeDasha.mahadasha)}(${context.dashaDeliveryReport.mdDignity},${context.dashaDeliveryReport.mdScore.toFixed(2)}) | AD:${cleanPlanet(context.activeDasha.antardasha)}(${context.dashaDeliveryReport.adDignity},${context.dashaDeliveryReport.adScore.toFixed(2)}) | PD:${cleanPlanet(context.activeDasha.pratyantardasha)}(${context.dashaDeliveryReport.pdDignity},${context.dashaDeliveryReport.pdScore.toFixed(2)})`
+    : `MD:${cleanPlanet(context.activeDasha.mahadasha)} > AD:${cleanPlanet(context.activeDasha.antardasha)} > PD:${cleanPlanet(context.activeDasha.pratyantardasha)}`;
+
+  const dashaDossier = (context.dashaLordsDossier || [])
+    .slice(0, 3)
+    .map(d => {
+      const cleanLord = cleanPlanet(d.lordName);
+      const owned = getOwnedHousesTag(cleanLord, lagnaIdx, moonIdx, isDualFold) || cleanInlineText(d.ownedHousesTitle);
+      return `- ${d.role}[${cleanLord}]: Natal H${d.natalHouseOccupied}(${d.natalDignity}) | Lords:${owned}`;
+    })
+    .join('\n');
+
+  const multiYearDasha = context.isMultiYearPrediction && context.multiYearDashas?.length
+    ? `\nTimeline:\n` + context.multiYearDashas.map((d, idx) => `${idx + 1}|${d.startDate}..${d.endDate}|${cleanPlanet(d.mahadasha)}>${cleanPlanet(d.antardasha)}>${cleanPlanet(d.pratyantardasha)}`).join('\n')
+    : '';
+
+  const tier1Dasha = `## TIER 1 — VIMSHOTTARI DASHA (PD:${context.activeDasha.startDate}..${context.activeDasha.endDate})\n${dashaSummary}${dashaDossier ? `\n${dashaDossier}` : ''}${multiYearDasha}`;
+
+  // Helper to format a planet with spans + pre-computed aspects
+  const savMap = new Map<number, number>();
+  (context.ashtakavargaPayload?.savPointsDistribution || []).forEach(s => {
+    savMap.set(s.signIndex, s.points);
+  });
+
+  const formatPlanetWithSpansAndAspects = (gKey: string): string => {
+    const tr = allTransits.find(t => cleanPlanet(t.graha_key) === gKey);
+    const spans = (context.monthlyMotionSpans || []).filter(sp => cleanPlanet(sp.grahaKey) === gKey);
+    const ownedTag = getOwnedHousesTag(gKey, lagnaIdx, moonIdx, isDualFold);
+    const taraTag = taraMap.get(gKey);
+    const metaBits = [ownedTag ? `Lords:${ownedTag}` : '', taraTag ? `Tara:${taraTag}` : ''].filter(Boolean).join(' | ');
+
+    if (gKey === 'Moon') {
+      if (!tr) return `- Moon: Moves every ~2.25 days across all 12 signs (see TIER 4 Lunar Timeline)`;
+      const hL = tr.house_from_lagna;
+      const hM = tr.house_from_moon || hL;
+      const coord = isDualFold ? `L${hL}/M${hM}` : `M${hM}`;
+      return `- Moon [Day-15 Ref Only — see TIER 4 for 2.25d progression]: ${cleanSign(tr.transit_rashi_name)}(${coord}) ${cleanDegree(tr.degree_sputa)} ${cleanStar(tr.nakshatra_name, tr.pada)}${taraTag ? ` | Tara:${taraTag}` : ''}`;
+    }
+
+    if (spans.length > 0) {
+      const spanParts = spans.map(sp => {
+        const sIdx = getCleanSignIndex(sp.signName) || (tr?.transit_rashi_index ?? 0);
+        const sName = sIdx ? SIGN_LIST_EN[sIdx - 1] : cleanSign(sp.signName);
+        const hL = sIdx ? ((sIdx - lagnaIdx + 12) % 12) + 1 : tr?.house_from_lagna || 1;
+        const hM = sIdx ? ((sIdx - moonIdx + 12) % 12) + 1 : tr?.house_from_moon || 1;
+        const coord = isDualFold ? `L${hL}/M${hM}` : `M${hM}`;
+        const sav = savMap.get(sIdx) || (tr && cleanSign(tr.transit_rashi_name) === sName ? tr.sav_points : undefined);
+        const savStr = sav ? `,SAV${sav}` : '';
+        const mTag = sp.motionType === 'Adisara' ? 'ADISARA' : sp.isRetrograde ? 'VAKRA' : 'DIRECT';
+        const refBits = tr && cleanSign(tr.transit_rashi_name) === sName
+          ? [cleanDegree(tr.degree_sputa), cleanStar(tr.nakshatra_name, tr.pada)].filter(Boolean).join(' ')
+          : '';
+        const refMatch = refBits ? ` [Mid-month:${refBits}]` : '';
+        const aspStr = sIdx ? formatParasharaAspects(gKey, sIdx, lagnaIdx, moonIdx, isDualFold) : '';
+        const dayRangeLabel = sp.startDay === sp.endDay ? `Day ${sp.startDay}` : `Days ${sp.startDay}–${sp.endDay}`;
+        return `${dayRangeLabel}: ${sName}(${coord}${savStr})[${mTag}]${refMatch}${aspStr ? ` -> Aspects: ${aspStr}` : ''}`;
+      });
+      return `- ${gKey}${metaBits ? ` [${metaBits}]` : ''}:\n  • ${spanParts.join('\n  • ')}`;
+    }
+
+    if (tr) {
+      const sIdx = tr.transit_rashi_index || getCleanSignIndex(tr.transit_rashi_name);
+      const coord = isDualFold ? `L${tr.house_from_lagna}/M${tr.house_from_moon || tr.house_from_lagna}` : `M${tr.house_from_moon || tr.house_from_lagna}`;
+      const mTag = tr.motion_type === 'Adisara' ? 'ADISARA' : tr.motion_type === 'Vakra' || tr.is_retrograde ? 'VAKRA' : 'DIRECT';
+      const savStr = tr.sav_points ? `,SAV${tr.sav_points}` : '';
+      const aspStr = sIdx ? formatParasharaAspects(gKey, sIdx, lagnaIdx, moonIdx, isDualFold) : '';
+      return `- ${gKey}${metaBits ? ` [${metaBits}]` : ''}: ${cleanSign(tr.transit_rashi_name)}(${coord}${savStr})[${mTag}] ${cleanDegree(tr.degree_sputa)} ${cleanStar(tr.nakshatra_name, tr.pada)}${aspStr ? ` -> Aspects: ${aspStr}` : ''}`;
+    }
+    return '';
+  };
+
+  // Tier 2: Slow Planets & Nodes + Prior 3-Day Boundary + Double Transit
+  const priorTailBlock = (context.priorMonthTailSummary && context.priorMonthTailSummary.length > 0)
+    ? `Prior-3-Day Boundary Continuity (leading into ${monthShort} 1):\n${context.priorMonthTailSummary.map(l => `- ${cleanInlineText(l)}`).join('\n')}`
+    : '';
+  const slowLines = ['Jupiter', 'Saturn', 'Rahu', 'Ketu'].map(formatPlanetWithSpansAndAspects).filter(Boolean).join('\n');
+  const doubleTransitLines = computeDoubleTransitWindows(context, lagnaIdx, moonIdx, isDualFold);
+  const doubleTransitBlock = doubleTransitLines.length > 0
+    ? `ACTIVE DOUBLE-TRANSIT (JUPITER + SATURN) WINDOWS:\n${doubleTransitLines.join('\n')}`
+    : '';
+
+  const tier2SlowAndDoubleTransit = [
+    `## TIER 2 — SLOW-PLANET & NODAL GOCHARA (PRIOR-3D, SPAN, LORDSHIP & ASPECTS)`,
+    priorTailBlock,
+    slowLines,
+    doubleTransitBlock
+  ].filter(Boolean).join('\n');
+
+  // Tier 3: Fast Planets + Deduplicated Ingresses & Special Yogas
+  const fastLines = ['Sun', 'Mars', 'Mercury', 'Venus', 'Moon'].map(formatPlanetWithSpansAndAspects).filter(Boolean).join('\n');
+  const vse = context.vedicSpecialEvents;
+  const spParts: string[] = [];
+  if (vse) {
+    if (vse.boundaryIngresses && vse.boundaryIngresses.length > 0) {
+      const ingCompact = vse.boundaryIngresses.map(ing => {
+        const coord = isDualFold ? `L${ing.toHouseFromLagna}/M${ing.toHouseFromMoon}` : `M${ing.toHouseFromMoon}`;
+        const boundaryFlag = ing.isPriorMonthBoundary ? '[PRIOR_BOUNDARY]' : '';
+        const mFlag = ing.motionType !== 'Normal' ? `[${ing.motionType.toUpperCase()}]` : '';
+        return `${cleanPlanet(ing.grahaKey)} ${cleanSign(ing.fromSignName)}->${cleanSign(ing.toSignName)} on ${ing.ingressDate}(${coord})${boundaryFlag}${mFlag}`;
+      });
+      spParts.push(`SIGN_INGRESSES(${ingCompact.length}): ${ingCompact.join(' | ')}`);
+    } else if (context.monthlyIngressEvents && context.monthlyIngressEvents.length > 0) {
+      const onlyActualChanges = context.monthlyIngressEvents
+        .filter(e => e.includes('enters') || e.includes('PRIOR BOUNDARY') || e.includes('stations'))
+        .slice(0, 10)
+        .map(cleanInlineText);
+      if (onlyActualChanges.length > 0) {
+        spParts.push(`SIGN_INGRESSES: ${onlyActualChanges.join(' | ')}`);
+      }
+    }
+    if (vse.adisaraWindows && vse.adisaraWindows.length > 0) {
+      for (const aw of vse.adisaraWindows) {
+        const coord = isDualFold ? `L${aw.houseFromLagna}/M${aw.houseFromMoon}` : `M${aw.houseFromMoon}`;
+        spParts.push(`ADISARA_FAST: ${cleanPlanet(aw.grahaKey)} across ${aw.signNames.map(cleanSign).join('->')} [${aw.startDate}..${aw.endDate}](${coord}) — accelerated, impatient execution`);
+      }
+    }
+    if (vse.sameSignStations && vse.sameSignStations.length > 0) {
+      for (const s of vse.sameSignStations) {
+        const coord = isDualFold ? `L${s.houseFromLagna}/M${s.houseFromMoon}` : `M${s.houseFromMoon}`;
+        spParts.push(`STATION: ${cleanPlanet(s.grahaKey)} ${s.turnType} in ${cleanSign(s.signName)}(${coord}) on ${s.stationDate} [Before ${s.beforeRange} | After ${s.afterRange}] — ${cleanInlineText(s.eventImpact)}`);
+      }
+    } else {
+      spParts.push(`STATIONS: None`);
+    }
+    if (vse.parivartanaYogas && vse.parivartanaYogas.length > 0) {
+      for (const p of vse.parivartanaYogas) {
+        const exchangeCoord = isDualFold
+          ? `L${p.lagnaHouseA}<->L${p.lagnaHouseB} / M${p.moonHouseA}<->M${p.moonHouseB}`
+          : `M${p.moonHouseA}<->M${p.moonHouseB}`;
+        spParts.push(`PARIVARTANA: ${cleanPlanet(p.grahaA)}<->${cleanPlanet(p.grahaB)} (${cleanSign(p.signAName)}<->${cleanSign(p.signBName)}, ${exchangeCoord}) [${p.startDate}..${p.endDate}] — ${cleanInlineText(p.predictedEvents)}`);
+      }
+    } else {
+      spParts.push(`PARIVARTANA: None`);
+    }
+    if (vse.debilitationEvents && vse.debilitationEvents.length > 0) {
+      for (const d of vse.debilitationEvents) {
+        const coord = isDualFold ? `L${d.houseFromLagna}/M${d.houseFromMoon}` : `M${d.houseFromMoon}`;
+        const reasons = Array.from(new Set(d.cancellationReasons.map(r => cleanInlineText(r.replace(/\s*\(H\d+ from (Moon|Lagna)\)/g, ''))))).slice(0, 3).join('; ');
+        spParts.push(`${d.neechaBhangaStatus}: ${cleanPlanet(d.grahaKey)} in ${cleanSign(d.signName)}(${coord}) [${d.startDate}..${d.endDate}, ${d.motionState}]${reasons ? ` | Factors:${reasons}` : ''} — ${cleanInlineText(d.predictedEvents)}`);
+      }
+    } else {
+      spParts.push(`NEECHA_BHANGA: None`);
+    }
+  }
+  const multiYearMaj = context.isMultiYearPrediction && context.multiYearMajorTransits?.length
+    ? `MULTI_YEAR_MAJORS:\n` + context.multiYearMajorTransits.map(t => `- ${cleanPlanet(t.grahaKey)}:${cleanSign(t.signName)} ${isDualFold && t.houseFromLagna ? `L${t.houseFromLagna}/M${t.houseFromMoon}` : `M${t.houseFromMoon}`} ${t.startDate}..${t.endDate}[${t.isRetrograde ? 'VAKRA' : 'DIR'}]`).join('\n')
+    : '';
+
+  const tier3FastAndSpecial = [
+    `## TIER 3 — FAST-PLANET PHASES, INGRESSES & SPECIAL YOGAS`,
+    fastLines,
+    spParts.length > 0 ? `Special Phenomena:\n- ${spParts.join('\n- ')}` : '',
+    multiYearMaj
+  ].filter(Boolean).join('\n');
+
+  // Tier 4: Lunar Timing & SAV
+  const chandraLine = (context.chandraBalaDailyTimeline || [])
+    .map(c => `${c.dayRange}:${cleanSign(c.moonSignName)}(${cleanInlineText(c.moonStarName)},T${c.taraBala.taraNumber}) M${c.houseFromNatalMoon}${c.isChandrashtama ? '[CHANDRASHTAMA]' : c.isFavorable ? '[Fav]' : ''}`)
+    .join(' | ');
+  const savLine = context.ashtakavargaPayload?.savPointsDistribution?.length
+    ? context.ashtakavargaPayload.savPointsDistribution.map(s => `H${s.houseNumber}:${s.points}`).join(' | ')
+    : '';
+  const multiYearMoons = context.isMultiYearPrediction && context.multiYearMoonTransits?.length
+    ? `\nMoon Ingresses(${context.multiYearMoonTransits.length}): ` + context.multiYearMoonTransits.slice(0, 60).map(m => `${m.startDate}..${m.endDate}:${cleanSign(m.signName)} M${m.houseFromMoon}${m.isChandrashtama ? '[AST]' : ''}`).join(' | ')
+    : '';
+
+  const tier4LunarAndSav = [
+    `## TIER 4 — LUNAR TIMING (CHANDRA BALA & CHANDRASHTAMA) & SAV`,
+    chandraLine ? `Lunar Progression: ${chandraLine}` : '',
+    savLine ? `SAV Capacity: ${savLine}` : '',
+    multiYearMoons
+  ].filter(Boolean).join('\n');
+
+  // Tier 5: Superset AD Chamber, 3 Gates, Compact House Map & Candidates
+  let tier5Superset = '';
+  if (context.eventManufacturingSuperset) {
+    const ss = context.eventManufacturingSuperset;
+    const ad = ss.adChamberSummary;
+    const ruledStr = ad.ruledHouses.length > 0
+      ? ad.ruledHouses.map(rh => `${isDualFold ? `L${rh.houseFromLagna}/M${rh.houseFromRashi}` : `M${rh.houseFromRashi}`}(${cleanSign(rh.rashiName)},Occ:${rh.occupants.join(',') || '-'},Asp:${rh.aspectingGrahas.join(',') || '-'})`).join('; ')
+      : '';
+    const gatesStr = ss.gates.map(g => {
+      const grahas = g.activeGrahasInGate.map(ag => `${ag.name}${ag.passageWindow ? `(${ag.passageWindow})` : ''}`).join(',') || 'Moon-only';
+      return `- G${g.gateIndex}:${g.nakshatraName}(${cleanSign(g.rashiName)},${isDualFold ? `L${g.houseFromLagna}/M${g.houseFromRashi}` : `M${g.houseFromRashi}`}) | Seat:${g.anatomicalSeat} | Themes:${g.significations} | Moon:${g.moonIngressWindow || '-'} | Grahas:${grahas}`;
+    }).join('\n');
+
+    // Compact House-Gate Map enriched with active Jupiter/Saturn aspects
+    const aspectMapBySign = new Map<number, string[]>();
+    for (const gp of ['Jupiter', 'Saturn', 'Mars', 'Rahu', 'Ketu']) {
+      const spans = (context.monthlyMotionSpans || []).filter(sp => cleanPlanet(sp.grahaKey) === gp);
+      if (spans.length > 0) {
+        for (const sp of spans) {
+          const sIdx = getCleanSignIndex(sp.signName);
+          if (!sIdx) continue;
+          for (const asp of getParasharaAspectEntries(gp, sIdx, lagnaIdx, moonIdx)) {
+            const arr = aspectMapBySign.get(asp.targetSignIdx) || [];
+            const rng = spans.length > 1 ? ` ${sp.startDay}-${sp.endDay}` : '';
+            arr.push(`${gp}(${asp.label}${rng})`);
+            aspectMapBySign.set(asp.targetSignIdx, arr);
+          }
+        }
+      } else {
+        const tr = allTransits.find(t => cleanPlanet(t.graha_key) === gp);
+        const sIdx = tr ? (tr.transit_rashi_index || getCleanSignIndex(tr.transit_rashi_name)) : 0;
+        if (sIdx) {
+          for (const asp of getParasharaAspectEntries(gp, sIdx, lagnaIdx, moonIdx)) {
+            const arr = aspectMapBySign.get(asp.targetSignIdx) || [];
+            arr.push(`${gp}(${asp.label})`);
+            aspectMapBySign.set(asp.targetSignIdx, arr);
+          }
+        }
+      }
+    }
+
+    const houseMapLines = ss.houseLordshipToGateLinks.map(l => {
+      const sIdx = getCleanSignIndex(l.rashiName);
+      const aspArr = sIdx ? Array.from(new Set(aspectMapBySign.get(sIdx) || [])) : [];
+      const coord = isDualFold ? `L${l.houseFromLagna}/M${l.houseFromMoon}` : `M${l.houseFromMoon}`;
+      return `- ${coord} ${cleanSign(l.rashiName)}(Lord:${l.rashiLord}): N[${l.natalOccupants.join(',') || '-'}] T[${l.transitOccupants.join(',') || '-'}] Asp[${aspArr.join(',') || '-'}]${l.isActivatedByAdLordship ? ' AD' : ''}${l.matchingGateNakshatra ? ` Gate:${l.matchingGateNakshatra}` : ''} Moon:${l.moonIgnitionDates || '-'}`;
+    }).join('\n');
+
+    const evStr = ss.candidateOrSynthesizedEvents.slice(0, 12).map((ev, idx) => {
+      const moonTag = ev.hasMoonSupport && ev.moonWindowDates ? `Moon:${ev.moonWindowDates}` : 'Latent(No-Moon)';
+      return `${idx + 1}.[${ev.portfolio}] ${ev.title} (${ev.probabilityScore}%,${moonTag}) | ${ev.correlatedHousesAndLordships} | ${ev.nakshatraGateTrigger}`;
+    }).join('\n');
+
+    tier5Superset = cleanInlineText([
+      `## TIER 5 — SUPERSET AD CHAMBER, 3 GATES & CANDIDATE TRIGGERS (MD:${ss.selectedMd}>AD:${ss.selectedAd}>PD:${ss.deliveringHandClean})`,
+      `AD_CHAMBER:${ad.adCleanName}@${cleanSign(ad.adNatalRashiName)}(${isDualFold ? `L${ad.adNatalHouseFromLagna}/M${ad.adNatalHouseFromRashi}` : `M${ad.adNatalHouseFromRashi}`}) ${ad.polarityLabel}(${ad.netScore}) | PeakGate:${ad.peakVentingGate}${ruledStr ? ` | AD_Ruled:${ruledStr}` : ''}`,
+      `GATES:\n${gatesStr}`,
+      `HOUSE_ASPECT_MAP:\n${houseMapLines}`,
+      `CANDIDATE_TRIGGERS:\n${evStr}`
+    ].join('\n'));
+  }
+
+  const queryText = context.userQuery || `Comprehensive monthly Vedic evaluation for ${periodLabel}.`;
+  const inquiryBlock = `## INQUIRY\nQuery: "${queryText}"`;
+
+  return {
+    horizonLine,
+    tier1Dasha,
+    tier2SlowAndDoubleTransit,
+    tier3FastAndSpecial,
+    tier4LunarAndSav,
+    tier5Superset,
+    inquiryBlock
+  };
+}
+
+/**
  * Builds STRICTLY Dynamic Ephemeris + Question Prompt (NO D1/D9/Rules/JSON Schema boilerplate).
- * Strictly caps output size <= maxTokenBudget (default 2,000 tokens / ~7,600 chars) so KV-cached engines
- * only ever evaluate fresh transit ephemeris and user questions.
+ * Strictly hierarchical Tier 1-5 layout with zero repetition and full aspect/Double-Transit visibility.
  */
 export function buildEphemeralsOnlyPrompt(
   context: VedicHouseContext,
   mode: AstroPromptVersion = 'v3',
-  maxTokenBudget = 2000
+  maxTokenBudget = 2800
 ): {
   ephemeralsPrompt: string;
   chars: number;
   tokensEst: number;
   withinBudget: boolean;
 } {
-  const isDualFold = mode !== 'v2';
-  const monthName = MONTH_NAMES[context.selectedMonth] || 'Active Month';
-  const periodLabel = context.isMultiYearPrediction
-    ? `${context.timelineStartDate}..${context.timelineEndDate}`
-    : `${monthName} ${context.selectedYear}`;
-
-  // 1. Dynamic Transits
-  const allTransits = context.allTransitPlacements || [];
-  const transitsBlock = allTransits.length > 0
-    ? allTransits.map(t => {
-        const hLagna = t.house_from_lagna;
-        const hMoon = t.house_from_moon || t.house_from_lagna;
-        const houseCoord = isDualFold ? `L${hLagna} M${hMoon}` : `M${hMoon}`;
-        const motion = t.motion_type === 'Vakra' ? 'VAKRA' : t.motion_type === 'Adisara' ? 'ADISARA' : 'Direct';
-        const sav = t.sav_points ? ` SAV${t.sav_points}` : '';
-        return `${cleanPlanet(t.graha_key)}:${cleanSign(t.transit_rashi_name)} ${houseCoord}${sav} ${motion} ${cleanDegree(t.degree_sputa)} ${cleanStar(t.nakshatra_name, t.pada)}`;
-      }).join('\n')
-    : 'Transits computed per ephemeris.';
-
-  // 2. Dynamic Dasha
-  const dashaSummary = context.dashaDeliveryReport
-    ? `Delivery:${(context.dashaDeliveryReport.overallIndex * 100).toFixed(0)}%(${context.dashaDeliveryReport.status}) | MD:${cleanPlanet(context.activeDasha.mahadasha)}(${context.dashaDeliveryReport.mdDignity}) | AD:${cleanPlanet(context.activeDasha.antardasha)}(${context.dashaDeliveryReport.adDignity}) | PD:${cleanPlanet(context.activeDasha.pratyantardasha)}(${context.dashaDeliveryReport.pdDignity})`
-    : `MD:${cleanPlanet(context.activeDasha.mahadasha)} > AD:${cleanPlanet(context.activeDasha.antardasha)} > PD:${cleanPlanet(context.activeDasha.pratyantardasha)}`;
-
-  const dashaDossier = (context.dashaLordsDossier || [])
-    .slice(0, 3)
-    .map(d => `${d.role}[${cleanPlanet(d.lordName)}]: H${d.natalHouseOccupied}(${d.natalDignity}) | ${cleanInlineText(d.ownedHousesTitle)}`)
-    .join('\n');
-
-  // 3. Ingresses, Motion Phases & Prior 3-Day Boundary Lookback (Never drop Jupiter/Saturn/Mars!)
-  const priorTailBlock = (context.priorMonthTailSummary && context.priorMonthTailSummary.length > 0)
-    ? `PRIOR_3D_BOUNDARY:\n${context.priorMonthTailSummary.map(l => `- ${cleanInlineText(l)}`).join('\n')}`
-    : '';
-  const ingressLines = (context.monthlyIngressEvents || []).slice(0, 18).map(e => `- ${cleanInlineText(e)}`).join('\n');
-  const motionSpans = (context.monthlyMotionSpans || []).slice(0, 14)
-    .map(sp => {
-      const mTag = sp.motionType === 'Adisara' ? 'ADISARA' : sp.isRetrograde ? 'VAKRA' : 'DIR';
-      return `${cleanPlanet(sp.grahaKey)}:${cleanSign(sp.signName)} D${sp.startDay}-${sp.endDay}[${mTag}]`;
-    })
-    .join(' | ');
-
-  // 4. Special Window Phenomena (Boundary Ingresses / Adisara / Stations / Parivartana / Neecha Bhanga — Compact Lossless Packing)
-  const buildCompactSpecialBlock = (): string => {
-    const vse = context.vedicSpecialEvents;
-    if (!vse) return '';
-    const spLines: string[] = [];
-    spLines.push(`## SPECIAL TRANSIT PHENOMENA (${vse.startDate}..${vse.endDate}${vse.priorTailStartDate ? ` + Tail ${vse.priorTailStartDate}` : ''})`);
-    if (vse.boundaryIngresses && vse.boundaryIngresses.length > 0) {
-      for (const ing of vse.boundaryIngresses) {
-        spLines.push(`- INGRESS${ing.isPriorMonthBoundary ? '[PRIOR_BOUNDARY]' : ''}: ${cleanPlanet(ing.grahaKey)} ${cleanSign(ing.fromSignName)}->${cleanSign(ing.toSignName)} on ${ing.ingressDate} (L${ing.toHouseFromLagna}/M${ing.toHouseFromMoon}) [${ing.motionType.toUpperCase()}]`);
-      }
-    }
-    if (vse.adisaraWindows && vse.adisaraWindows.length > 0) {
-      for (const aw of vse.adisaraWindows) {
-        spLines.push(`- ADISARA_FAST: ${cleanPlanet(aw.grahaKey)} in ${aw.signNames.map(cleanSign).join('->')} [${aw.startDate}..${aw.endDate}] (L${aw.houseFromLagna}/M${aw.houseFromMoon})`);
-      }
-    }
-    for (const s of vse.sameSignStations || []) {
-      spLines.push(`- STATION: ${cleanPlanet(s.grahaKey)} ${s.turnType} in ${cleanSign(s.signName)} on ${s.stationDate} (L${s.houseFromLagna}/M${s.houseFromMoon})`);
-    }
-    for (const p of vse.parivartanaYogas || []) {
-      spLines.push(`- PARIVARTANA: ${cleanPlanet(p.grahaA)}<->${cleanPlanet(p.grahaB)} (${cleanSign(p.signAName)}/M${p.moonHouseA} <-> ${cleanSign(p.signBName)}/M${p.moonHouseB}, L${p.lagnaHouseA}<->L${p.lagnaHouseB}) [${p.startDate}..${p.endDate}]`);
-    }
-    for (const d of vse.debilitationEvents || []) {
-      spLines.push(`- ${d.neechaBhangaStatus}: ${cleanPlanet(d.grahaKey)} in ${cleanSign(d.signName)} [${d.startDate}..${d.endDate}] (L${d.houseFromLagna}/M${d.houseFromMoon}, ${d.motionState.includes('Retrograde') ? 'Vakra' : 'Direct'})`);
-    }
-    if (spLines.length <= 1 && vse.consolidatedOneLiner) {
-      spLines.push(`ONE_LINER: ${cleanInlineText(vse.consolidatedOneLiner)}`);
-    }
-    return spLines.join('\n').slice(0, 2200);
-  };
-  const specialBlock = buildCompactSpecialBlock();
-
-  // 5. Compact Tara Bala & Chandra Bala highlights
-  const taraLine = (context.taraBalaTransitPlanets || [])
-    .map(t => `${cleanPlanet(t.graha_key)}:${t.taraName}(T${t.taraNumber})`)
-    .join(' | ');
-  const chandraLine = (context.chandraBalaDailyTimeline || [])
-    .map(c => `${c.dayRange}:${cleanSign(c.moonSignName)} M${c.houseFromNatalMoon}${c.isChandrashtama ? '[AST]' : c.isFavorable ? '[Fav]' : ''}`)
-    .join(' | ');
-
-  // 6. Compact AD Chamber + 3 Gates + Top Candidate Events
-  let supersetCompact = '';
-  if (context.eventManufacturingSuperset) {
-    const ss = context.eventManufacturingSuperset;
-    const ad = ss.adChamberSummary;
-    const gatesStr = ss.gates.map(g => {
-      const grahas = g.activeGrahasInGate.map(ag => ag.name).join(',') || 'Moon';
-      return `G${g.gateIndex}:${g.nakshatraName}(${cleanSign(g.rashiName)},L${g.houseFromLagna}/M${g.houseFromRashi}) Moon:${g.moonIngressWindow || 'T'} Grahas:${grahas}`;
-    }).join(' | ');
-    const evStr = ss.candidateOrSynthesizedEvents.slice(0, 6).map((ev, idx) =>
-      `${idx + 1}.[${ev.portfolio}] ${ev.title} (${ev.probabilityScore}%,${ev.hasMoonSupport ? `Moon:${ev.moonWindowDates || 'Yes'}` : 'Latent'})`
-    ).join('\n');
-    supersetCompact = cleanInlineText(
-      `AD_CHAMBER:${ad.adCleanName}@${cleanSign(ad.adNatalRashiName)}(L${ad.adNatalHouseFromLagna}/M${ad.adNatalHouseFromRashi}) ${ad.polarityLabel}(${ad.netScore}) Peak:${ad.peakVentingGate}\nGATES: ${gatesStr}\nCANDIDATES:\n${evStr}`
-    );
-  }
-
-  const horizonLine = context.isMultiYearPrediction
-    ? `HORIZON: ${periodLabel} (Multi-Year)`
-    : context.isComprehensiveMonthly || !context.houseNumber
-      ? `HORIZON: ${periodLabel} | Full 12-House Synthesis`
-      : `HORIZON: ${periodLabel} | House ${context.houseNumber} (${cleanSign(context.rashiName)}) Score:${(context.activationScore ?? 0).toFixed(2)}`;
-
-  const queryText = context.userQuery || `Synthesize complete Vedic evaluation & correlated events for ${periodLabel}.`;
-
-  const ingressSection = (priorTailBlock || ingressLines || motionSpans)
-    ? `## INGRESS, PRIOR-3D BOUNDARY & MOTION\n${[priorTailBlock, ingressLines, motionSpans ? `Phases: ${motionSpans}` : ''].filter(Boolean).join('\n')}`
-    : '';
-
+  const s = buildHierarchicalEphemerisSections(context, mode);
   const candidateSections = [
-    horizonLine,
-    `## DASHA (${context.activeDasha.startDate}..${context.activeDasha.endDate})\n${dashaSummary}${dashaDossier ? `\n${dashaDossier}` : ''}`,
-    `## GOCHARA EPHEMERIS (${periodLabel})\n${transitsBlock}`,
-    ingressSection,
-    specialBlock,
-    taraLine ? `## TARA_BALA: ${taraLine}` : '',
-    chandraLine ? `## CHANDRA_BALA: ${chandraLine}` : '',
-    supersetCompact ? `## SUPERSET_GATES\n${supersetCompact}` : '',
-    `## INQUIRY\n"${queryText}"`
+    s.horizonLine,
+    s.tier1Dasha,
+    s.tier2SlowAndDoubleTransit,
+    s.tier3FastAndSpecial,
+    s.tier4LunarAndSav,
+    s.tier5Superset,
+    s.inquiryBlock
   ].filter(Boolean);
 
   let combined = candidateSections.join('\n\n');
-  const maxChars = Math.max(2000, maxTokenBudget * 4 - 200);
+  const maxChars = Math.max(4000, maxTokenBudget * 4 - 200);
   if (combined.length > maxChars) {
-    // Shed lower-priority bulk while keeping Horizon, Dasha, Gochara, Ingress/Prior-Boundary, Special, and Inquiry 100% intact
-    const compactIngress = [priorTailBlock, ingressLines].filter(Boolean).join('\n').slice(0, 1400);
+    // Preserve Tier 1 (Dasha), Tier 2 (Slow Planets, Prior-3D, Aspects & Double-Transit), Tier 3 (Ingresses/Special), and Inquiry 100%
     const prioritySections = [
-      horizonLine,
-      `## DASHA (${context.activeDasha.startDate}..${context.activeDasha.endDate})\n${dashaSummary}`,
-      `## GOCHARA EPHEMERIS (${periodLabel})\n${transitsBlock}`,
-      compactIngress ? `## INGRESS & PRIOR-3D BOUNDARY\n${compactIngress}` : '',
-      specialBlock,
-      supersetCompact ? `## SUPERSET_GATES\n${supersetCompact.slice(0, 1000)}` : '',
-      chandraLine ? `## CHANDRA_BALA: ${chandraLine.slice(0, 500)}` : '',
-      `## INQUIRY\n"${queryText}"`
+      s.horizonLine,
+      s.tier1Dasha,
+      s.tier2SlowAndDoubleTransit,
+      s.tier3FastAndSpecial,
+      s.tier4LunarAndSav.slice(0, 1200),
+      s.tier5Superset.slice(0, 2400),
+      s.inquiryBlock
     ].filter(Boolean);
     combined = prioritySections.join('\n\n').slice(0, maxChars);
   }
@@ -701,3 +1062,4 @@ export function buildEphemeralsOnlyPrompt(
     withinBudget: tokensEst <= maxTokenBudget
   };
 }
+

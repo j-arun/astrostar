@@ -52,55 +52,91 @@ export const LORD_NAKSHATRA_GATES: Record<
     nakshatras: ['Ashwini', 'Magha', 'Mula'],
     rashis: [1, 5, 9],
     anatomies: ['Head & Cranium', 'Heart & Spine', 'Hips, Sciatic Nerve & Sacrum'],
-    signs: ['Spiritual detachment, sudden breaks, deep subconscious karma, surgery']
+    signs: [
+      'Swift initiations, impulsive breaks, healing & nervous tension in head',
+      'Lineage weight, authority detachment, status tests & heart/spine pacing',
+      'Root karmic upheaval, sudden structural pivots & deep subconscious clearing'
+    ]
   },
   'Venus (Sukra)': {
     nakshatras: ['Bharani', 'Purva Phalguni', 'Purva Ashadha'],
     rashis: [1, 5, 9],
     anatomies: ['Face, Eyes & Reproductive Fluids', 'Spine & Vital Circulation', 'Pelvic & Thigh Musculature'],
-    signs: ['Pleasure, attraction, luxury expenses, skin/facial countenance, romance']
+    signs: [
+      'Desire vs restraint, resource tradeoffs, personal stamina & eye/face fatigue',
+      'Creative pleasure, luxury outlays, romance warmth & circulation pacing',
+      'Diplomatic victory, advisory charisma, travel comforts & pelvic strain watch'
+    ]
   },
   'Sun (Surya)': {
     nakshatras: ['Krittika', 'Uttara Phalguni', 'Uttara Ashadha'],
     rashis: [2, 6, 10],
     anatomies: ['Neck & Vocal Chords', 'Upper Abdomen & Gut Flora', 'Knees & Skeletal Structure'],
-    signs: ['Vitality, father, authority, government orders, bone density, ego expression']
+    signs: [
+      'Cutting clarity, direct speech, vitality & neck/throat heat',
+      'Patronage, formal agreements, workplace duty & digestive sensitivity',
+      'Enduring authority, institutional standing, disciplined goals & joint/bone load'
+    ]
   },
   'Moon (Chandra)': {
     nakshatras: ['Rohini', 'Hasta', 'Shravana'],
     rashis: [2, 6, 10],
     anatomies: ['Throat & Thyroid', 'Digestive Organs & Bowels', 'Lymphatic Fluid & Knees'],
-    signs: ['Mind, emotional fluctuations, mother, home sanctuary, liquids, travel']
+    signs: [
+      'Emotional security, domestic comforts, liquid assets & vocal/thyroid calm',
+      'Tactile skill, daily routines, detailed execution & gut equilibrium',
+      'Receptive listening, counseling, travel momentum & lymphatic/knee rest'
+    ]
   },
   'Mars (Sevvai)': {
     nakshatras: ['Mrigashira', 'Chitra', 'Dhanishta'],
     rashis: [3, 7, 11],
     anatomies: ['Shoulders & Upper Arms', 'Lower Abdomen & Kidneys', 'Shin Bones & Circulatory Heat'],
-    signs: ['Pitta burning, digestive heat, conflicts, surgery, muscular exertion, siblings, land']
+    signs: [
+      'Restless searching, curiosity, short travel & shoulder/arm exertion',
+      'Technical precision, structural design, assertive negotiation & renal heat',
+      'Asset acquisition, rhythmic enterprise, wealth push & circulatory recovery'
+    ]
   },
   Rahu: {
     nakshatras: ['Ardra', 'Swati', 'Shatabhisha'],
     rashis: [3, 7, 11],
     anatomies: ['Respiratory Bronchials & Arms', 'Pelvic Organs & Bladder', 'Calves, Ankles & Nervous Signals'],
-    signs: ['Obsession, sudden twists, foreign connections, toxic exposure, unconventional gains']
+    signs: [
+      'Sudden intellectual shifts, storm-before-clarity, tech breakthroughs & bronchial care',
+      'Independent deals, foreign leverage, diplomatic agility & urinary/pelvic hydration',
+      'Network disruption, unconventional gains, deep research & ankle/nerve rest'
+    ]
   },
   'Jupiter (Guru)': {
     nakshatras: ['Punarvasu', 'Vishakha', 'Purva Bhadrapada'],
     rashis: [4, 8, 12],
     anatomies: ['Chest & Lungs', 'Reproductive Tissues & Excretory', 'Feet & Toes'],
-    signs: ['Wisdom, divine grace, wealth clearance, advisory roles, children, liver']
+    signs: [
+      'Renewal of wealth/shelter, safe harbor, expansion & respiratory restoration',
+      'Goal-driven ambition, financial/alliance milestones & metabolic balance',
+      'High idealism, philosophical resolve, behind-the-scenes sacrifice & foot care'
+    ]
   },
   'Saturn (Sani)': {
     nakshatras: ['Pushya', 'Anuradha', 'Uttara Bhadrapada'],
     rashis: [4, 8, 12],
     anatomies: ['Stomach, Ribcage & Lungs', 'Bladder, Groin & Chronic Tissues', 'Feet & Nervous Terminals'],
-    signs: ['Delay, chronic friction, cold conditions, institutional duty, dental/bone wear, persistent marks']
+    signs: [
+      'Duty, steady nurturing under load, structural stamina & gastric discipline',
+      'Loyal alliances under pressure, hidden resilience & chronic tension release',
+      'Karmic settling, solitary contemplation, foundational endurance & sleep/feet rest'
+    ]
   },
   'Mercury (Budha)': {
     nakshatras: ['Ashlesha', 'Jyeshtha', 'Revati'],
     rashis: [4, 8, 12],
     anatomies: ['Stomach Lining, Gut Flora & Sleep', 'Secret Parts, Colon & Sensory Nerves', 'Feet, Lymph & Peripheral Nerves'],
-    signs: ['Communication, sensory nerves, paperwork, intellect, trade, sleep depth, food digestion']
+    signs: [
+      'Shrewd strategy, protective contracts, guarded dialogue & gastric calm',
+      'Senior responsibility, crisis troubleshooting, sharp analysis & nerve cooling',
+      'Final closure, creative synthesis, foreign clearances & restorative sleep'
+    ]
   }
 };
 
@@ -257,7 +293,7 @@ export function computeNakshatraGateDetails(params: {
       houseFromLagna: hLagna,
       houseFromRashi: hRashi,
       anatomicalSeat: lordMeta.anatomies[idx] || 'Vital Organs & Nerves',
-      significations: lordMeta.signs[0] || 'Karmic fruition gate',
+      significations: lordMeta.signs[idx] || lordMeta.signs[0] || 'Karmic fruition gate',
       activeGrahasInGate: Array.from(grahaMap.values()),
       moonIngressWindow
     };
@@ -469,6 +505,7 @@ function buildDeterministicPortfolioCandidates(params: {
   vedicSpecialEvents: VedicWindowAnalysis;
   monthlyMoonSpans: any[];
   monthlyGrahaSpans?: any[];
+  transitPlacements?: any[];
 }): CorrelatedManufacturedEvent[] {
   const {
     selectedMonth,
@@ -479,7 +516,8 @@ function buildDeterministicPortfolioCandidates(params: {
     houseLinks,
     vedicSpecialEvents,
     monthlyMoonSpans,
-    monthlyGrahaSpans
+    monthlyGrahaSpans,
+    transitPlacements = []
   } = params;
 
   const monthShort = (MONTH_NAMES[selectedMonth] || 'Month').slice(0, 3);
@@ -543,8 +581,209 @@ function buildDeterministicPortfolioCandidates(params: {
       correlatedHousesAndLordships: `Lagna H${gate.houseFromLagna} / Moon H${gate.houseFromRashi} (${cleanEnglishSignName(gate.rashiName)}, Lord: ${link?.rashiLord || 'Lord'})${chamberAdNote}`,
       nakshatraGateTrigger: `Gate ${idx + 1}: ${gate.nakshatraName} [${perspLabel}] • Grahas: ${grahaDesc}`,
       narrative: hasTransit
-        ? `${adChamberDynamics.pdCleanName} Delivering Hand channels ${adChamberDynamics.adCleanName} AD chamber pressure (${adChamberDynamics.polarityLabel}) through ${gate.nakshatraName} around ${gate.significations.toLowerCase()} and ${gate.anatomicalSeat.toLowerCase()}. ${moonMatch.timingExplanation}`
-        : `${gate.nakshatraName} holds latent receptivity in Lagna H${gate.houseFromLagna} / Moon H${gate.houseFromRashi}. ${moonMatch.timingExplanation}`,
+        ? `${adChamberDynamics.pdCleanName} activates ${gate.nakshatraName} (${gate.significations}; seat: ${gate.anatomicalSeat}) under ${adChamberDynamics.adCleanName} AD (${adChamberDynamics.polarityLabel}). ${moonMatch.timingExplanation}`
+        : `${gate.nakshatraName} (${gate.significations}) holds latent receptivity in L${gate.houseFromLagna}/M${gate.houseFromRashi}. ${moonMatch.timingExplanation}`,
+      source: 'deterministic_gate_candidate'
+    });
+  });
+
+  // 1B. Tier-1 Slow-Planet Boundary Ingresses, Adisara Motion & Double Transit (Jupiter + Saturn) Events
+  const getTouchesForPlanet = (grahaKey: string, signIdx: number): Array<{ signIdx: number; label: string }> => {
+    const out: Array<{ signIdx: number; label: string }> = [{ signIdx, label: 'Occupied' }];
+    const opp = ((signIdx + 5) % 12) + 1;
+    out.push({ signIdx: opp, label: '7th Aspect' });
+    if (grahaKey === 'Jupiter') {
+      out.push({ signIdx: ((signIdx + 3) % 12) + 1, label: '5th Aspect' });
+      out.push({ signIdx: ((signIdx + 7) % 12) + 1, label: '9th Aspect' });
+    } else if (grahaKey === 'Saturn') {
+      out.push({ signIdx: ((signIdx + 1) % 12) + 1, label: '3rd Aspect' });
+      out.push({ signIdx: ((signIdx + 8) % 12) + 1, label: '10th Aspect' });
+    }
+    return out;
+  };
+
+  const rawSpans = (monthlyGrahaSpans || []).map(s => ({
+    grahaKey: cleanEnglishPlanetName(s.graha_key ?? s.grahaKey ?? ''),
+    signIdx: Number(s.sign_index ?? s.rashiIndex ?? 0),
+    startDay: Number(s.start_day ?? s.startDay ?? 1),
+    endDay: Number(s.end_day ?? s.endDay ?? daysInMonth),
+    motionType: s.motion_type ?? s.motionType ?? (s.is_retrograde || s.isRetrograde ? 'Vakra' : 'Normal'),
+    isRetrograde: Boolean(s.is_retrograde ?? s.isRetrograde)
+  }));
+
+  let jupSpans = rawSpans.filter(s => s.grahaKey === 'Jupiter' && s.signIdx > 0);
+  let satSpans = rawSpans.filter(s => s.grahaKey === 'Saturn' && s.signIdx > 0);
+
+  if (jupSpans.length === 0) {
+    const jt = transitPlacements.find((t: any) => cleanEnglishPlanetName(t.graha_key) === 'Jupiter');
+    const jIdx = Number(jt?.transit_rashi_index || 0);
+    if (jIdx > 0) {
+      jupSpans = [{
+        grahaKey: 'Jupiter',
+        signIdx: jIdx,
+        startDay: 1,
+        endDay: daysInMonth,
+        motionType: jt.motion_type || (jt.is_retrograde ? 'Vakra' : 'Normal'),
+        isRetrograde: Boolean(jt.is_retrograde)
+      }];
+    }
+  }
+  if (satSpans.length === 0) {
+    const st = transitPlacements.find((t: any) => cleanEnglishPlanetName(t.graha_key) === 'Saturn');
+    const sIdx = Number(st?.transit_rashi_index || 0);
+    if (sIdx > 0) {
+      satSpans = [{
+        grahaKey: 'Saturn',
+        signIdx: sIdx,
+        startDay: 1,
+        endDay: daysInMonth,
+        motionType: st.motion_type || (st.is_retrograde ? 'Vakra' : 'Normal'),
+        isRetrograde: Boolean(st.is_retrograde)
+      }];
+    }
+  }
+
+  const mergeSameSignSpans = (list: typeof rawSpans) => {
+    const merged: typeof rawSpans = [];
+    for (const item of [...list].sort((a, b) => a.startDay - b.startDay)) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.signIdx === item.signIdx && item.startDay <= prev.endDay + 1) {
+        prev.endDay = Math.max(prev.endDay, item.endDay);
+        if (item.motionType === 'Adisara') prev.motionType = 'Adisara';
+        if (item.isRetrograde) prev.isRetrograde = true;
+      } else {
+        merged.push({ ...item });
+      }
+    }
+    return merged;
+  };
+
+  jupSpans = mergeSameSignSpans(jupSpans);
+  satSpans = mergeSameSignSpans(satSpans);
+
+  if (jupSpans.length > 0 && satSpans.length > 0) {
+    const dayPoints = Array.from(new Set([
+      1,
+      ...jupSpans.map(s => s.startDay),
+      ...jupSpans.map(s => s.endDay),
+      ...satSpans.map(s => s.startDay),
+      ...satSpans.map(s => s.endDay),
+      daysInMonth
+    ])).sort((a, b) => a - b);
+
+    const seenDoubleKey = new Set<string>();
+    for (let i = 0; i < dayPoints.length; i++) {
+      const d = dayPoints[i];
+      const jSpan = jupSpans.find(s => d >= s.startDay && d <= s.endDay);
+      const sSpan = satSpans.find(s => d >= s.startDay && d <= s.endDay);
+      if (!jSpan || !sSpan) continue;
+      const wStart = Math.max(jSpan.startDay, sSpan.startDay);
+      const wEnd = Math.min(jSpan.endDay, sSpan.endDay);
+      if (wStart > wEnd) continue;
+
+      const jTouches = getTouchesForPlanet('Jupiter', jSpan.signIdx);
+      const sTouches = getTouchesForPlanet('Saturn', sSpan.signIdx);
+
+      for (const jt of jTouches) {
+        const st = sTouches.find(x => x.signIdx === jt.signIdx);
+        if (!st) continue;
+        const dk = `${jt.signIdx}-${wStart}-${wEnd}`;
+        if (seenDoubleKey.has(dk)) continue;
+        seenDoubleKey.add(dk);
+
+        const matchedLink = houseLinks.find(l => {
+          const rMeta = RASHI_LIST_META.find(r => r.index === jt.signIdx);
+          return rMeta && cleanEnglishSignName(rMeta.eng).toLowerCase() === l.rashiName.toLowerCase();
+        });
+        const signShort = matchedLink?.rashiName || `Sign ${jt.signIdx}`;
+        const hL = matchedLink?.houseFromLagna || 1;
+        const hM = matchedLink?.houseFromMoon || 1;
+        const pMeta = HOUSE_PORTFOLIO_LABELS[hL] || { portfolio: 'Money', label: `House ${hL}` };
+        const portfolio = (hM === 2 || hM === 11 || hL === 2 || hL === 11) ? 'Money' : (hL === 10 || hM === 10 ? 'Work' : pMeta.portfolio);
+
+        const activeLabel = `${formatMonthDays(monthShort, wStart, wEnd)}`;
+        const moonMatch = evaluateInWindowMoonTrigger({
+          targetSignIndices: [jt.signIdx],
+          windowStartDay: wStart,
+          windowEndDay: wEnd,
+          monthlyMoonSpans,
+          monthShort,
+          activeLabel
+        });
+        const score = moonMatch.hasMoonSupport ? 86 : 62;
+
+        events.push({
+          id: `det-double-transit-${jt.signIdx}-${wStart}`,
+          title: `Double Transit Activation: ${signShort} (L${hL}/M${hM}) — Jupiter ${jt.label} + Saturn ${st.label}`,
+          portfolio,
+          probabilityScore: score,
+          isHighProbability: score >= 60,
+          latencyStatus: moonMatch.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent',
+          hasMoonSupport: moonMatch.hasMoonSupport,
+          moonWindowDates: moonMatch.moonWindowDates,
+          correlatedHousesAndLordships: `Lagna H${hL} / Moon H${hM} (${signShort}, Lord: ${matchedLink?.rashiLord || 'Lord'})`,
+          nakshatraGateTrigger: `Double Transit [${activeLabel}] -> ${adChamberDynamics.peakVentingGate}`,
+          narrative: `Jupiter (${jt.label}${jSpan.motionType === 'Adisara' ? ', ADISARA' : ''}) + Saturn (${st.label}${sSpan.isRetrograde ? ', Vakra' : ''}) jointly unlock ${pMeta.label} & Moon H${hM}. ${moonMatch.timingExplanation}`,
+          source: 'deterministic_gate_candidate'
+        });
+      }
+    }
+  }
+
+  (vedicSpecialEvents.boundaryIngresses || []).forEach((ing, idx) => {
+    if (!ing.isPriorMonthBoundary && !['Jupiter', 'Saturn', 'Mars', 'Venus', 'Sun'].includes(ing.grahaKey)) return;
+    const ingDay = ing.isPriorMonthBoundary ? 1 : parseIsoDay(ing.ingressDate, 1);
+    const matchingSpans = rawSpans.filter(
+      s => s.grahaKey === ing.grahaKey && s.signIdx === ing.toSignIndex
+    );
+    const wStart = ing.isPriorMonthBoundary
+      ? 1
+      : (matchingSpans.length > 0 ? Math.min(...matchingSpans.map(s => s.startDay)) : ingDay);
+    const wEnd = matchingSpans.length > 0 ? Math.max(...matchingSpans.map(s => s.endDay)) : daysInMonth;
+    const activeLabel = `${formatMonthDays(monthShort, wStart, wEnd)} (${ing.ingressDate})`;
+
+    const targetSigns = ing.grahaKey === 'Jupiter'
+      ? [
+          ing.toSignIndex,
+          ((ing.toSignIndex + 3) % 12) + 1,
+          ((ing.toSignIndex + 5) % 12) + 1,
+          ((ing.toSignIndex + 7) % 12) + 1
+        ]
+      : [ing.toSignIndex];
+
+    const moonMatch = evaluateInWindowMoonTrigger({
+      targetSignIndices: targetSigns,
+      windowStartDay: wStart,
+      windowEndDay: wEnd,
+      monthlyMoonSpans,
+      monthShort,
+      activeLabel
+    });
+
+    const pMeta = HOUSE_PORTFOLIO_LABELS[ing.toHouseFromLagna] || { portfolio: 'Work', label: `House ${ing.toHouseFromLagna}` };
+    const isSlowMajor = ing.grahaKey === 'Jupiter' || ing.grahaKey === 'Saturn' || ing.isPriorMonthBoundary || ing.motionType === 'Adisara';
+    const portfolio = ing.toHouseFromMoon === 2 || ing.toHouseFromMoon === 11 || ing.toHouseFromLagna === 2 || ing.toHouseFromLagna === 11
+      ? 'Money'
+      : (ing.toHouseFromLagna === 10 || ing.toHouseFromMoon === 10 ? 'Work' : pMeta.portfolio);
+    const prob = moonMatch.hasMoonSupport ? (isSlowMajor ? 88 : 77) : (isSlowMajor ? 64 : 52);
+
+    const aspectTags = ing.grahaKey === 'Jupiter'
+      ? ` + aspects 5th->L${((ing.toHouseFromLagna + 3) % 12) + 1}/M${((ing.toHouseFromMoon + 3) % 12) + 1}, 7th->L${((ing.toHouseFromLagna + 5) % 12) + 1}/M${((ing.toHouseFromMoon + 5) % 12) + 1}, 9th->L${((ing.toHouseFromLagna + 7) % 12) + 1}/M${((ing.toHouseFromMoon + 7) % 12) + 1}`
+      : '';
+    const cleanToSign = cleanEnglishSignName(ing.toSignName);
+
+    events.push({
+      id: `det-ingress-${ing.grahaKey.toLowerCase()}-${idx + 1}`,
+      title: `${ing.grahaKey} ${ing.isPriorMonthBoundary ? 'Boundary Shift' : 'Ingress'} -> ${cleanToSign} (L${ing.toHouseFromLagna}/M${ing.toHouseFromMoon})${ing.motionType === 'Adisara' ? ' [ADISARA]' : ''}`,
+      portfolio,
+      probabilityScore: prob,
+      isHighProbability: prob >= 60,
+      latencyStatus: moonMatch.hasMoonSupport ? 'acute_moon_triggered' : 'dormant_latent',
+      hasMoonSupport: moonMatch.hasMoonSupport,
+      moonWindowDates: moonMatch.moonWindowDates,
+      correlatedHousesAndLordships: `Lagna H${ing.toHouseFromLagna} / Moon H${ing.toHouseFromMoon} (${cleanToSign})${aspectTags}`,
+      nakshatraGateTrigger: `${ing.isPriorMonthBoundary ? 'Prior-Boundary' : 'In-Month'} Ingress (${ing.ingressDate}) -> ${adChamberDynamics.peakVentingGate}`,
+      narrative: `${ing.eventImpact} ${moonMatch.timingExplanation}`,
       source: 'deterministic_gate_candidate'
     });
   });
@@ -731,11 +970,11 @@ function buildDeterministicPortfolioCandidates(params: {
       const meta = RASHI_LIST_META.find(r => cleanEnglishSignName(r.eng).toLowerCase() === l.rashiName.toLowerCase());
       return meta ? meta.index : 0;
     }).filter(x => x > 0);
-    const activeSpans = (monthlyGrahaSpans || []).filter(
-      s => targetSigns.includes(s.sign_index) && cleanEnglishPlanetName(s.graha_key) !== 'Moon'
+    const activeSpans = rawSpans.filter(
+      s => targetSigns.includes(s.signIdx) && s.grahaKey !== 'Moon'
     );
-    const wStart = activeSpans.length > 0 ? Math.min(...activeSpans.map(s => Number(s.start_day) || 1)) : 1;
-    const wEnd = activeSpans.length > 0 ? Math.max(...activeSpans.map(s => Number(s.end_day) || daysInMonth)) : daysInMonth;
+    const wStart = activeSpans.length > 0 ? Math.min(...activeSpans.map(s => s.startDay)) : 1;
+    const wEnd = activeSpans.length > 0 ? Math.max(...activeSpans.map(s => s.endDay)) : daysInMonth;
 
     const moonMatch = evaluateInWindowMoonTrigger({
       targetSignIndices: targetSigns.slice(0, 1), // Primary portfolio house sign + its 7th aspect
@@ -781,21 +1020,21 @@ function buildDeterministicPortfolioCandidates(params: {
     });
   });
 
-  // Deduplicate by title and sort: Moon-supported/aspected events at top, then highest probability
+  // Sort highest-confidence / Moon-supported events first BEFORE deduplicating by title
+  const sorted = [...events].sort((a, b) => {
+    if (a.hasMoonSupport !== b.hasMoonSupport) {
+      return a.hasMoonSupport ? -1 : 1;
+    }
+    return b.probabilityScore - a.probabilityScore;
+  });
+
   const seen = new Set<string>();
-  return events
-    .filter(ev => {
-      const k = ev.title.toLowerCase().trim();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-    .sort((a, b) => {
-      if (a.hasMoonSupport !== b.hasMoonSupport) {
-        return a.hasMoonSupport ? -1 : 1;
-      }
-      return b.probabilityScore - a.probabilityScore;
-    });
+  return sorted.filter(ev => {
+    const k = ev.title.toLowerCase().trim();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export function buildEventManufacturingSnapshot(params: {
@@ -888,7 +1127,8 @@ export function buildEventManufacturingSnapshot(params: {
     houseLinks,
     vedicSpecialEvents,
     monthlyMoonSpans: params.monthlyMoonSpans || [],
-    monthlyGrahaSpans: params.monthlyGrahaSpans || []
+    monthlyGrahaSpans: params.monthlyGrahaSpans || [],
+    transitPlacements: params.transitPlacements || []
   });
 
   const liveRaw = params.preSynthesizedEvents || [];

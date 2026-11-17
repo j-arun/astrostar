@@ -139,7 +139,7 @@ export function buildVedicHtmlContent(
   const kvOverrides: KvCacheBlockOverrides | undefined = options?.kvOverrides || kvCfg.overrides;
   const kvMode: 'v2' | 'v3' = telemetry.promptVersion === 'v2' ? 'v2' : 'v3';
   const kvPrefix = buildKvCacheSystemPrefix(context, kvMode, kvOverrides, 'json_report');
-  const ephemeralsData = buildEphemeralsOnlyPrompt(context, telemetry.promptVersion, 2000);
+  const ephemeralsData = buildEphemeralsOnlyPrompt(context, telemetry.promptVersion, 2800);
   const splitFromPromptSent = extractKvAndEphemeralPartsFromPrompt(narrative.promptSent);
   const kvCacheActive = Boolean(
     narrative.tokenTelemetry?.kvCacheUsed ??

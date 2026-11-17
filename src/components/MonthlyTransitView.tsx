@@ -29,7 +29,8 @@ import {
   Download,
   AlertCircle,
   Key,
-  Cpu
+  Cpu,
+  Activity
 } from 'lucide-react';
 import { testGeminiConnection } from '../services/apiHealthService';
 import { getPreferredGeminiModel } from '../services/llm/geminiModels';
@@ -49,6 +50,7 @@ import {
 import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
 import { LocalBatchSchedulerModal } from './LocalBatchSchedulerModal';
+import { OriginalSourcePromptModal } from './OriginalSourcePromptModal';
 import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
@@ -578,6 +580,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [reportAutoRunTimestamp, setReportAutoRunTimestamp] = useState<number | undefined>(undefined);
   const [liveEventEngineSuperset, setLiveEventEngineSuperset] = useState<EventManufacturingSupersetPayload | null>(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
+  const [isOriginalSourceModalOpen, setIsOriginalSourceModalOpen] = useState<boolean>(false);
 
   const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
@@ -1484,6 +1487,17 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
             >
               <Cpu className="w-3.5 h-3.5 text-indigo-300" />
               <span>Schedule 14B Batch</span>
+            </button>
+
+            {/* BUTTON 3: ORIGINAL SOURCE (ORIGINAL HEARTBEAT) PROMPT GENERATOR */}
+            <button
+              type="button"
+              onClick={() => setIsOriginalSourceModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 font-bold transition text-xs cursor-pointer active:scale-95"
+              title={`Generate Original Source (Original Heartbeat) standalone prompt for ${MONTH_NAMES[selectedMonth]} ${selectedYear} (copy & paste externally)`}
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Original Source</span>
             </button>
 
             {/* PD Micro-Focus Mode Slider */}
@@ -2623,6 +2637,14 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         }}
         buildContextForSelectedMonth={() => buildMonthlyHouseContext('local_qwen')}
         yearOptions={yearOptions}
+      />
+
+      <OriginalSourcePromptModal
+        isOpen={isOriginalSourceModalOpen}
+        onClose={() => setIsOriginalSourceModalOpen(false)}
+        buildContextForSelectedMonth={() => buildMonthlyHouseContext()}
+        selectedMonthName={MONTH_NAMES[selectedMonth]}
+        selectedYear={selectedYear}
       />
     </div>
   );

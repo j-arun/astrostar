@@ -2,14 +2,7 @@ import { VedicHouseContext, LLMThreePartNarrative, LLM_PROVIDERS } from './llm/t
 import { getStructuredPayloadReportSections } from './structuredPayloadReport';
 import { createReportFilenameTimestamp } from './reportFilename';
 import { extractReportTokenTelemetry } from './reportTelemetry';
-import {
-  KvCacheBlockOverrides,
-  KvCacheConfig,
-  loadKvCacheConfig,
-  buildKvCacheSystemPrefix,
-  buildEphemeralsOnlyPrompt,
-  resolveEngineProfile
-} from './llm/kvCacheManager';
+import { resolveEngineProfile } from './llm/vedicPromptHelpers';
 import { buildVedicPrompt, PREFERRED_VEDIC_14B_MODEL } from './llm/adapters';
 
 const MONTH_NAMES = [
@@ -87,39 +80,9 @@ function getReadableEngineName(providerId: string, modelName?: string): string {
   return providerId;
 }
 
-export interface BuildHtmlReportOptions {
-  kvOverrides?: KvCacheBlockOverrides;
-  kvConfigSnapshot?: Partial<KvCacheConfig>;
-}
-
-function extractKvAndEphemeralPartsFromPrompt(rawPromptSent?: string): {
-  parsedSystemCache: string;
-  parsedEphemeralsPrompt: string;
-  hasSplitMarkers: boolean;
-} {
-  const text = (rawPromptSent || '').trim();
-  if (!text) {
-    return { parsedSystemCache: '', parsedEphemeralsPrompt: '', hasSplitMarkers: false };
-  }
-  const sysHeaderMatch = text.match(/^\[SYSTEM\s+(?:KV|EPHEMERAL)\s+CACHE[^\]]*\]\s*\n/i);
-  const ephMarkerMatch = text.match(/\n\n\[EPHEMERIS PROMPT[^\]]*\]\s*\n/i);
-  if (sysHeaderMatch && ephMarkerMatch && typeof ephMarkerMatch.index === 'number') {
-    const sysStart = sysHeaderMatch[0].length;
-    const sysBody = text.slice(sysStart, ephMarkerMatch.index).trim();
-    const ephBody = text.slice(ephMarkerMatch.index + ephMarkerMatch[0].length).trim();
-    return {
-      parsedSystemCache: sysBody,
-      parsedEphemeralsPrompt: ephBody,
-      hasSplitMarkers: true
-    };
-  }
-  return { parsedSystemCache: '', parsedEphemeralsPrompt: '', hasSplitMarkers: false };
-}
-
 export function buildVedicHtmlContent(
   context: VedicHouseContext,
-  narrative: LLMThreePartNarrative,
-  options?: BuildHtmlReportOptions
+  narrative: LLMThreePartNarrative
 ): string {
   const monthName = MONTH_NAMES[context.selectedMonth] || `Month ${context.selectedMonth + 1}`;
   const year = context.selectedYear;
@@ -136,32 +99,12 @@ export function buildVedicHtmlContent(
   const engineDisplayName = getReadableEngineName(narrative.providerUsed, modelName);
   const telemetry = extractReportTokenTelemetry(context, narrative);
 
-  const kvCfg: Partial<KvCacheConfig> = options?.kvConfigSnapshot || (typeof window !== 'undefined' ? loadKvCacheConfig() : {});
-  const kvOverrides: KvCacheBlockOverrides | undefined = options?.kvOverrides || kvCfg.overrides;
-  const kvMode: 'v2' | 'v3' = telemetry.promptVersion === 'v2' ? 'v2' : 'v3';
   const engineProfile = resolveEngineProfile(
     narrative.isPrivateLocal || narrative.providerUsed === 'local_qwen' ? 'local_qwen' : narrative.providerUsed
   );
-  const kvPrefix = buildKvCacheSystemPrefix(context, kvMode, kvOverrides, 'json_report', engineProfile);
-  const ephemeralsData = buildEphemeralsOnlyPrompt(context, telemetry.promptVersion, 2800);
-  const splitFromPromptSent = extractKvAndEphemeralPartsFromPrompt(narrative.promptSent);
-  const kvCacheActive = Boolean(
-    narrative.tokenTelemetry?.kvCacheUsed ??
-    context.useKvCache ??
-    splitFromPromptSent.hasSplitMarkers
-  );
-  const effectiveKvSystemText = splitFromPromptSent.parsedSystemCache || kvPrefix.systemPrompt;
-  const effectiveEphemeralsText = splitFromPromptSent.parsedEphemeralsPrompt || ephemeralsData.ephemeralsPrompt;
-  const effectiveEphemeralsTokens = Math.round(effectiveEphemeralsText.length / 4);
   const fullEntireReportPrompt = (narrative.promptSent && narrative.promptSent.trim().length > 0)
     ? narrative.promptSent.trim()
-    : (() => {
-        try {
-          return buildVedicPrompt(context, engineDisplayName, telemetry.promptVersion, engineProfile);
-        } catch {
-          return `[KV CACHE SYSTEM PREFIX]\n${effectiveKvSystemText}\n\n[EPHEMERIS SPAN]\n${effectiveEphemeralsText}`;
-        }
-      })();
+    : buildVedicPrompt(context, engineDisplayName, telemetry.promptVersion, engineProfile);
   const fullEntirePromptTokensEst = Math.round(fullEntireReportPrompt.length / 4);
 
   const now = new Date();
@@ -715,7 +658,7 @@ export function buildVedicHtmlContent(
     .payload-row strong { color: var(--slate-700); }
     .payload-empty { color: var(--slate-500); font-size: 11px; font-style: italic; }
 
-    /* Meta Info, KV Cache & Prompt Audit Blocks */
+    /* Meta Info & Prompt Audit Blocks */
     .meta-info-table {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -756,30 +699,6 @@ export function buildVedicHtmlContent(
       text-align: right;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 11.5px;
-    }
-    .kv-summary-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      background: #ecfdf5;
-      border: 1px solid #a7f3d0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: 12px;
-      font-size: 12px;
-      color: #065f46;
-    }
-    .kv-pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 700;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
-      color: var(--slate-800);
     }
     .code-pre-box {
       background: #0f172a;
@@ -1277,14 +1196,6 @@ export function buildVedicHtmlContent(
           <span class="meta-info-val">In: ${escapeHtml(telemetry.inputTokensDisplay)} &bull; Out: ${escapeHtml(telemetry.outputTokensDisplay)}</span>
         </div>
         <div class="meta-info-row">
-          <span class="meta-info-key">KV Cache Mode</span>
-          <span class="meta-info-val">${kvCacheActive ? 'ENABLED (System Prefix + <=2K Ephemeris Split)' : 'DISABLED / Baseline Snapshot Shown'}</span>
-        </div>
-        <div class="meta-info-row">
-          <span class="meta-info-key">KV Hash &amp; Tokens</span>
-          <span class="meta-info-val">#${escapeHtml(kvPrefix.systemHash)} &bull; Sys ~${kvPrefix.systemTokensEst.toLocaleString()} tok &bull; Eph ~${effectiveEphemeralsTokens.toLocaleString()} tok</span>
-        </div>
-        <div class="meta-info-row">
           <span class="meta-info-key">Endpoint Used</span>
           <span class="meta-info-val">${escapeHtml(narrative.endpointUsed || 'Local / API Proxy')}</span>
         </div>
@@ -1294,108 +1205,32 @@ export function buildVedicHtmlContent(
         </div>
         ${narrative.isPrivateLocal ? `
         <div class="meta-info-row">
-          <span class="meta-info-key">Ollama KV &amp; Flash Attention</span>
-          <span class="meta-info-val">FlashAttn: ${kvCfg.privateOllama?.flashAttention !== false ? 'ON' : 'OFF'} &bull; KV Type: ${escapeHtml(kvCfg.privateOllama?.kvCacheType || 'q8_0')} &bull; KeepAlive: ${escapeHtml(kvCfg.privateOllama?.keepAlive || '30m')}</span>
-        </div>
-        <div class="meta-info-row">
           <span class="meta-info-key">RAM Retention State</span>
           <span class="meta-info-val">${narrative.memoryPurged ? 'Unloaded After Run' : 'Retained Warm in RAM'}</span>
         </div>` : ''}
       </div>
     </section>
 
-    <!-- SECTION 7: KV CACHE (STATIC SYSTEM PREFIX: D1, D9, RULES & DELIVERY) -->
+    <!-- SECTION 7: ENTIRE REPORT PROMPT (FULL WIRE PAYLOAD FOR REPORT GENERATION) -->
     <section class="section">
       <div class="section-header">
-        <h2 class="section-title">7. KV CACHE SYSTEM PAYLOAD (STATIC MEMORY PREFIX)</h2>
-        <span class="section-subtitle">Natal D1 Chart, Natal D9 Navamsha Chart, Reasoning Rules &amp; Delivery Schema</span>
-      </div>
-
-      <div class="kv-summary-bar" style="${kvCacheActive ? '' : 'background: #fffbeb; border-color: #fde68a; color: #92400e;'}">
-        <strong>${kvCacheActive ? 'KV Cache Split Active During This Run' : 'KV Cache Reference Snapshot (Exact Static Blocks)'}:</strong>
-        <span class="kv-pill">Hash: ${escapeHtml(kvPrefix.systemHash)}</span>
-        <span class="kv-pill">System Tokens: ~${Math.round(effectiveKvSystemText.length / 4).toLocaleString()}</span>
-        <span class="kv-pill">Chars: ${effectiveKvSystemText.length.toLocaleString()}</span>
-        <span class="kv-pill">Mode: ${escapeHtml(kvMode.toUpperCase())}</span>
-      </div>
-
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: #b45309;">KV Block 1: Natal D1 Chart (Fixed Birth Promise)</span>
-          <span class="part-badge">~${Math.round(kvPrefix.sections.d1Chart.length / 4).toLocaleString()} tok</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(kvPrefix.sections.d1Chart)}</pre></div>
-      </div>
-
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: #7c3aed;">KV Block 2: Natal D9 Navamsha Chart (Fixed Divisional Strength)</span>
-          <span class="part-badge">~${Math.round(kvPrefix.sections.d9Chart.length / 4).toLocaleString()} tok</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(kvPrefix.sections.d9Chart)}</pre></div>
-      </div>
-
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: var(--sky-600);">KV Block 3: Interpretation &amp; Reasoning Rules (${escapeHtml(kvMode.toUpperCase())})</span>
-          <span class="part-badge">~${Math.round(kvPrefix.sections.rules.length / 4).toLocaleString()} tok</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(kvPrefix.sections.rules)}</pre></div>
-      </div>
-
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: var(--emerald-600);">KV Block 4: Delivery &amp; JSON Output Contract</span>
-          <span class="part-badge">~${Math.round(kvPrefix.sections.delivery.length / 4).toLocaleString()} tok</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(kvPrefix.sections.delivery)}</pre></div>
-      </div>
-
-      ${splitFromPromptSent.parsedSystemCache ? `
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: var(--slate-900);">Verbatim Combined System Prefix Sent in KV Slot</span>
-          <span class="part-badge">${splitFromPromptSent.parsedSystemCache.length.toLocaleString()} chars (~${Math.round(splitFromPromptSent.parsedSystemCache.length / 4).toLocaleString()} tok)</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(splitFromPromptSent.parsedSystemCache)}</pre></div>
-      </div>` : ''}
-    </section>
-
-    <!-- SECTION 8: DYNAMIC EPHEMERALS SPAN PROMPT (TRANSITS, DASHA & INQUIRY <= 2.8K) -->
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">8. EPHEMERAL SPAN PROMPT (&le; 2.8K DYNAMIC EPHEMERIS + INQUIRY)</h2>
-        <span class="section-subtitle">${effectiveEphemeralsText.length.toLocaleString()} chars (~${effectiveEphemeralsTokens.toLocaleString()} tokens &bull; ${effectiveEphemeralsTokens <= 2800 ? 'Within 2,800 Token Cap' : 'Compact Ephemeris Span'})</span>
-      </div>
-      <div class="part-card">
-        <div class="part-header">
-          <span class="part-title" style="color: #0369a1;">Dynamic Ephemeris Span Sent Per Monthly Invocation</span>
-          <span class="part-badge">~${effectiveEphemeralsTokens.toLocaleString()} tok</span>
-        </div>
-        <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(effectiveEphemeralsText)}</pre></div>
-      </div>
-    </section>
-
-    <!-- SECTION 9: ENTIRE REPORT PROMPT (FULL WIRE PAYLOAD FOR REPORT GENERATION) -->
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">9. ENTIRE REPORT PROMPT (FULL PROMPT LOG)</h2>
+        <h2 class="section-title">7. ENTIRE REPORT PROMPT (FULL PROMPT LOG)</h2>
         <span class="section-subtitle">${fullEntireReportPrompt.length.toLocaleString()} chars (~${fullEntirePromptTokensEst.toLocaleString()} tokens)</span>
       </div>
       <div class="part-card">
         <div class="part-header">
           <span class="part-title" style="color: var(--indigo-600);">Complete Prompt Payload Used to Generate This Report</span>
-          <span class="part-badge">${splitFromPromptSent.hasSplitMarkers ? 'Split System KV + Ephemeris' : 'Full Unified Prompt'}</span>
+          <span class="part-badge">Full Unified Prompt</span>
         </div>
         <div class="part-body" style="padding: 12px;"><pre class="code-pre-box">${escapeHtml(fullEntireReportPrompt)}</pre></div>
       </div>
     </section>
 
-    <!-- SECTION 10: CLAUDE EXTENDED REASONING SCRATCHPAD (IF AVAILABLE) -->
+    <!-- SECTION 8: CLAUDE EXTENDED REASONING SCRATCHPAD (IF AVAILABLE) -->
     ${narrative.thinkingContent ? `
     <section class="section">
       <div class="section-header">
-        <h2 class="section-title">10. EXTENDED REASONING AUDIT LOG</h2>
+        <h2 class="section-title">8. EXTENDED REASONING AUDIT LOG</h2>
         <span class="section-subtitle">Deep Ephemeris Chain of Thought</span>
       </div>
       <div class="code-pre-box">${escapeHtml(narrative.thinkingContent)}</div>

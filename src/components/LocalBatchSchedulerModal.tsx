@@ -20,8 +20,6 @@ import {
 } from 'lucide-react';
 import { VedicHouseContext } from '../services/llm/types';
 import { buildVedicPrompt, getActivePromptVersion } from '../services/llm/adapters';
-import { KvCachePreflightModal } from './KvCachePreflightModal';
-import { isKvCacheEnabledForEngine, loadKvCacheConfig } from '../services/llm/kvCacheManager';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -130,8 +128,6 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
   const [uiError, setUiError] = useState<string | null>(null);
   const [showPromptPreview, setShowPromptPreview] = useState<boolean>(false);
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
-  const [showKvPreflight, setShowKvPreflight] = useState<boolean>(false);
-  const [kvPrivateEnabled, setKvPrivateEnabled] = useState<boolean>(() => isKvCacheEnabledForEngine('privateOllama'));
   const [savedBatchRuns, setSavedBatchRuns] = useState<Array<{ id: string; label: string; model: string; timestamp?: string; htmlUrl?: string }>>([]);
 
   const fetchStatus = async () => {
@@ -203,7 +199,6 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
 
   useEffect(() => {
     if (!isOpen) return;
-    setKvPrivateEnabled(isKvCacheEnabledForEngine('privateOllama'));
     fetchStatus();
     fetchOllamaModels();
     fetchSavedBatchRuns();
@@ -236,12 +231,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
       m.name.toLowerCase().split(':')[0] === modelTag.trim().toLowerCase().split(':')[0]
   );
 
-  const handleSchedule = async (kvDecision?: 'use_kv' | 'skip_kv') => {
-    if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
-      setShowKvPreflight(true);
-      return;
-    }
-
+  const handleSchedule = async () => {
     setUiError(null);
     setSubmitting(true);
     try {
@@ -251,18 +241,9 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
         localStorage.setItem('astro_ollama_endpoint', ollamaEndpoint.trim());
       } catch {}
 
-      const currentKvCfg = loadKvCacheConfig();
-      const effectiveKvCfg =
-        kvDecision === 'skip_kv'
-          ? { ...currentKvCfg, privateOllama: { ...currentKvCfg.privateOllama, enabled: false } }
-          : kvDecision === 'use_kv'
-            ? { ...currentKvCfg, privateOllama: { ...currentKvCfg.privateOllama, enabled: true } }
-            : currentKvCfg;
-
       const context = {
         ...buildContextForSelectedMonth(),
-        promptVersion: activePromptVer,
-        useKvCache: effectiveKvCfg.privateOllama.enabled
+        promptVersion: activePromptVer
       };
       const res = await fetch('/api/batch/schedule', {
         method: 'POST',
@@ -271,8 +252,7 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           context,
           modelTag: trimmedModel,
           delaySeconds,
-          ollamaEndpoint: ollamaEndpoint.trim() || 'http://localhost:11434/api/generate',
-          kvCacheConfig: effectiveKvCfg
+          ollamaEndpoint: ollamaEndpoint.trim() || 'http://localhost:11434/api/generate'
         })
       });
 
@@ -348,15 +328,6 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
                 <h3 className="text-sm sm:text-base font-extrabold text-white">
                   Offline Local 14B Batch Scheduler (Single Month)
                 </h3>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
-                    kvPrivateEnabled
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                  }`}
-                >
-                  {kvPrivateEnabled ? 'KV Cache: ON (D1+D9+Rules Split)' : 'KV Cache: OFF (Preflight Ready)'}
-                </span>
               </div>
               <p className="text-[11px] text-slate-400">
                 Runs {activePromptVer.toUpperCase()} Unified Prompt (1-Month Prediction + Manifestation Events) inside npm prompt
@@ -776,29 +747,6 @@ export const LocalBatchSchedulerModal: React.FC<LocalBatchSchedulerModalProps> =
           </div>
         </div>
       </div>
-
-      <KvCachePreflightModal
-        isOpen={showKvPreflight}
-        engineSlot="privateOllama"
-        context={showKvPreflight ? buildContextForSelectedMonth() : null}
-        actionLabel="Start Local 14B Batch"
-        onCancel={() => setShowKvPreflight(false)}
-        onGoToSettings={() => {
-          setShowKvPreflight(false);
-          onClose();
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('astro-navigate-settings', { detail: { focusSlot: 'privateOllama' } }));
-          }
-        }}
-        onProceedWithKvCache={() => {
-          setShowKvPreflight(false);
-          void handleSchedule('use_kv');
-        }}
-        onProceedWithoutKvCache={() => {
-          setShowKvPreflight(false);
-          void handleSchedule('skip_kv');
-        }}
-      />
     </div>
   );
 };

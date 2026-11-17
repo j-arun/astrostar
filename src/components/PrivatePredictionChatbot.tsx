@@ -49,15 +49,6 @@ import {
 } from '../services/llm/adapters';
 import { ADChamberDynamics } from '../services/dashaChamberEngine';
 import type { VedicWindowAnalysis } from '../services/vedicEventsEngine';
-import { KvCachePreflightModal } from './KvCachePreflightModal';
-import {
-  isKvCacheEnabledForEngine,
-  loadKvCacheConfig,
-  buildKvCacheSystemPrefix
-} from '../services/llm/kvCacheManager';
-import { VedicHouseContext } from '../services/llm/types';
-import storedPersonsData from '../data/stored_persons.json';
-import { sampleNatalPlacements } from '../data/horoscopeData';
 
 export interface ChatMessage {
   id: string;
@@ -323,7 +314,6 @@ export const PrivatePredictionChatbot: React.FC<PrivatePredictionChatbotProps> =
     availableModels: [],
     checking: false
   });
-  const [pendingKvQuery, setPendingKvQuery] = useState<string | null>(null);
   const [monthBatchList, setMonthBatchList] = useState<CachedPredictionSummary[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string>('__none__');
   const [loadedBatchEntry, setLoadedBatchEntry] = useState<CachedPredictionEntry | null>(null);
@@ -579,15 +569,9 @@ Ask me specific questions comparing personal situations, like:
   };
 
   // Submit User Message to Local Ollama (via CORS-free proxy or direct) with deterministic fallback
-  const handleSendMessage = async (textToSend?: string, kvDecision?: 'use_kv' | 'skip_kv') => {
+  const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || userInput).trim();
     if (!query || isGenerating) return;
-
-    // Pre-flight KV cache check when local Ollama is available or targeted
-    if (!kvDecision && !isKvCacheEnabledForEngine('privateOllama')) {
-      setPendingKvQuery(query);
-      return;
-    }
 
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
@@ -608,9 +592,6 @@ Ask me specific questions comparing personal situations, like:
     const canTryOllama = ollamaStatus.isOnline || (await pingOllamaHealth(ollamaEndpoint)).isOnline;
     if (canTryOllama) {
       try {
-        const kvCfg = loadKvCacheConfig();
-        const useKvSplit = kvDecision === 'use_kv' || (kvDecision !== 'skip_kv' && Boolean(kvCfg.privateOllama.enabled));
-
         const languageDirective =
           responseLanguage === 'ta'
             ? `LANGUAGE RULE: Respond in clear, respectful Tamil (தமிழ்) script with clean technical clarity.`
@@ -643,59 +624,7 @@ Ask me specific questions comparing personal situations, like:
           .join('\n\n')
           .slice(0, 7600);
 
-        const storedPerson = (storedPersonsData as any)[personId] || (storedPersonsData as any)['001ME'];
-        const storedPlacements: any[] = storedPerson?.placements || sampleNatalPlacements;
-        const resolvedD1 =
-          flattenedD1 && flattenedD1.length > 0
-            ? flattenedD1
-            : storedPlacements.filter((p: any) => !p.chart_type || p.chart_type === 'D1');
-        const resolvedD9 =
-          flattenedD9 && flattenedD9.length > 0
-            ? flattenedD9
-            : storedPlacements.filter((p: any) => p.chart_type === 'D9');
-
-        const kvContextForChat: VedicHouseContext = {
-          matchedRules: [],
-          natalOccupants: [],
-          transitOccupants: [],
-          natalLagnaSignName: screenContextSnapshot.natalLagna,
-          natalMoonSignName: screenContextSnapshot.natalMoon,
-          activeDasha: activeDashaHierarchy,
-          selectedMonth,
-          selectedYear,
-          flattenedNatalD1: resolvedD1.map((p: any) => ({
-            body_name: p.body_name,
-            rashi_name: p.rashi_name,
-            degree_sputa: p.degree_sputa,
-            nakshatra_name: p.nakshatra_name,
-            pada: p.pada,
-            house_number: p.house_number,
-            is_retrograde: p.is_retrograde
-          })),
-          flattenedNatalD9: resolvedD9.map((p: any) => ({
-            body_name: p.body_name,
-            rashi_name: p.rashi_name,
-            degree_sputa: p.degree_sputa,
-            house_number: p.house_number,
-            is_retrograde: p.is_retrograde
-          })),
-          natalJanmaStar: {
-            nakshatra_name: storedPerson?.profile?.birth_star || 'Anuradha',
-            pada: storedPerson?.profile?.birth_star_pada || 2,
-            rashi_name: screenContextSnapshot.natalMoon,
-            rashi_index: natalRashiIdx
-          }
-        };
-
-        const staticKvSystem = [
-          `Native: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})`,
-          buildKvCacheSystemPrefix(kvContextForChat, 'v3', kvCfg.overrides, 'qa_chat').systemPrompt,
-          languageDirective
-        ]
-          .filter(Boolean)
-          .join('\n\n');
-
-        const legacyUnifiedPrompt = `You are a classical Parashara Vedic Astrological Prediction Analyst running privately on the user's local machine.
+        const unifiedPrompt = `You are a classical Parashara Vedic Astrological Prediction Analyst running privately on the user's local machine.
 Native: ${screenContextSnapshot.personName} (Age: ${screenContextSnapshot.nativeAge})
 Natal Lagna: ${screenContextSnapshot.natalLagna} | Natal Moon: ${screenContextSnapshot.natalMoon}
 
@@ -709,12 +638,12 @@ INSTRUCTIONS:
         const data = await callLocalOllamaGenerate({
           endpoint: ollamaEndpoint,
           model: localModelName,
-          ...(useKvSplit ? { system: staticKvSystem, prompt: dynamicSnapshotOnly } : { prompt: legacyUnifiedPrompt }),
-          keep_alive: useKvSplit ? (kvCfg.privateOllama.keepAlive || '30m') : '5m',
+          prompt: unifiedPrompt,
+          keep_alive: '5m',
           options: {
             temperature: 0.3,
             num_predict: 2000,
-            num_ctx: useKvSplit ? Math.min(numCtx, 8192) : numCtx
+            num_ctx: numCtx
           }
         });
 
@@ -722,7 +651,6 @@ INSTRUCTIONS:
         if (responseText) {
           const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
           const tokInfo = data.eval_count ? ` • ${data.eval_count} tok` : '';
-          const kvTag = useKvSplit ? ' • KV' : '';
           const langTag = responseLanguage === 'ta' ? 'TA' : 'EN';
           const displayModel = formatLocalModelDisplayName(data.model || localModelName);
           if (!ollamaStatus.isOnline) {
@@ -735,7 +663,7 @@ INSTRUCTIONS:
               sender: 'assistant',
               text: responseText,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              modelUsed: `${displayModel} [${langTag}${kvTag}] • ${elapsedSec}s${tokInfo}`
+              modelUsed: `${displayModel} [${langTag}] • ${elapsedSec}s${tokInfo}`
             }
           ]);
           setIsGenerating(false);
@@ -1564,22 +1492,6 @@ INSTRUCTIONS:
         </div>
       )}
 
-      <KvCachePreflightModal
-        isOpen={Boolean(pendingKvQuery)}
-        engineSlot="privateOllama"
-        actionLabel="Send Local Q&A"
-        onCancel={() => setPendingKvQuery(null)}
-        onProceedWithKvCache={() => {
-          const q = pendingKvQuery;
-          setPendingKvQuery(null);
-          if (q) void handleSendMessage(q, 'use_kv');
-        }}
-        onProceedWithoutKvCache={() => {
-          const q = pendingKvQuery;
-          setPendingKvQuery(null);
-          if (q) void handleSendMessage(q, 'skip_kv');
-        }}
-      />
     </div>
   );
 };

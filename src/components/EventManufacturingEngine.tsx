@@ -68,13 +68,6 @@ import {
   ActiveTransitGrahaDetail,
   NakshatraGateInfo
 } from '../services/eventManufacturingBuilder';
-import { KvCachePreflightModal } from './KvCachePreflightModal';
-import {
-  KvCacheEngineSlot,
-  mapProviderToKvSlot,
-  isKvCacheEnabledForEngine,
-  loadKvCacheConfig
-} from '../services/llm/kvCacheManager';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -716,19 +709,8 @@ Return ONLY a valid JSON object matching this schema:
     }
   };
 
-  const [pendingKvSlot, setPendingKvSlot] = useState<KvCacheEngineSlot | null>(null);
-
   // Generic LLM Synthesis Execution supporting Gemini, Claude, and Ollama
-  const handleSynthesizeEvents = async (kvDecision?: 'use_kv' | 'skip_kv') => {
-    const slot = mapProviderToKvSlot(selectedProvider);
-    if (!kvDecision && !isKvCacheEnabledForEngine(slot)) {
-      setPendingKvSlot(slot);
-      return;
-    }
-
-    const kvCfg = loadKvCacheConfig();
-    const useKv = kvDecision === 'use_kv' || (kvDecision !== 'skip_kv' && Boolean(kvCfg[slot]?.enabled));
-
+  const handleSynthesizeEvents = async () => {
     setIsSynthesizing(true);
     setSynthesisError(null);
     setSynthesisSeconds(0);
@@ -742,12 +724,6 @@ Return ONLY a valid JSON object matching this schema:
       let endpoint = '/api/llm/gemini';
       let payloadBody: any = { prompt: promptPayload };
 
-      const markerIdx = promptPayload.indexOf('[CRITICAL PARASHARA REASONING LAWS');
-      const dynamicPart = markerIdx > 0 ? promptPayload.slice(0, markerIdx).trim() : promptPayload;
-      const staticPart = markerIdx > 0
-        ? `${kvCfg.overrides?.d1Chart?.trim() ? `${kvCfg.overrides.d1Chart.trim()}\n\n` : ''}${promptPayload.slice(markerIdx).trim()}`
-        : '';
-
       if (selectedProvider === 'local_qwen') {
         // 1. LOCAL QWEN (Ollama port 11434 on local machine)
         const localModel = (typeof window !== 'undefined' ? localStorage.getItem('astro_ollama_model') : '') || 'hf.co/gnanasreekar/vedic-qwen2.5-14b-GGUF:Q4_K_M';
@@ -755,10 +731,10 @@ Return ONLY a valid JSON object matching this schema:
 
         const reqBody = {
           model: localModel,
-          ...(useKv && staticPart ? { system: staticPart, prompt: dynamicPart } : { prompt: promptPayload }),
+          prompt: promptPayload,
           stream: false,
           format: 'json',
-          keep_alive: useKv ? (kvCfg.privateOllama.keepAlive || '30m') : '5m',
+          keep_alive: '5m',
           options: {
             temperature: 0.3,
             num_predict: 2500,
@@ -820,8 +796,7 @@ Return ONLY a valid JSON object matching this schema:
           : ((typeof window !== 'undefined' ? localStorage.getItem('astro_anthropic_model') : '') || 'claude-sonnet-5-5');
 
         payloadBody = {
-          prompt: useKv && staticPart ? dynamicPart : promptPayload,
-          ...(useKv && staticPart ? { system: staticPart, usePromptCache: true } : {}),
+          prompt: promptPayload,
           model: activeClaudeModel,
           apiKey: activeClaudeKey || undefined,
           thinkingMode: selectedProvider === 'claude_fable' ? 'auto' : undefined
@@ -865,8 +840,7 @@ Return ONLY a valid JSON object matching this schema:
         const modelToUse = getPreferredGeminiModel();
 
         payloadBody = {
-          prompt: useKv && staticPart ? dynamicPart : promptPayload,
-          ...(useKv && staticPart ? { systemInstruction: staticPart } : {}),
+          prompt: promptPayload,
           model: modelToUse,
           apiKey: activeGeminiKey || undefined
         };
@@ -1884,21 +1858,6 @@ Return ONLY a valid JSON object matching this schema:
           </div>
         </div>
       )}
-
-      <KvCachePreflightModal
-        isOpen={Boolean(pendingKvSlot)}
-        engineSlot={pendingKvSlot || 'geminiPro'}
-        actionLabel="Manufacture Events"
-        onCancel={() => setPendingKvSlot(null)}
-        onProceedWithKvCache={() => {
-          setPendingKvSlot(null);
-          void handleSynthesizeEvents('use_kv');
-        }}
-        onProceedWithoutKvCache={() => {
-          setPendingKvSlot(null);
-          void handleSynthesizeEvents('skip_kv');
-        }}
-      />
     </div>
   );
 };

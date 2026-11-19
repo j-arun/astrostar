@@ -402,6 +402,54 @@ When requesting `format=llm_markdown` (or `markdown=true`), the REST API automat
 ## 📄 License
 Vedic astrology calculation, database ingestion, and REST API engine developed for Tamil Jadhagam processing. Open source under the MIT License.
 
+---
+
+## 🌐 Original Source Monthly Prompt REST API (`GET /api/content`)
+
+Serves the deterministic **Original Source (Original Heartbeat)** monthly prompt over HTTP (with CORS enabled) for consumption by external apps or local LLM workflows.
+
+- **Endpoint:** `GET /api/content` (aliases: `/api/original-source`, `/api/original-source/content`)
+- **Default dev host:** `http://localhost:3000` (if starting on a custom port in Chrome/Edge, avoid blocked port `6000` — use e.g. `npx vite --port 6001 --host 0.0.0.0`)
+
+### Supported Query Parameters
+
+| Parameter | Values | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `date` | `"May 2026"`, `"may-2026"`, `"4/2026"`, `"04/2026"`, `"2026-04"`, `"202605"`, `"2026-05-15"`, `"15-05-2026"`, `"Nov 2026"` | Current month | Target month & year (or use `?month=5&year=2026` / `?month=May&year=2026`). |
+| `variant` | `baseline` \| `compact` \| `both` | `baseline` | `baseline` (14B Private full format), `compact` (compressed token-efficient format), or `both`. |
+| `part` | `full` \| `month` \| `static` | `full` | `full` (`R0–R6` + `S1–S6` + `C1–C9`), `month` (`C1–C9` monthly slice only), or `static` (`S1–S6` natal/rules block only). |
+| `format` | `json` \| `text` | `json` | `json` (metadata + prompt strings) or `text` (raw `text/plain` prompt body). |
+| `personId` | Stored profile ID | `001ME` | Optional profile override from `stored_persons.json`. |
+
+### All 4 Invocation Options
+
+#### Option 1: Default Full Baseline (`14B Private` JSON)
+Returns the validated full baseline prompt with metadata and token count.
+```bash
+curl "http://localhost:3000/api/content?date=May+2026"
+```
+
+#### Option 2: Compact Variant (`Compact` JSON for Testing 14B / Cloud LLMs)
+Returns the token-reduced compact variant (`~25%` fewer tokens while retaining all chart/transit/moon/AD chamber facts). Accepts numeric `M/YYYY` or ISO dates too:
+```bash
+curl "http://localhost:3000/api/content?date=4/2026&variant=compact"
+```
+
+#### Option 3: Raw Plain Text (`format=text` for Direct App Bar / Pipe Injection)
+Returns `text/plain; charset=utf-8` directly with zero JSON wrapping—ready to inject into another app's prompt box or copy to clipboard:
+```bash
+curl "http://localhost:3000/api/content?date=Nov+2026&variant=compact&format=text"
+```
+*Note: You can also request only the monthly slice (`&part=month`) or static natal block (`&part=static`).*
+
+#### Option 4: Both Variants Side-by-Side (`variant=both`)
+Returns both `baseline` and `compact` payloads in a single JSON response along with calculated `tokenSavings`:
+```bash
+curl "http://localhost:3000/api/content?date=2026-11&variant=both"
+```
+
+---
+
 ## GEMINI Setup
 to run the gemini , you have create the .env file with the below content and get the api key from gemini ai studio
 
@@ -410,5 +458,6 @@ arun@Aruns-MacBook-Pro astrostar % vi .env
 arun@Aruns-MacBook-Pro astrostar % cat .env
 GEMINI_API_KEY=""
 arun@Aruns-MacBook-Pro astrostar %
+
 
 

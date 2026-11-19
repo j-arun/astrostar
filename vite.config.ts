@@ -2981,11 +2981,165 @@ function localBatchPlugin(env: Record<string, string>): Plugin {
   };
 }
 
+function originalSourceApiPlugin(): Plugin {
+  return {
+    name: 'original-source-api-plugin',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const rawUrl = req.url || '';
+        const urlObj = new URL(rawUrl, 'http://localhost');
+        const pathname = urlObj.pathname.replace(/\/+$/, '');
+
+        const isContentRoute =
+          pathname === '/api/content' ||
+          pathname === '/api/original-source' ||
+          pathname === '/api/original-source/content';
+
+        if (!isContentRoute) {
+          next();
+          return;
+        }
+
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, error: 'Method not allowed. Use GET.' }));
+          return;
+        }
+
+        try {
+          const mod = await server.ssrLoadModule('/src/services/originalSourceContextBuilder.ts');
+
+          const dateParam = urlObj.searchParams.get('date') ?? urlObj.searchParams.get('d');
+          const monthParam = urlObj.searchParams.get('month');
+          const yearParam = urlObj.searchParams.get('year');
+          const parsed = mod.parseMonthYearQuery(dateParam, monthParam, yearParam);
+
+          if (!parsed.ok) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({ success: false, error: parsed.error }));
+            return;
+          }
+
+          const rawVariant = (urlObj.searchParams.get('variant') || 'baseline').trim().toLowerCase();
+          if (rawVariant !== 'baseline' && rawVariant !== 'compact' && rawVariant !== 'both') {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({
+              success: false,
+              error: `Invalid variant "${rawVariant}". Expected "baseline", "compact", or "both".`
+            }));
+            return;
+          }
+
+          const rawPart = (urlObj.searchParams.get('part') || 'full').trim().toLowerCase();
+          if (rawPart !== 'full' && rawPart !== 'month' && rawPart !== 'static') {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({
+              success: false,
+              error: `Invalid part "${rawPart}". Expected "full", "month", or "static".`
+            }));
+            return;
+          }
+
+          const rawFormat = (urlObj.searchParams.get('format') || 'json').trim().toLowerCase();
+          if (rawFormat !== 'json' && rawFormat !== 'text') {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({
+              success: false,
+              error: `Invalid format "${rawFormat}". Expected "json" or "text".`
+            }));
+            return;
+          }
+
+          let chartSource: any = undefined;
+          const personIdParam = (urlObj.searchParams.get('personId') || '').trim();
+          if (personIdParam) {
+            const dataPath = path.resolve(__dirname, 'src/data/stored_persons.json');
+            let matchedPerson: any = null;
+            if (fs.existsSync(dataPath)) {
+              try {
+                const db = JSON.parse(fs.readFileSync(dataPath, 'utf-8') || '{}');
+                matchedPerson = db[personIdParam] || null;
+              } catch {}
+            }
+            if (matchedPerson) {
+              chartSource = {
+                person: matchedPerson.profile,
+                placements: matchedPerson.placements,
+                dashaRecords: matchedPerson.dashaRecords
+              };
+            } else if (personIdParam !== '001ME') {
+              res.statusCode = 404;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ success: false, error: `Person "${personIdParam}" not found.` }));
+              return;
+            }
+          }
+
+          const payload = mod.generateOriginalSourceApiPayload({
+            year: parsed.year,
+            monthIndex: parsed.monthIndex,
+            variant: rawVariant,
+            part: rawPart,
+            chartSource
+          });
+
+          if (!payload.validated) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({
+              success: false,
+              error: 'Generated Original Source prompt failed integrity validation.',
+              validationErrors: payload.validationErrors
+            }));
+            return;
+          }
+
+          if (rawFormat === 'text') {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            const textBody = payload.variant === 'both'
+              ? `=== BASELINE (14B) ===\n${payload.baseline.content}\n=== COMPACT ===\n${payload.compact.content}`
+              : payload.content;
+            res.end(textBody);
+            return;
+          }
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify(payload));
+        } catch (err: any) {
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({
+            success: false,
+            error: err?.message || 'Failed to build Original Source content.'
+          }));
+        }
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin(), localBatchPlugin(env)],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(env), claudeApiPlugin(env), astroApiPlugin(), docsServerPlugin(), localBatchPlugin(env), originalSourceApiPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -69,6 +69,7 @@ async function main() {
     const eventsMod = await server.ssrLoadModule('/src/services/vedicEventsEngine.ts');
     const builderMod = await server.ssrLoadModule('/src/services/eventManufacturingBuilder.ts');
     const promptMod = await server.ssrLoadModule('/src/services/llm/originalSourcePrompt.ts');
+    const contextBuilderMod = await server.ssrLoadModule('/src/services/originalSourceContextBuilder.ts');
 
     const { samplePersonMaster, sampleNatalPlacements } = horoscopeMod;
     const { getGrahaTransitPosition, calculateMonthlyMoonSpans, RASHI_LIST_META } = ephemerisMod;
@@ -77,6 +78,7 @@ async function main() {
     const { analyzeVedicWindowEvents } = eventsMod;
     const { buildEventManufacturingSnapshot } = builderMod;
     const { buildOriginalSourcePrompt, validateOriginalSourcePrompt } = promptMod;
+    const { parseMonthYearQuery, generateOriginalSourceApiPayload } = contextBuilderMod;
 
     const natalLagnaIdx = resolveSignIdx(samplePersonMaster.birth_lagna, 9);
     const natalRashiIdx = resolveSignIdx(samplePersonMaster.birth_rashi, 8);
@@ -367,13 +369,72 @@ async function main() {
       );
     }
 
+    // 4. REST API query parser checks across accepted date/month-year formats
+    const dateCases: Array<{
+      args: [string | null, string | null, string | null];
+      expectOk: boolean;
+      year?: number;
+      monthIndex?: number;
+      desc: string;
+    }> = [
+      { args: ['May 2026', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: 'May 2026' },
+      { args: ['may-2026', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: 'may-2026' },
+      { args: ['4/2026', null, null], expectOk: true, year: 2026, monthIndex: 3, desc: '4/2026' },
+      { args: ['04/2026', null, null], expectOk: true, year: 2026, monthIndex: 3, desc: '04/2026' },
+      { args: ['2026-04', null, null], expectOk: true, year: 2026, monthIndex: 3, desc: '2026-04' },
+      { args: ['202605', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: '202605' },
+      { args: ['2026-05-15', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: '2026-05-15' },
+      { args: ['15-05-2026', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: '15-05-2026' },
+      { args: ['05/15/2026', null, null], expectOk: true, year: 2026, monthIndex: 4, desc: '05/15/2026' },
+      { args: ['Nov 2026', null, null], expectOk: true, year: 2026, monthIndex: 10, desc: 'Nov 2026' },
+      { args: ['2026 November', null, null], expectOk: true, year: 2026, monthIndex: 10, desc: '2026 November' },
+      { args: [null, '5', '2026'], expectOk: true, year: 2026, monthIndex: 4, desc: 'month=5&year=2026' },
+      { args: [null, 'May', '2026'], expectOk: true, year: 2026, monthIndex: 4, desc: 'month=May&year=2026' },
+      { args: [null, null, null], expectOk: true, desc: 'empty defaults to current month' },
+      { args: ['not-a-date', null, null], expectOk: false, desc: 'invalid date rejected' }
+    ];
+
+    for (const tc of dateCases) {
+      const parsed = parseMonthYearQuery(...tc.args);
+      if (parsed.ok !== tc.expectOk) {
+        allFailures.push(`[API date parser] "${tc.desc}" expected ok=${tc.expectOk}, got ${parsed.ok}`);
+      } else if (tc.expectOk && parsed.ok && tc.year !== undefined && tc.monthIndex !== undefined) {
+        if (parsed.year !== tc.year || parsed.monthIndex !== tc.monthIndex) {
+          allFailures.push(`[API date parser] "${tc.desc}" expected ${tc.year}-${tc.monthIndex}, got ${parsed.year}-${parsed.monthIndex}`);
+        }
+      }
+    }
+
+    // 5. REST API payload builder checks (baseline, compact, both, month, static)
+    const apiBase = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'baseline', part: 'full' });
+    const apiCompact = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'full' });
+    const apiMonth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'month' });
+    const apiStatic = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'static' });
+    const apiBoth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'both', part: 'full' });
+
+    if (!apiBase.validated || apiBase.monthLabel !== 'May 2026') {
+      allFailures.push('[API payload] baseline May 2026 failed validation or monthLabel check');
+    }
+    if (!apiCompact.validated || apiCompact.content !== apiCompact.fullPrompt) {
+      allFailures.push('[API payload] compact May 2026 full part mismatch');
+    }
+    if (apiMonth.content !== apiCompact.monthSlice || !apiMonth.content.startsWith('[PERIOD]')) {
+      allFailures.push('[API payload] compact May 2026 month slice mismatch');
+    }
+    if (apiStatic.content !== apiCompact.staticBlock || !apiStatic.content.startsWith('[RULES]')) {
+      allFailures.push('[API payload] compact May 2026 static slice mismatch');
+    }
+    if (!apiBoth.validated || !apiBoth.baseline?.validated || !apiBoth.compact?.validated || apiBoth.tokenSavings <= 0) {
+      allFailures.push('[API payload] variant=both May 2026 failed validation or tokenSavings check');
+    }
+
     if (allFailures.length > 0) {
       console.error(`\nOriginal Source Prompt Regression FAILED with ${allFailures.length} mismatch(es):`);
       allFailures.forEach((f, idx) => console.error(`  ${idx + 1}. ${f}`));
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS (${TEST_MONTHS.length * 2} CHECKS) PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + API PARSER/PAYLOAD CHECKS PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
   } finally {
     await server.close();
   }

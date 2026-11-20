@@ -51,7 +51,7 @@ VALUES
 ('001ME', 'D9', 'Sun (Surya)', 'Mesham (Aries)', 9, NULL, NULL, NULL, FALSE),
 ('001ME', 'D9', 'Venus (Sukra)', 'Rishabam (Taurus)', 10, NULL, NULL, NULL, FALSE),
 ('001ME', 'D9', 'Mandi (Gulika)', 'Rishabam (Taurus)', 10, NULL, NULL, NULL, FALSE),
-('001ME', 'D9', 'Rahu', 'Mithunam (Gemini)', 11, NULL, NULL, NULL, FALSE),
+('001ME', 'D9', 'Rahu', 'Rishabam (Taurus)', 10, NULL, NULL, NULL, FALSE),
 ('001ME', 'D9', 'Mars (Sevvai)', 'Katakam (Cancer)', 12, NULL, NULL, NULL, FALSE)
 ON CONFLICT (person_id, chart_type, body_name) DO UPDATE SET
     house_number = EXCLUDED.house_number,

@@ -4,13 +4,27 @@ import { getVimshottariDashaForDate } from '../data/dashaCalculator';
 import { computeSarvashtakavarga } from '../data/parasharaCalculations';
 import { analyzeVedicWindowEvents } from './vedicEventsEngine';
 import { buildEventManufacturingSnapshot } from './eventManufacturingBuilder';
-import { VedicHouseContext } from './llm/types';
+import {
+  DOMAIN_PROMPT_SPECS,
+  apply001MEEnrichments
+} from '../data/vargaAndStrengthData';
+import { OriginalSourceDomain, VedicHouseContext } from './llm/types';
 import {
   buildOriginalSourcePrompt,
   validateOriginalSourcePrompt,
   OriginalSourcePromptResult,
   OriginalSourceVariant
 } from './llm/originalSourcePrompt';
+
+export function resolveOriginalSourceDomain(input?: string | null): OriginalSourceDomain | null {
+  const raw = (input || '').trim().toLowerCase();
+  if (!raw || raw === 'master' || raw === 'all' || raw === 'base') return 'master';
+  if (raw === 'career' || raw === 'work' || raw === 'job' || raw === 'profession') return 'career';
+  if (raw === 'finance' || raw === 'wealth' || raw === 'money' || raw === 'financial') return 'finance';
+  if (raw === 'love' || raw === 'romance' || raw === 'relationship' || raw === 'marriage' || raw === 'relationships') return 'love';
+  if (raw === 'family' || raw === 'home' || raw === 'parents' || raw === 'lineage') return 'family';
+  return null;
+}
 
 const MONTH_ALIASES: Record<string, number> = {
   jan: 0, january: 0,
@@ -236,7 +250,8 @@ export interface ChartSourceOverride {
 export function buildMonthlyVedicContext(
   year: number,
   monthIndex: number,
-  chartSource?: ChartSourceOverride
+  chartSource?: ChartSourceOverride,
+  domain: OriginalSourceDomain = 'master'
 ): VedicHouseContext {
   const person = chartSource?.person || samplePersonMaster;
   const placements = (chartSource?.placements && chartSource.placements.length > 0)
@@ -400,7 +415,9 @@ export function buildMonthlyVedicContext(
     vedicSpecialEvents
   });
 
-  return {
+  const baseContext: VedicHouseContext = {
+    personId: person.person_id || '001ME',
+    originalSourceDomain: domain,
     isComprehensiveMonthly: true,
     activeDomainFilter: 'all',
     isEventActive: false,
@@ -446,18 +463,23 @@ export function buildMonthlyVedicContext(
     ashtakavargaPayload: {
       targetHousePoints: 0,
       targetHouseStrength: 'All-House Distribution',
+      savTotalSum: savResult.savTotalSum,
+      bavByPlanet: savResult.bavByPlanet,
       savPointsDistribution: savResult.allHousesOverview
     },
     eventManufacturingSuperset
   };
+
+  return apply001MEEnrichments(baseContext, natalLagnaIdx, natalRashiIdx);
 }
 
-export type PromptPart = 'full' | 'month' | 'static';
+export type PromptPart = 'full' | 'month' | 'static' | 'subprompt';
 export type ApiVariantParam = OriginalSourceVariant | 'both';
 
 function selectPartText(res: OriginalSourcePromptResult, part: PromptPart): string {
   if (part === 'month') return res.monthSlice;
   if (part === 'static') return res.staticBlock;
+  if (part === 'subprompt') return res.subPromptBlock || '';
   return res.fullPrompt;
 }
 
@@ -466,20 +488,24 @@ export function generateOriginalSourceApiPayload(options: {
   monthIndex: number;
   variant?: ApiVariantParam;
   part?: PromptPart;
+  domain?: OriginalSourceDomain;
   chartSource?: ChartSourceOverride;
 }) {
-  const { year, monthIndex, variant = 'baseline', part = 'full', chartSource } = options;
-  const context = buildMonthlyVedicContext(year, monthIndex, chartSource);
+  const { year, monthIndex, variant = 'compact', part = 'full', domain = 'master', chartSource } = options;
+  const context = buildMonthlyVedicContext(year, monthIndex, chartSource, domain);
+  const vargaChartsAttached = DOMAIN_PROMPT_SPECS[domain].vargaCharts;
 
   if (variant === 'both') {
-    const baseRes = buildOriginalSourcePrompt(context, 'baseline');
-    const compRes = buildOriginalSourcePrompt(context, 'compact');
-    const baseVal = validateOriginalSourcePrompt(baseRes, context, 'baseline');
-    const compVal = validateOriginalSourcePrompt(compRes, context, 'compact');
+    const baseRes = buildOriginalSourcePrompt(context, 'baseline', domain);
+    const compRes = buildOriginalSourcePrompt(context, 'compact', domain);
+    const baseVal = validateOriginalSourcePrompt(baseRes, context, 'baseline', domain);
+    const compVal = validateOriginalSourcePrompt(compRes, context, 'compact', domain);
     return {
       success: baseVal.valid && compVal.valid,
       variant: 'both' as const,
       part,
+      domain,
+      vargaChartsAttached,
       monthLabel: baseRes.meta.monthLabel,
       year,
       month: monthIndex + 1,
@@ -491,6 +517,7 @@ export function generateOriginalSourceApiPayload(options: {
         content: selectPartText(baseRes, part),
         staticBlock: baseRes.staticBlock,
         monthSlice: baseRes.monthSlice,
+        subPromptBlock: baseRes.subPromptBlock,
         fullPrompt: baseRes.fullPrompt,
         meta: baseRes.meta,
         validated: baseVal.valid
@@ -499,6 +526,7 @@ export function generateOriginalSourceApiPayload(options: {
         content: selectPartText(compRes, part),
         staticBlock: compRes.staticBlock,
         monthSlice: compRes.monthSlice,
+        subPromptBlock: compRes.subPromptBlock,
         fullPrompt: compRes.fullPrompt,
         meta: compRes.meta,
         validated: compVal.valid
@@ -506,12 +534,14 @@ export function generateOriginalSourceApiPayload(options: {
     };
   }
 
-  const singleRes = buildOriginalSourcePrompt(context, variant);
-  const singleVal = validateOriginalSourcePrompt(singleRes, context, variant);
+  const singleRes = buildOriginalSourcePrompt(context, variant, domain);
+  const singleVal = validateOriginalSourcePrompt(singleRes, context, variant, domain);
   return {
     success: singleVal.valid,
     variant,
     part,
+    domain,
+    vargaChartsAttached,
     monthLabel: singleRes.meta.monthLabel,
     year,
     month: monthIndex + 1,
@@ -521,6 +551,7 @@ export function generateOriginalSourceApiPayload(options: {
     content: selectPartText(singleRes, part),
     staticBlock: singleRes.staticBlock,
     monthSlice: singleRes.monthSlice,
+    subPromptBlock: singleRes.subPromptBlock,
     fullPrompt: singleRes.fullPrompt,
     meta: singleRes.meta
   };

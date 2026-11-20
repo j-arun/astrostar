@@ -1,0 +1,200 @@
+{
+  "planets": {
+    "Mars": {
+      "ratio": 1.31,
+      "total_shadbala": 392.38,
+      "required_shadbala": 300,
+      "percent": 130.8,
+      "status": "Strong",
+      "shadbala": {
+        "sthana_bala": 123.46,
+        "dig_bala": 21.69,
+        "kaala_bala": 194.66,
+        "cheshta_bala": 46.30,
+        "naisargika_bala": 17.14,
+        "drik_bala": -10.87
+      },
+      "other_balas": {
+        "harsha_bala": 10.00,
+        "pancha_vargeeya": 4.35,
+        "dwadhasa_vargeeya": 6.00,
+        "ishta_phala": 32.07,
+        "kashta_phala": 22.75
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "Vyanjanaamsa", "charts": ["D3", "D12", "D30"], "vimsopaka_bala": 10.3, "vaiseshikamsa_bala": 3 },
+        "saptavarga": { "amsa": "Vyanjanaamsa", "charts": ["D3", "D12", "D30"], "vimsopaka_bala": 11.5, "vaiseshikamsa_bala": 3 },
+        "dashavarga": { "amsa": "Gopuraamsa", "charts": ["D3", "D12", "D30", "D60"], "vimsopaka_bala": 13.4, "vaiseshikamsa_bala": 4 },
+        "shodashavarga": { "amsa": "Keralaamsa", "charts": ["D3", "D4", "D12", "D30", "D45", "D60"], "vimsopaka_bala": 12.7, "vaiseshikamsa_bala": 6 }
+      }
+    },
+    "Venus": {
+      "ratio": 1.20,
+      "total_shadbala": 394.55,
+      "required_shadbala": 330,
+      "percent": 119.6,
+      "status": "Strong",
+      "shadbala": {
+        "sthana_bala": 188.05,
+        "dig_bala": 26.62,
+        "kaala_bala": 119.24,
+        "cheshta_bala": 22.37,
+        "naisargika_bala": 42.86,
+        "drik_bala": -4.59
+      },
+      "other_balas": {
+        "harsha_bala": 10.00,
+        "pancha_vargeeya": 8.17,
+        "dwadhasa_vargeeya": 10.00,
+        "ishta_phala": 22.71,
+        "kashta_phala": 37.29
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "No Amsa", "charts": ["D9"], "vimsopaka_bala": 15.0, "vaiseshikamsa_bala": 1 },
+        "saptavarga": { "amsa": "No Amsa", "charts": ["D9"], "vimsopaka_bala": 13.2, "vaiseshikamsa_bala": 1 },
+        "dashavarga": { "amsa": "Paarijaataamsa", "charts": ["D9", "D16"], "vimsopaka_bala": 13.5, "vaiseshikamsa_bala": 2 },
+        "shodashavarga": { "amsa": "Bhedakaamsa", "charts": ["D9", "D16"], "vimsopaka_bala": 15.0, "vaiseshikamsa_bala": 2 }
+      }
+    },
+    "Jupiter": {
+      "ratio": 1.17,
+      "total_shadbala": 456.93,
+      "required_shadbala": 390,
+      "percent": 117.2,
+      "status": "Strong",
+      "shadbala": {
+        "sthana_bala": 217.82,
+        "dig_bala": 27.19,
+        "kaala_bala": 173.38,
+        "cheshta_bala": 26.41,
+        "naisargika_bala": 34.29,
+        "drik_bala": -22.16
+      },
+      "other_balas": {
+        "harsha_bala": 10.00,
+        "pancha_vargeeya": 12.84,
+        "dwadhasa_vargeeya": 6.00,
+        "ishta_phala": 26.49,
+        "kashta_phala": 33.51
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "Kimsukaamsa", "charts": ["D1", "D12"], "vimsopaka_bala": 13.9, "vaiseshikamsa_bala": 2 },
+        "saptavarga": { "amsa": "Kimsukaamsa", "charts": ["D1", "D12"], "vimsopaka_bala": 14.5, "vaiseshikamsa_bala": 2 },
+        "dashavarga": { "amsa": "Uttamaamsa", "charts": ["D1", "D10", "D12"], "vimsopaka_bala": 13.4, "vaiseshikamsa_bala": 3 },
+        "shodashavarga": { "amsa": "Kandukaamsa", "charts": ["D1", "D4", "D10", "D12", "D20"], "vimsopaka_bala": 13.0, "vaiseshikamsa_bala": 5 }
+      }
+    },
+    "Moon": {
+      "ratio": 1.09,
+      "total_shadbala": 391.35,
+      "required_shadbala": 360,
+      "percent": 108.7,
+      "status": "Strong",
+      "shadbala": {
+        "sthana_bala": 155.22,
+        "dig_bala": 17.04,
+        "kaala_bala": 170.40,
+        "cheshta_bala": 0.00,
+        "naisargika_bala": 51.43,
+        "drik_bala": -2.74
+      },
+      "other_balas": {
+        "harsha_bala": 5.00,
+        "pancha_vargeeya": 0.75,
+        "dwadhasa_vargeeya": 5.00,
+        "ishta_phala": 5.61,
+        "kashta_phala": 47.53
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "No Amsa", "charts": ["D2"], "vimsopaka_bala": 11.6, "vaiseshikamsa_bala": 1 },
+        "saptavarga": { "amsa": "No Amsa", "charts": ["D2"], "vimsopaka_bala": 11.3, "vaiseshikamsa_bala": 1 },
+        "dashavarga": { "amsa": "No Amsa", "charts": ["D2"], "vimsopaka_bala": 11.3, "vaiseshikamsa_bala": 1 },
+        "shodashavarga": { "amsa": "Nagapurushaamsa", "charts": ["D2", "D27", "D40", "D45"], "vimsopaka_bala": 11.4, "vaiseshikamsa_bala": 4 }
+      }
+    },
+    "Saturn": {
+      "ratio": 1.03,
+      "total_shadbala": 309.57,
+      "required_shadbala": 300,
+      "percent": 103.2,
+      "status": "Strong",
+      "shadbala": {
+        "sthana_bala": 122.68,
+        "dig_bala": 53.59,
+        "kaala_bala": 79.71,
+        "cheshta_bala": 57.54,
+        "naisargika_bala": 8.57,
+        "drik_bala": -12.52
+      },
+      "other_balas": {
+        "harsha_bala": 10.00,
+        "pancha_vargeeya": 5.85,
+        "dwadhasa_vargeeya": 4.00,
+        "ishta_phala": 38.06,
+        "kashta_phala": 9.26
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "No Amsa", "charts": [], "vimsopaka_bala": 6.2, "vaiseshikamsa_bala": 0 },
+        "saptavarga": { "amsa": "No Amsa", "charts": ["D7"], "vimsopaka_bala": 7.9, "vaiseshikamsa_bala": 1 },
+        "dashavarga": { "amsa": "No Amsa", "charts": ["D7"], "vimsopaka_bala": 9.2, "vaiseshikamsa_bala": 1 },
+        "shodashavarga": { "amsa": "No Amsa", "charts": ["D7"], "vimsopaka_bala": 8.1, "vaiseshikamsa_bala": 1 }
+      }
+    },
+    "Mercury": {
+      "ratio": 0.96,
+      "total_shadbala": 402.60,
+      "required_shadbala": 420,
+      "percent": 95.9,
+      "status": "Weak",
+      "shadbala": {
+        "sthana_bala": 139.47,
+        "dig_bala": 53.65,
+        "kaala_bala": 154.69,
+        "cheshta_bala": 56.57,
+        "naisargika_bala": 25.71,
+        "drik_bala": -27.49
+      },
+      "other_balas": {
+        "harsha_bala": 10.00,
+        "pancha_vargeeya": 5.68,
+        "dwadhasa_vargeeya": 5.00,
+        "ishta_phala": 36.24,
+        "kashta_phala": 11.23
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "No Amsa", "charts": ["D30"], "vimsopaka_bala": 10.8, "vaiseshikamsa_bala": 1 },
+        "saptavarga": { "amsa": "No Amsa", "charts": ["D30"], "vimsopaka_bala": 11.6, "vaiseshikamsa_bala": 1 },
+        "dashavarga": { "amsa": "Paarijaataamsa", "charts": ["D16", "D30"], "vimsopaka_bala": 12.2, "vaiseshikamsa_bala": 2 },
+        "shodashavarga": { "amsa": "Bhedakaamsa", "charts": ["D16", "D30"], "vimsopaka_bala": 12.1, "vaiseshikamsa_bala": 2 }
+      }
+    },
+    "Sun": {
+      "ratio": 0.78,
+      "total_shadbala": 302.68,
+      "required_shadbala": 390,
+      "percent": 77.6,
+      "status": "Weak",
+      "shadbala": {
+        "sthana_bala": 129.92,
+        "dig_bala": 21.56,
+        "kaala_bala": 117.86,
+        "cheshta_bala": 0.00,
+        "naisargika_bala": 60.00,
+        "drik_bala": -26.66
+      },
+      "other_balas": {
+        "harsha_bala": 0.00,
+        "pancha_vargeeya": 8.17,
+        "dwadhasa_vargeeya": 6.00,
+        "ishta_phala": 18.91,
+        "kashta_phala": 37.72
+      },
+      "varga_groups": {
+        "shadvarga": { "amsa": "No Amsa", "charts": ["D9"], "vimsopaka_bala": 8.8, "vaiseshikamsa_bala": 1 },
+        "saptavarga": { "amsa": "No Amsa", "charts": ["D9"], "vimsopaka_bala": 8.8, "vaiseshikamsa_bala": 1 },
+        "dashavarga": { "amsa": "No Amsa", "charts": ["D9"], "vimsopaka_bala": 11.8, "vaiseshikamsa_bala": 1 },
+        "shodashavarga": { "amsa": "Kusumaamsa", "charts": ["D4", "D9", "D24"], "vimsopaka_bala": 10.9, "vaiseshikamsa_bala": 3 }
+      }
+    }
+  }
+}

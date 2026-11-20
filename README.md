@@ -346,7 +346,7 @@ When requesting `format=llm_markdown` (or `markdown=true`), the REST API automat
 | Jupiter (Guru) | Meenam (Pisces) | 4 | 24° 42' | Revati (P3) | Direct | Kumbam (Aquarius) | 7 |
 | Venus (Sukra) | Dhanus (Sagittarius) | 1 | 06° 08' | Mula (P2) | Direct | Rishabam (Taurus) | 10 |
 | Saturn (Sani) | Katakam (Cancer) | 8 | 05° 57' | Pushya (P1) | Retrograde | Simham (Leo) | 1 |
-| Rahu | Thulaam (Libra) | 11 | 24° 25' | Vishakha (P2) | Retrograde | Mithunam (Gemini) | 11 |
+| Rahu | Thulaam (Libra) | 11 | 24° 25' | Vishakha (P2) | Retrograde | Rishabam (Taurus) | 10 |
 | Ketu | Mesham (Aries) | 5 | 24° 25' | Bharani (P4) | Retrograde | Vrischigam (Scorpio) | 4 |
 
 ## 2. ACTIVE VIMSHOTTARI DASHA TIMELINE (103 Sub-Intervals down to PD Level)
@@ -404,49 +404,126 @@ Vedic astrology calculation, database ingestion, and REST API engine developed f
 
 ---
 
+## 🧠 Original Source Architecture: Master Prompt + 4 Domain Sub-Prompts
+
+One **unified deterministic engine** (`src/services/llm/originalSourcePrompt.ts` + `src/services/originalSourceContextBuilder.ts` + `src/data/vargaAndStrengthData.ts`) powers **both the React UI and the `GET /api/content` REST API** in **readable LLM-compact format** (spaces enabled between pipes/commas for clean tokenization, zero underscores, zero blank lines).
+
+Instead of sending a single generic prompt or dumping all 22 Varga charts at once, the system separates:
+1. **The Master Prompt (`domain=master`)** — contains complete foundational natal data (**only `D1` and `D9` charts**), **Shadbala**, **full 7-Planet + Lagna (`As`) Ashtakavarga + Sodhya Pindas**, **21 Yogas & Pitru Dosha**, **Jaimini Karakamsa/Arudhas**, plus the **9-section Monthly Transit & Dasha Ephemeris**.
+2. **4 Domain Sub-Prompts (`Career`, `Finance`, `Love`, `Family`)** — dynamically attach a targeted `[SUB-PROMPT: <DOMAIN>]`, `[DOMAIN STRENGTHS]` spotlight, and **only the Divisional Varga charts (`D2..D144`) relevant to that domain** on top of the Master Prompt.
+
+> Note: Existing `v1`, `v2`, and `v3` app prompts are untouched.
+
+---
+
+### 1. What is Inside the **Master Prompt** (`domain=master`)
+
+The Master Prompt has two blocks (**Static Chart Block** + **Monthly Ephemeris Slice**) and **strictly excludes `D2..D144`** so context stays clean:
+
+#### Static Natal Block (`S1–S7`)
+| Section | Contents & Recent Upgrades |
+| :--- | :--- |
+| `[RULES]` | Strict deterministic reading rules `R0..R8`: `25–27 = neutral` SAV, `CB:- = unfavorable`, glossary (`H#`, `d#`, `P#`, `R`, `N:/T:/Asp:`, `ADISARA`, `VAKRA`, `Prior3d`, `Kendra(...)` from Lagna & Moon), `AD CHAMBER/GATES` definition, and Sub-Prompt Varga synthesis protocol. |
+| `[LORDSHIPS]` | Lagna (Sagittarius), Janma Rashi (Scorpio), Janma Star (Anuradha P2), and planetary sign lordships (`Sun..Saturn`) mapped to both Lagna (`L#`) and Moon (`M#`). |
+| `[HOUSE LORDS]` | Exact H1–H12 lord placement lookup table showing natal house, dignity, retrograde `(R)`, and solar combustion `(Combust)`. |
+| `[D1]` | All 11 Rashi placements with degree, Nakshatra/Pada, dignity (`Own/Exalt/Debil`), **natal Combustion** (e.g. `Mercury | Capricorn | H2 | 05°15' | ... | Comb(6°22')`), **conjunctions**, and **Parashara aspects**. |
+| `[D9]` | Navamsa chart (Leo Lagna) with strict 180° node opposition verified: **`Rahu | Taurus | H10`** (conjunct Venus & Mandi) opposite **`Ketu | Scorpio | H4`** — with Vargottama / Own / Exalt / Debil flags and zero invented node exaltation. |
+| `[SHADBALA]` | **Newly Added** from `planet_strengths.json`: all 7 planets (`Sun..Saturn`) with Ratio, Total/Required Virupas, `%`, `Strong/Weak` status, all 6 Balas (`Sthana`, `Dig`, `Kaala`, `Cheshta`, `Naisargika`, `Drik`), `Harsha`, `IshtaPhala`, `KashtaPhala`, and `Shadvarga / Dashavarga / Shodashavarga` Vimsopaka scores & Amsas. |
+| `[SAV]` | **Calibrated to `Sum:337`** matching Vedic software: `H1:26, H2:30, H3:27, H4:31, H5:24, H6:31, H7:22, H8:22, H9:27, H10:32, H11:35, H12:30` (`Avg:28.1 | Max:H11(35) | Min:H7,H8(22)`). |
+| `[BAV]` | **Newly Expanded** from `ashtakavarga_prompt.txt`: full 12-house Bhinnashtakavarga distributions for **all 7 planets** (`Sun 48`, `Moon 49`, `Mars 39`, `Mercury 54`, `Jupiter 56`, `Venus 52`, `Saturn 39`) **plus Lagna (`As`) BAV (49 bindus)** (noted excluded from 337 SAV sum). |
+| `[PINDAS]` | **Newly Added**: `Rasi Pinda`, `Graha Pinda`, `Sodhya Pinda`, and `%` strength for all 7 planets (e.g., `Mars: R94+G79=173 (100%)`, `Mercury: R91+G69=160 (92%)`, `Jupiter: R78+G55=133 (77%)`, `Saturn: R91+G15=106 (61%)`). |
+| `[YOGAS]` | **Newly Added** from `d1_yogas_doshas_prompt.txt`: **2 Raja Yogas** (*Dharma Karmadhipati Raja Yoga*, *Vipareetha Raja Yoga*) + **19 General Yogas** (*Vosi*, *Nipuna*, *Sunaphaa*, *Hamsa*, *Daama*, *Subha*, *Harihara Brahma*, *Saraswathi*, *Parijatha*, *Swaveeryaddhana*, *Matrumooladdhana*, *Maathru Sneha*, *Bandhu Pujya*, *Vaahana*, *Bhaagya*, etc.). |
+| `[DOSHAS]` | **Newly Added**: **`Pitru Dosha (Present)`** — Sun (Pitri Karaka & L9) plus H9 Leo & L9 afflicted by malefics; ancestral lineage obligations & potential friction with father/paternal continuity. |
+| `[JAIMINI]` | **Newly Added**: Deterministic 7-Karaka scheme (`AK: Jupiter 24°42'`, `AmK: Mars 21°23'`, `BK: Sun 11°37'`, `MK: Moon 07°24'`, `PK: Venus 06°08'`, `GK: Saturn 05°57'`, `DK: Mercury 05°15'`), `Karakamsa (KK)`, `AL (A1)`, `A5`, `A7`, `A10`, `A11`, and `UL (A12)`. |
+| `[KARAKAS]` | Domain focus legend (`Career: H10/Sun/Mercury/Mars`, `Wealth: H2/H11/Jupiter`, `Home: H4/Moon`, `Love/Progeny: H5/H7/Venus`, `Health: H1/H6/Saturn`). |
+
+#### Monthly Ephemeris Slice (`C1–C9`)
+| Section | Contents |
+| :--- | :--- |
+| `[PERIOD]` | Target month/year, date bounds, `TZ: UTC (IST=+05:30)`, daily snapshot (`12:00 UTC`), and `Prior3d` boundary. |
+| `[DASHA]` | Exact MD/AD/PD date windows (`start..end`), natal house, per-segment transit sign & dignity (never conflated across signs), `Vakra`, and solar `Combust`. |
+| `[SLOW PLANETS]` | Prior-3-day ingress/motion boundary (`Jupiter`, `Saturn`, etc.), full monthly paths for `Jupiter`, `Saturn`, `Rahu`, `Ketu` with calibrated `SAV`, `ADISARA/VAKRA/DIRECT`, degree span, per-pada `Tara`, and Parashara aspects. |
+| `[DOUBLE TRANSIT]` | Co-activation windows where Jupiter + Saturn touch/aspect the same sign simultaneously. |
+| `[FAST PLANETS]` | `Sun`, `Mars`, `Mercury`, `Venus` sign segments, exact solar combustion dates (e.g., `Combust d1-9`), retrograde/direct spans, and Taras (no redundant Moon row). |
+| `[EVENTS]` | Exact stations (`STA`), ingresses, and `Neechabhanga` (`NB`) windows with clarified `Kendra[L#/M#]` frame. |
+| `[HOUSE MAP]` | Unified 12-house grid `L#/M#` merging Natal (`N:`), Transit (`T:`), Aspects (`Asp:`), and Moon day spans (`Moon:`). |
+| `[LUNAR]` | Continuous UTC hour/minute precision Moon path covering **every traversed Nakshatra** (no skipped stars like `Ardra`), Tara tags, `CB:Fav / CB:-`, and `CHANDRASHTAMA (M8)`. |
+| `[AD CHAMBER/GATES]` | Antardasha lord's natal chamber (`natal Saturn @ Cancer L8/M9`) + ruled houses (`T:` transits & `Asp:`) + 3 lunar Nakshatra gates. |
+
+---
+
+### 2. What is Added in Each of the **4 Domain Sub-Prompts**
+
+When you select **Career**, **Finance**, **Love**, or **Family** in the UI or pass `&domain=...` in `GET /api/content`, the engine appends `[SUB-PROMPT: <DOMAIN>]`, `[DOMAIN STRENGTHS]` (karaka Shadbala + focus house SAV/BAV + filtered Yogas & Doshas), and **only that domain's Divisional Varga charts** from `charts_by_house.json` / PostgreSQL `natal_placement_detail`:
+
+| Prompt Type | Master Charts | Divisional Charts Attached | Focus Houses & Karakas | What Gets Highlighted in `[DOMAIN STRENGTHS]` |
+| :--- | :--- | :--- | :--- | :--- |
+| **Master** (`master`) | **`D1`, `D9`** only | *None* (`D2..D144` omitted) | All H1–H12 baseline | Full foundational chart + monthly ephemeris for all-domain overview. |
+| **Career** (`career`) | `D1`, `D9` | **`D10` (Dasamsa)** | **H10, H6, H11, H2, H9, H1** · *Mercury, Sun, Saturn, Mars, Jupiter* | Career Shadbala (`Dig`/`Shodashavarga`), H10(`32`)/H6(`31`)/H11(`35`) SAV/BAV, *Dharma Karmadhipati Raja*, *Vipareetha Raja*, *Nipuna*, *Hamsa*, *Saraswathi* yogas + full 12-house **D10 Dasamsa** placements (Virgo Lagna, Exalted Saturn H2, Vakra Mercury, etc.). |
+| **Finance** (`finance`) | `D1`, `D9` | **`D2` (Hora)**, **`D11` (Ekadasamsa)**, **`D4` (Chaturthamsa)** | **H2, H11, H5, H9, H4, H8** · *Jupiter, Venus, Mercury, Saturn, Mars* | Wealth/Pinda strength, H2(`30`)/H11(`35`)/H4(`31`)/H9(`27`) SAV/BAV, *Swaveeryaddhana*, *Anthya Vayasi Dhana*, *Vipareetha Raja*, *Matrumooladdhana* yogas + **D2 Hora** (Solar/Lunar wealth), **D11 Ekadasamsa** (gains), & **D4 Chaturthamsa** (fixed assets). |
+| **Love** (`love`) | `D1`, **`D9` (Navamsa)** | **`D7` (Saptamsa)**, **`D30` (Trimsamsa)** | **H5, H7, H12, H11, H1** · *Venus, Jupiter, Mercury, Moon* | Explicitly anchors on Master **`[D9]` Navamsa** (including fixed `Rahu Taurus H10` + `Venus` / `Mandi` opposite `Ketu Scorpio H4`) & Jaimini **`UL (A12)`, `A7`, `DK (Mercury)`**, flags H7(`22`)/H5(`24`) SAV vs H11(`35`)/H12(`30`) SAV + Venus(`52`) & Jupiter(`56`) BAV, *Saraswathi*, *Subha*, *Nishkapata* yogas + **D7 Saptamsa** (intimacy/progeny/creative bond) & **D30 Trimsamsa** (relationship vulnerabilities/friction). |
+| **Family** (`family`) | `D1`, `D9` | **`D4` (Chaturthamsa)**, **`D12` (Dwadasamsa)**, **`D7` (Saptamsa)**, **`D16` (Shodasamsa)** | **H4, H2, H5, H9, H3** · *Moon, Jupiter, Sun, Venus, Mars* | Spotlights **`Pitru Dosha (Present)`** (ancestral/paternal obligation & Sun/H9 affliction), *Maathru Sneha*, *Matrumooladdhana*, *Bandhu Pujya*, *Hamsa*, *Vaahana* yogas, H4(`31`)/H2(`30`)/H5(`24`)/H9(`27`) SAV/BAV, **D4 Chaturthamsa** (home/domestic peace), **D12 Dwadasamsa** (parents & lineage), **D7 Saptamsa** (children/family expansion), & **D16 Shodasamsa** (vehicles, comforts, property happiness). |
+
+> All 22 Varga charts (`D1`–`D144`, `001ME`) stored in PostgreSQL `natal_placement_detail` are embedded in `src/data/vargaAndStrengthData.ts` so the frontend & REST endpoint run identically with zero extra database roundtrips.
+
+---
+
 ## 🌐 Original Source Monthly Prompt REST API (`GET /api/content`)
 
-Serves the deterministic **Original Source (Original Heartbeat)** monthly prompt over HTTP (with CORS enabled) for consumption by external apps or local LLM workflows.
+Serves the deterministic **Master Prompt** or any of the **4 Domain Prompts** (`Career`, `Finance`, `Love`, `Family`) over HTTP (CORS enabled) for external apps or scripts.
 
 - **Endpoint:** `GET /api/content` (aliases: `/api/original-source`, `/api/original-source/content`)
-- **Default dev host:** `http://localhost:3000` (if starting on a custom port in Chrome/Edge, avoid blocked port `6000` — use e.g. `npx vite --port 6001 --host 0.0.0.0`)
+- **Default dev host:** `http://localhost:3000`
 
 ### Supported Query Parameters
 
 | Parameter | Values | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `date` | `"May 2026"`, `"may-2026"`, `"4/2026"`, `"04/2026"`, `"2026-04"`, `"202605"`, `"2026-05-15"`, `"15-05-2026"`, `"Nov 2026"` | Current month | Target month & year (or use `?month=5&year=2026` / `?month=May&year=2026`). |
-| `variant` | `baseline` \| `compact` \| `both` | `baseline` | `baseline` (14B Private full format), `compact` (compressed token-efficient format), or `both`. |
-| `part` | `full` \| `month` \| `static` | `full` | `full` (`R0–R6` + `S1–S6` + `C1–C9`), `month` (`C1–C9` monthly slice only), or `static` (`S1–S6` natal/rules block only). |
-| `format` | `json` \| `text` | `json` | `json` (metadata + prompt strings) or `text` (raw `text/plain` prompt body). |
+| `date` | `"May 2026"`, `"may-2026"`, `"4/2026"`, `"2026-04"`, `"202605"`, `"Nov 2026"` | Current month | Target month & year (or `?month=11&year=2026`). |
+| `domain` | `master` \| `career` (`work`) \| `finance` (`wealth`) \| `love` (`romance`) \| `family` (`home`) | `master` | Selects Master Base (`D1+D9`) or Master + Domain Sub-Prompt + Divisional Varga charts. |
+| `variant` | `compact` \| `baseline` \| `both` | `compact` | `compact` (readable LLM-compact with spaces), `baseline` (full verbose 14B labels), or `both`. |
+| `part` | `full` \| `static` \| `month` \| `subprompt` | `full` | `full` (complete prompt), `static` (`[RULES]..[KARAKAS]`), `month` (`[PERIOD]..[AD CHAMBER/GATES]`), or `subprompt` (`[SUB-PROMPT: ...]` + Vargas only). |
+| `format` | `json` \| `text` | `json` | `json` (metadata + prompt strings + `vargaChartsAttached`) or `text` (raw `text/plain`). |
 | `personId` | Stored profile ID | `001ME` | Optional profile override from `stored_persons.json`. |
 
-### All 4 Invocation Options
+### Invocation Examples (All Domains & Formats)
 
-#### Option 1: Default Full Baseline (`14B Private` JSON)
-Returns the validated full baseline prompt with metadata and token count.
+#### Option 1: Master Prompt (Default Readable Compact JSON)
 ```bash
-curl "http://localhost:3000/api/content?date=May+2026"
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=master&variant=compact"
 ```
 
-#### Option 2: Compact Variant (`Compact` JSON for Testing 14B / Cloud LLMs)
-Returns the token-reduced compact variant (`~25%` fewer tokens while retaining all chart/transit/moon/AD chamber facts). Accepts numeric `M/YYYY` or ISO dates too:
+#### Option 2: Domain Prompts (Career / Finance / Love / Family) — Raw Text Ready to Paste
 ```bash
-curl "http://localhost:3000/api/content?date=4/2026&variant=compact"
+# Career Prompt (Master + D10 Dasamsa)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=career&variant=compact&format=text"
+
+# Finance Prompt (Master + D2 Hora, D11 Ekadasamsa, D4 Chaturthamsa)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=finance&variant=compact&format=text"
+
+# Love Prompt (Master D9 Navamsa + D7 Saptamsa, D30 Trimsamsa)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=love&variant=compact&format=text"
+
+# Family Prompt (Master + D4, D12 Dwadasamsa, D7, D16 Shodasamsa + Pitru Dosha)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=family&variant=compact&format=text"
 ```
 
-#### Option 3: Raw Plain Text (`format=text` for Direct App Bar / Pipe Injection)
-Returns `text/plain; charset=utf-8` directly with zero JSON wrapping—ready to inject into another app's prompt box or copy to clipboard:
+#### Option 3: Sub-Prompt Block Only (`part=subprompt`)
 ```bash
-curl "http://localhost:3000/api/content?date=Nov+2026&variant=compact&format=text"
+curl "http://localhost:3000/api/content?date=4/2026&domain=family&part=subprompt&format=text"
 ```
-*Note: You can also request only the monthly slice (`&part=month`) or static natal block (`&part=static`).*
 
-#### Option 4: Both Variants Side-by-Side (`variant=both`)
-Returns both `baseline` and `compact` payloads in a single JSON response along with calculated `tokenSavings`:
+#### Option 4: Baseline vs Compact Comparison (`variant=both`)
 ```bash
-curl "http://localhost:3000/api/content?date=2026-11&variant=both"
+curl "http://localhost:3000/api/content?date=2026-11&domain=love&variant=both"
 ```
+
+### UI Usage (Unified Implementation)
+In the Monthly Transit View top toolbar, the segmented **Master | Career | Finance | Love | Family** button group opens the **Original Source Prompt Builder** modal directly on the chosen prompt type for the currently selected month/year. Inside the modal you can:
+- Switch seamlessly between **Master**, **Career**, **Finance**, **Love**, and **Family** (all powered by `buildOriginalSourcePrompt`)
+- Toggle **Compact (LLM Readable)** *(default)* vs **Baseline (14B Private)**
+- Inspect tabs (**Full Prompt**, **Master Static**, **Month Slice**, and **`<Domain>` Sub-Prompt**)
+- One-click **Copy** or **Download `.txt`**
 
 ---
 

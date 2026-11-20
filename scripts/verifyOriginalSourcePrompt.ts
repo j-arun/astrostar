@@ -274,7 +274,9 @@ async function main() {
         ashtakavargaPayload: {
           targetHousePoints: 0,
           targetHouseStrength: 'All-House Distribution',
-          savPointsDistribution: savResult.allHousesOverview
+          savPointsDistribution: savResult.allHousesOverview,
+          savTotalSum: savResult.savTotalSum,
+          bavByPlanet: savResult.bavByPlanet
         },
         eventManufacturingSuperset
       };
@@ -308,7 +310,7 @@ async function main() {
           val.errors.forEach((e: string) => allFailures.push(`[${label} / ${variant}] ${e}`));
         }
 
-        // 3. Spot-checks specifically targeting Fix List items 1..7 on November 2026
+        // 3. Spot-checks specifically targeting Master enrichments + Nov 2026 facts
         if (year === 2026 && monthIndex === 10) {
           const txt = result.fullPrompt;
           const assertContains = (needle: string | RegExp, desc: string) => {
@@ -321,16 +323,40 @@ async function main() {
           };
 
           assertNotContains(/\(\s*\)/, 'empty parentheses in [D1] nakshatra names');
-          assertNotContains(/^Ketu\|.*Exalted/m, 'Ketu Exalted in [D9]');
-          assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9] (spaced)');
-          assertNotContains(/^Rahu\|.*Exalted/m, 'Rahu Exalted in [D9]');
-          assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9] (spaced)');
+          assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9]');
+          assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9]');
+          assertNotContains(/Moon\s*\(d\d+\)/, 'redundant Moon line in [FAST PLANETS]');
+          assertContains('Rahu | Taurus | H10', '[D9] Rahu in Taurus H10 opposite Ketu Scorpio H4');
+          assertContains('Ketu | Scorpio | H4', '[D9] Ketu in Scorpio H4');
+          assertContains('Mercury | Capricorn | H2', '[D1] Mercury in Capricorn H2');
+          assertContains('Sum:337', 'authentic Parashara SAV sum 337');
+          assertContains('H7:22', 'calibrated SAV H7=22');
+          assertContains('H8:22', 'calibrated SAV H8=22');
+          assertContains('H10:32', 'calibrated SAV H10=32');
+          assertContains('H11:35', 'calibrated SAV H11=35');
           assertContains('Combust d1-9', 'Mercury data-computed Combust d1-9');
           assertContains('MD Venus 2013-04-02..2033-04-02', 'MD Venus start..end dates');
-          assertContains('AD Saturn 2026-01-31..2029-04-02', 'AD Saturn start..end dates');
-          assertContains('PD Mercury 2026-08-02..2027-01-13', 'PD Mercury start..end dates');
+          assertContains('AD Saturn 2026-02-02..2029-04-02', 'AD Saturn start..end dates');
+          assertContains('PD Mercury 2026-08-03..2027-01-14', 'PD Mercury start..end dates');
+          assertContains(/Ardra P1-P4 d26 \d{2}:\d{2}\.\.d27 \d{2}:\d{2}/, 'Lunar Ardra d26-27 continuous scan');
+          assertContains(/Ardra .*?\(Mitra T8\)/, 'Lunar Ardra (Mitra T8)');
+          assertContains(/Kendra\[[^\]]+\]/, 'NB Kendra frame clarification');
+          assertNotContains(/tr-disp Moon\[[^\]]+\],.*tr-disp Moon\[/, 'duplicate tr-disp Moon inside NB line');
+          assertContains('As(Lagna)', '[BAV] Lagna As BAV row');
+          assertContains('Pitru Dosha', '[DOSHAS] Pitru Dosha');
+          assertContains('Raja Yogas (2)', '[YOGAS] 2 Raja Yogas');
+          assertContains('General Yogas (19)', '[YOGAS] 19 General Yogas');
+          assertContains('Dharma Karmadhipati Raja Yoga', '[YOGAS] Dharma Karmadhipati Raja Yoga');
 
           if (variant === 'baseline') {
+            assertContains(/Mercury \| Capricorn \| H2 \|.*Combust\(/, '[D1] natal Mercury Combust flag');
+            assertContains('L7:Mercury@H2(M3)(R,Combust)', '[HOUSE LORDS] L7 Mercury@H2');
+            assertContains('AK: Jupiter (', '[JAIMINI] AK Jupiter');
+            assertContains('DK: Mercury (', '[JAIMINI] DK Mercury');
+            assertContains('Venus BAV (52):', '[BAV] Venus 52 bindus');
+            assertContains('Jupiter BAV (56):', '[BAV] Jupiter 56 bindus');
+            assertContains('Saturn: Rasi 91 + Graha 15 = Sodhya 106', '[PINDAS] Saturn Sodhya Pinda');
+            assertContains('TZ: UTC (IST=+05:30) | Daily Snapshot: 12:00 UTC', '[PERIOD] timezone and snapshot time');
             assertContains('ChandraBala: Fav', 'ChandraBala: Fav on favorable Moon spans');
             assertContains('ChandraBala: -', 'ChandraBala: - on unfavorable Moon spans');
             assertContains(/Swati P3 d1-2 \(Mitra T8\), Swati P4 d3-6 \(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
@@ -338,27 +364,35 @@ async function main() {
             assertContains(/Anuradha P1 d20-22 \(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
             assertContains(/Mercury \| Libra .*Vishakha P1 d1-2 \(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
             assertContains(/Mercury \| Libra .*Vishakha P1 d25-27 \(Parama Mitra T9\)/, 'Mercury d25-27 Vishakha (Parama Mitra T9)');
-            assertContains(/Pushya P2 \(Janma T1\) -> Ashlesha P3 \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
+            assertContains(/Pushya P1-P4 d1 \d{2}:\d{2}\.\.d1 \d{2}:\d{2} UTC \(Janma T1\) -> Ashlesha P1-P4 d1 \d{2}:\d{2}\.\.d2 \d{2}:\d{2} UTC \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
             assertContains('ADCHAMBER: natal Saturn @ Cancer (L8/M9)', 'ADCHAMBER natal Saturn @ Cancer');
             assertContains('L2/M3 Capricorn (T: Moon)', 'T: Moon in ADCHAMBER Ruled');
             assertContains('L3/M4 Aquarius (T: Rahu', 'T: Rahu in ADCHAMBER Ruled');
             assertContains('Libra L11/M12 (Swakshetra) d1-5; Virgo L10/M11 (Neecha) d6-22; Libra L11/M12 (Swakshetra) d23-30', 'MD Venus per-segment dignity');
-            assertContains('STATION Mercury Retrograde -> Direct Libra L11/M12 2026-11-14', 'STATION explicit event');
+            assertContains(/STATION Mercury Retrograde -> Direct Libra L11\/M12 2026-11-14 @\d{2}°\d{2}'/, 'STATION explicit event with degree');
             assertContains('NEECHABHANGA Venus Virgo L10/M11 2026-11-06..2026-11-13', 'NEECHABHANGA explicit event');
           } else {
+            assertContains(/Mercury \| Capricorn \| H2 \|.*Comb\(/, '[D1] natal Mercury Comb flag');
+            assertContains('L7:Mercury@H2(R,Comb)', '[HOUSE LORDS] L7 Mercury@H2');
+            assertContains('AK: Jupiter (', '[JAIMINI] AK: Jupiter');
+            assertContains('DK: Mercury (', '[JAIMINI] DK: Mercury');
+            assertContains('Venus(52):', '[BAV] Venus(52)');
+            assertContains('Jupiter(56):', '[BAV] Jupiter(56)');
+            assertContains('Saturn: R91+G15=106', '[PINDAS] Saturn compact Pinda');
+            assertContains('TZ:UTC(IST=+05:30)|Snap:12:00 UTC', '[PERIOD] compact timezone and snapshot');
             assertContains('CB:Fav', 'CB:Fav on favorable Moon spans');
             assertContains('CB:-', 'CB:- on unfavorable Moon spans');
             assertContains(/Swati P3 d1-2\/P4 d3-6\(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
             assertContains(/Vishakha P1 d7-9\/P2 d10-12\/P3 d13-16\(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
             assertContains(/Anuradha P1 d20-22\/P2 d23-25\/P3 d26-29\/P4 d30\(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
-            assertContains(/Mercury\|Libra.*Vishakha P1 d1-2\(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
-            assertContains(/Mercury\|Libra.*Vishakha P1 d25-27\/P2 d28-29\/P3 d30\(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
-            assertContains(/Pushya P2\(Janma T1\)->Ashlesha P3\(Sampat T2\)/, 'Lunar Pushya (Janma T1)->Ashlesha (Sampat T2)');
+            assertContains(/Mercury \| Libra.*Vishakha P1 d1-2\(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
+            assertContains(/Mercury \| Libra.*Vishakha P1 d25-27\/P2 d28-29\/P3 d30\(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
+            assertContains(/Pushya P1-P4 d1 \d{2}:\d{2}\.\.d1 \d{2}:\d{2}\(Janma T1\)->Ashlesha P1-P4 d1 \d{2}:\d{2}\.\.d2 \d{2}:\d{2}\(Sampat T2\)/, 'Lunar Pushya (Janma T1)->Ashlesha (Sampat T2)');
             assertContains(/ADCHAMBER:natal Saturn@Cancer\(L8\/M9\)/, 'ADCHAMBER natal Saturn@Cancer');
             assertContains('L2/M3 Capricorn(T:Moon)', 'T:Moon in ADCHAMBER Ruled');
             assertContains('L3/M4 Aquarius(T:Rahu', 'T:Rahu in ADCHAMBER Ruled');
             assertContains('Libra L11/M12(Swakshetra) d1-5;Virgo L10/M11(Neecha) d6-22;Libra L11/M12(Swakshetra) d23-30', 'MD Venus per-segment dignity');
-            assertContains('STA Mercury R->D Libra L11/M12 11-14', 'STA compact event');
+            assertContains(/STA Mercury R->D Libra L11\/M12 11-14 @\d{2}°\d{2}'/, 'STA compact event with degree');
             assertContains('NB Venus Virgo L10/M11 11-06..11-13', 'NB compact event');
           }
         }
@@ -405,27 +439,75 @@ async function main() {
       }
     }
 
-    // 5. REST API payload builder checks (baseline, compact, both, month, static)
-    const apiBase = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'baseline', part: 'full' });
-    const apiCompact = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'full' });
-    const apiMonth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'month' });
-    const apiStatic = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'compact', part: 'static' });
-    const apiBoth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 4, variant: 'both', part: 'full' });
+    // 5. REST API payload builder checks (baseline, compact, both, month, static, subprompt + all 5 domains)
+    const apiBase = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 10, variant: 'baseline', part: 'full', domain: 'master' });
+    const apiCompact = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 10, variant: 'compact', part: 'full', domain: 'master' });
+    const apiMonth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 10, variant: 'compact', part: 'month', domain: 'master' });
+    const apiStatic = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 10, variant: 'compact', part: 'static', domain: 'master' });
+    const apiBoth = generateOriginalSourceApiPayload({ year: 2026, monthIndex: 10, variant: 'both', part: 'full', domain: 'master' });
 
-    if (!apiBase.validated || apiBase.monthLabel !== 'May 2026') {
-      allFailures.push('[API payload] baseline May 2026 failed validation or monthLabel check');
+    if (!apiBase.validated || apiBase.monthLabel !== 'November 2026') {
+      allFailures.push('[API payload] baseline Nov 2026 failed validation or monthLabel check');
     }
     if (!apiCompact.validated || apiCompact.content !== apiCompact.fullPrompt) {
-      allFailures.push('[API payload] compact May 2026 full part mismatch');
+      allFailures.push('[API payload] compact Nov 2026 full part mismatch');
     }
     if (apiMonth.content !== apiCompact.monthSlice || !apiMonth.content.startsWith('[PERIOD]')) {
-      allFailures.push('[API payload] compact May 2026 month slice mismatch');
+      allFailures.push('[API payload] compact Nov 2026 month slice mismatch');
     }
     if (apiStatic.content !== apiCompact.staticBlock || !apiStatic.content.startsWith('[RULES]')) {
-      allFailures.push('[API payload] compact May 2026 static slice mismatch');
+      allFailures.push('[API payload] compact Nov 2026 static slice mismatch');
     }
     if (!apiBoth.validated || !apiBoth.baseline?.validated || !apiBoth.compact?.validated || apiBoth.tokenSavings <= 0) {
-      allFailures.push('[API payload] variant=both May 2026 failed validation or tokenSavings check');
+      allFailures.push('[API payload] variant=both Nov 2026 failed validation or tokenSavings check');
+    }
+
+    // 6. All 4 Domain Sub-Prompts + Varga exclusivity checks
+    const domainExpectations: Array<{
+      domain: 'career' | 'finance' | 'love' | 'family';
+      expectedVargas: string[];
+      forbiddenVargas: string[];
+    }> = [
+      { domain: 'career', expectedVargas: ['D10'], forbiddenVargas: ['D2', 'D4', 'D7', 'D11', 'D12', 'D16', 'D30'] },
+      { domain: 'finance', expectedVargas: ['D2', 'D11', 'D4'], forbiddenVargas: ['D7', 'D10', 'D12', 'D16', 'D30'] },
+      { domain: 'love', expectedVargas: ['D7', 'D30'], forbiddenVargas: ['D2', 'D4', 'D10', 'D11', 'D12', 'D16'] },
+      { domain: 'family', expectedVargas: ['D4', 'D12', 'D7', 'D16'], forbiddenVargas: ['D2', 'D10', 'D11', 'D30'] }
+    ];
+
+    for (const de of domainExpectations) {
+      const domRes = generateOriginalSourceApiPayload({
+        year: 2026,
+        monthIndex: 10,
+        variant: 'compact',
+        part: 'full',
+        domain: de.domain
+      });
+      if (!domRes.validated) {
+        allFailures.push(`[Domain ${de.domain}] failed validation: ${(domRes.validationErrors || []).join('; ')}`);
+      }
+      for (const v of de.expectedVargas) {
+        if (!domRes.fullPrompt.includes(`[VARGA ${v}:`)) {
+          allFailures.push(`[Domain ${de.domain}] missing expected [VARGA ${v}:]`);
+        }
+      }
+      for (const fv of de.forbiddenVargas) {
+        if (domRes.fullPrompt.includes(`[VARGA ${fv}:`)) {
+          allFailures.push(`[Domain ${de.domain}] leaked forbidden [VARGA ${fv}:]`);
+        }
+      }
+      const subOnly = generateOriginalSourceApiPayload({
+        year: 2026,
+        monthIndex: 10,
+        variant: 'compact',
+        part: 'subprompt',
+        domain: de.domain
+      });
+      if (!subOnly.content.startsWith(`[SUB-PROMPT: ${de.domain.toUpperCase()}]`)) {
+        allFailures.push(`[Domain ${de.domain}] part=subprompt missing [SUB-PROMPT: ${de.domain.toUpperCase()}] header`);
+      }
+      console.log(
+        `PASS Domain [${de.domain.toUpperCase()}]: ${domRes.meta.lineCount}L, ${domRes.meta.charCount}c (~${domRes.meta.estTokens}t) | Vargas: ${de.expectedVargas.join(', ')}`
+      );
     }
 
     if (allFailures.length > 0) {
@@ -434,7 +516,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + API PARSER/PAYLOAD CHECKS PASSED ORIGINAL SOURCE REGRESSION VALIDATION (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 4 DOMAIN SUB-PROMPTS + API PARSER/PAYLOAD CHECKS PASSED (0 mismatches).`);
   } finally {
     await server.close();
   }

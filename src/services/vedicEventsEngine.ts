@@ -56,6 +56,8 @@ export interface SameSignMotionTransition {
   houseFromMoon: number;
   turnType: 'Retrograde -> Direct' | 'Direct -> Retrograde';
   stationDate: string;
+  stationDegree?: string;
+  stationTimeUtc?: string;
   beforeRange: string;
   afterRange: string;
   summary: string;
@@ -449,6 +451,35 @@ export function analyzeVedicWindowEvents(params: {
         const hMoon = getHouse(curr.signIdx, natalRashiIdx);
         const gName = PLANET_DISPLAY[g] || g;
         const isBoundary = curr.startDate < dStartCanonStr;
+
+        // Pinpoint exact station degree & timestamp via fine 30-min scan around the transition
+        let stationDegree: string | undefined;
+        let stationTimeUtc: string | undefined;
+        if (!overrides[g]) {
+          const tPrevMs = new Date(`${prev.endDate}T12:00:00Z`).getTime() - 12 * 3600 * 1000;
+          const tCurrMs = new Date(`${curr.startDate}T12:00:00Z`).getTime() + 12 * 3600 * 1000;
+          let bestPos = getGrahaTransitPosition(g, new Date(tPrevMs), natalLagnaIdx, natalRashiIdx);
+          let bestMs = tPrevMs;
+          const isMinTurn = turnType === 'Retrograde -> Direct';
+          const unwrapRef = bestPos.sidereal_longitude;
+          let bestDelta = 0;
+          const STEP_MS = 30 * 60 * 1000; // 30 minutes
+          for (let ms = tPrevMs + STEP_MS; ms <= tCurrMs; ms += STEP_MS) {
+            const p = getGrahaTransitPosition(g, new Date(ms), natalLagnaIdx, natalRashiIdx);
+            let delta = p.sidereal_longitude - unwrapRef;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            if ((isMinTurn && delta < bestDelta) || (!isMinTurn && delta > bestDelta)) {
+              bestDelta = delta;
+              bestPos = p;
+              bestMs = ms;
+            }
+          }
+          const dm = bestPos.degree_sputa.match(/(\d{1,2})\s*°\s*(\d{1,2})?/);
+          stationDegree = dm ? `${dm[1].padStart(2, '0')}°${(dm[2] || '00').padStart(2, '0')}'` : bestPos.degree_sputa;
+          stationTimeUtc = new Date(bestMs).toISOString().slice(11, 16);
+        }
+
         sameSignStations.push({
           grahaKey: g,
           grahaName: gName,
@@ -458,9 +489,11 @@ export function analyzeVedicWindowEvents(params: {
           houseFromMoon: hMoon,
           turnType,
           stationDate: curr.startDate,
+          stationDegree,
+          stationTimeUtc,
           beforeRange: `${prev.startDate} to ${prev.endDate}`,
           afterRange: `${curr.startDate} to ${curr.endDate}`,
-          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${curr.startDate}${isBoundary ? ' [Prior Boundary Carry-Over]' : ''} (${prev.isRetro ? 'Retro' : 'Direct'} ${prev.startDate}→${prev.endDate}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${curr.startDate}→${curr.endDate})`,
+          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${curr.startDate}${stationDegree ? ` @ ${stationDegree}` : ''}${isBoundary ? ' [Prior Boundary Carry-Over]' : ''} (${prev.isRetro ? 'Retro' : 'Direct'} ${prev.startDate}→${prev.endDate}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${curr.startDate}→${curr.endDate})`,
           eventImpact: buildStationForecast(g, turnType, signName, hMoon)
         });
       }

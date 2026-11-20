@@ -1,0 +1,1725 @@
+{
+ "format": {
+  "house_system": "Whole-sign: house 1 = the Lagna sign of that chart, houses follow zodiac order",
+  "planet_format": "<code> <deg>°<min>",
+  "body_codes": {
+   "Sun": "Su",
+   "Moon": "Mo",
+   "Mars": "Ma",
+   "Mercury": "Me",
+   "Jupiter": "Ju",
+   "Venus": "Ve",
+   "Saturn": "Sa",
+   "Rahu": "Ra",
+   "Ketu": "Ke",
+   "Uranus": "Ur",
+   "Neptune": "Ne",
+   "Pluto": "Pl"
+  },
+  "sign_codes": {
+   "Ar": "Aries",
+   "Ta": "Taurus",
+   "Ge": "Gemini",
+   "Cn": "Cancer",
+   "Le": "Leo",
+   "Vi": "Virgo",
+   "Li": "Libra",
+   "Sc": "Scorpio",
+   "Sg": "Sagittarius",
+   "Cp": "Capricorn",
+   "Aq": "Aquarius",
+   "Pi": "Pisces"
+  }
+ },
+ "charts": {
+  "D1": {
+   "name": "Rashi",
+   "lagna": "16°17 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Ve 6°08"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": [
+      "Su 11°36",
+      "Me 5°21"
+     ]
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": [
+      "Ju 24°43"
+     ]
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": [
+      "Ke 24°25"
+     ]
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": [
+      "Ma 21°21"
+     ]
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": [
+      "Sa 5°31"
+     ]
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": [
+      "Pl 18°08"
+     ]
+    },
+    "11": {
+     "sign": "Li",
+     "planets": [
+      "Ra 24°25",
+      "Ur 13°30"
+     ]
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 7°24",
+      "Ne 19°46"
+     ]
+    }
+   }
+  },
+  "D2": {
+   "name": "Hora",
+   "lagna": "2°35 Vi",
+   "houses": {
+    "1": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "2": {
+     "sign": "Li",
+     "planets": []
+    },
+    "3": {
+     "sign": "Sc",
+     "planets": [
+      "Su 6°46",
+      "Me 19°17",
+      "Sa 18°56"
+     ]
+    },
+    "4": {
+     "sign": "Sg",
+     "planets": []
+    },
+    "5": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "6": {
+     "sign": "Aq",
+     "planets": [
+      "Ju 10°33",
+      "Pl 23°42"
+     ]
+    },
+    "7": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "8": {
+     "sign": "Ar",
+     "planets": [
+      "Ur 27°00"
+     ]
+    },
+    "9": {
+     "sign": "Ta",
+     "planets": [
+      "Ra 18°50",
+      "Ke 18°50"
+     ]
+    },
+    "10": {
+     "sign": "Ge",
+     "planets": [
+      "Ma 17°16",
+      "Ne 20°27"
+     ]
+    },
+    "11": {
+     "sign": "Cn",
+     "planets": [
+      "Mo 15°10"
+     ]
+    },
+    "12": {
+     "sign": "Le",
+     "planets": [
+      "Ve 12°17"
+     ]
+    }
+   }
+  },
+  "D3": {
+   "name": "Drekkana",
+   "lagna": "18°52 Ar",
+   "houses": {
+    "1": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "2": {
+     "sign": "Ta",
+     "planets": [
+      "Su 4°49"
+     ]
+    },
+    "3": {
+     "sign": "Ge",
+     "planets": [
+      "Ra 13°15"
+     ]
+    },
+    "4": {
+     "sign": "Cn",
+     "planets": [
+      "Sa 16°35"
+     ]
+    },
+    "5": {
+     "sign": "Le",
+     "planets": []
+    },
+    "6": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "7": {
+     "sign": "Li",
+     "planets": []
+    },
+    "8": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 22°13",
+      "Ju 14°10"
+     ]
+    },
+    "9": {
+     "sign": "Sg",
+     "planets": [
+      "Ve 18°25",
+      "Ke 13°15"
+     ]
+    },
+    "10": {
+     "sign": "Cp",
+     "planets": [
+      "Ma 4°05",
+      "Me 16°03",
+      "Pl 24°25"
+     ]
+    },
+    "11": {
+     "sign": "Aq",
+     "planets": [
+      "Ur 10°30"
+     ]
+    },
+    "12": {
+     "sign": "Pi",
+     "planets": [
+      "Ne 29°18"
+     ]
+    }
+   }
+  },
+  "D4": {
+   "name": "Chaturthamsa",
+   "lagna": "5°10 Ge",
+   "houses": {
+    "1": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "2": {
+     "sign": "Cn",
+     "planets": [
+      "Sa 22°07",
+      "Ra 7°40"
+     ]
+    },
+    "3": {
+     "sign": "Le",
+     "planets": []
+    },
+    "4": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "5": {
+     "sign": "Li",
+     "planets": []
+    },
+    "6": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 29°38",
+      "Ma 25°27"
+     ]
+    },
+    "7": {
+     "sign": "Sg",
+     "planets": [
+      "Ju 8°53",
+      "Ve 24°34"
+     ]
+    },
+    "8": {
+     "sign": "Cp",
+     "planets": [
+      "Me 21°24",
+      "Ke 7°40",
+      "Ur 24°00"
+     ]
+    },
+    "9": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "10": {
+     "sign": "Pi",
+     "planets": [
+      "Pl 12°34"
+     ]
+    },
+    "11": {
+     "sign": "Ar",
+     "planets": [
+      "Su 16°26"
+     ]
+    },
+    "12": {
+     "sign": "Ta",
+     "planets": [
+      "Ne 19°04"
+     ]
+    }
+   }
+  },
+  "D5": {
+   "name": "Panchamsa",
+   "lagna": "21°28 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Ur 7°30"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": [
+      "Ma 16°49",
+      "Ne 8°50",
+      "Pl 0°43"
+     ]
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": [
+      "Ve 0°43"
+     ]
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": [
+      "Me 26°45",
+      "Sa 27°39"
+     ]
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": [
+      "Su 28°03",
+      "Mo 7°02"
+     ]
+    },
+    "11": {
+     "sign": "Li",
+     "planets": [
+      "Ra 2°05",
+      "Ke 2°05"
+     ]
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": [
+      "Ju 3°37"
+     ]
+    }
+   }
+  },
+  "D6": {
+   "name": "Shashtamsa",
+   "lagna": "7°45 Cn",
+   "houses": {
+    "1": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "2": {
+     "sign": "Le",
+     "planets": [
+      "Ra 26°30",
+      "Ke 26°30"
+     ]
+    },
+    "3": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "4": {
+     "sign": "Li",
+     "planets": []
+    },
+    "5": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 14°27",
+      "Me 2°06",
+      "Sa 3°11"
+     ]
+    },
+    "6": {
+     "sign": "Sg",
+     "planets": [
+      "Su 9°39"
+     ]
+    },
+    "7": {
+     "sign": "Cp",
+     "planets": [
+      "Ne 28°37",
+      "Pl 18°51"
+     ]
+    },
+    "8": {
+     "sign": "Aq",
+     "planets": [
+      "Ma 8°11",
+      "Ju 28°20"
+     ]
+    },
+    "9": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "10": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "11": {
+     "sign": "Ta",
+     "planets": [
+      "Ve 6°51"
+     ]
+    },
+    "12": {
+     "sign": "Ge",
+     "planets": [
+      "Ur 21°00"
+     ]
+    }
+   }
+  },
+  "D7": {
+   "name": "Saptamsa",
+   "lagna": "24°03 Pi",
+   "houses": {
+    "1": {
+     "sign": "Pi",
+     "planets": [
+      "Ma 29°33",
+      "Ra 20°55"
+     ]
+    },
+    "2": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "3": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "4": {
+     "sign": "Ge",
+     "planets": [
+      "Mo 21°52"
+     ]
+    },
+    "5": {
+     "sign": "Cn",
+     "planets": [
+      "Pl 7°00"
+     ]
+    },
+    "6": {
+     "sign": "Le",
+     "planets": [
+      "Me 7°28"
+     ]
+    },
+    "7": {
+     "sign": "Vi",
+     "planets": [
+      "Su 21°16",
+      "Ke 20°55",
+      "Ne 18°23"
+     ]
+    },
+    "8": {
+     "sign": "Li",
+     "planets": []
+    },
+    "9": {
+     "sign": "Sc",
+     "planets": []
+    },
+    "10": {
+     "sign": "Sg",
+     "planets": []
+    },
+    "11": {
+     "sign": "Cp",
+     "planets": [
+      "Ve 13°00",
+      "Ur 4°30"
+     ]
+    },
+    "12": {
+     "sign": "Aq",
+     "planets": [
+      "Ju 23°03",
+      "Sa 8°43"
+     ]
+    }
+   }
+  },
+  "D8": {
+   "name": "Ashtamsa",
+   "lagna": "10°21 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Pl 25°09"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": [
+      "Mo 29°16"
+     ]
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": [
+      "Ju 17°47"
+     ]
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": [
+      "Ma 20°55",
+      "Me 12°49",
+      "Sa 14°15",
+      "Ne 8°09"
+     ]
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": [
+      "Su 2°53",
+      "Ur 18°00"
+     ]
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": [
+      "Ve 19°08"
+     ]
+    },
+    "11": {
+     "sign": "Li",
+     "planets": [
+      "Ra 15°20",
+      "Ke 15°20"
+     ]
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": []
+    }
+   }
+  },
+  "D9": {
+   "name": "Navamsa",
+   "lagna": "26°38 Le",
+   "houses": {
+    "1": {
+     "sign": "Le",
+     "planets": [
+      "Sa 19°47"
+     ]
+    },
+    "2": {
+     "sign": "Vi",
+     "planets": [
+      "Mo 6°41"
+     ]
+    },
+    "3": {
+     "sign": "Li",
+     "planets": []
+    },
+    "4": {
+     "sign": "Sc",
+     "planets": [
+      "Ke 9°45"
+     ]
+    },
+    "5": {
+     "sign": "Sg",
+     "planets": [
+      "Ne 27°55"
+     ]
+    },
+    "6": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "7": {
+     "sign": "Aq",
+     "planets": [
+      "Me 18°10",
+      "Ju 12°30",
+      "Ur 1°30"
+     ]
+    },
+    "8": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "9": {
+     "sign": "Ar",
+     "planets": [
+      "Su 14°29"
+     ]
+    },
+    "10": {
+     "sign": "Ta",
+     "planets": [
+      "Ve 25°17",
+      "Ra 9°45"
+     ]
+    },
+    "11": {
+     "sign": "Ge",
+     "planets": [
+      "Pl 13°17"
+     ]
+    },
+    "12": {
+     "sign": "Cn",
+     "planets": [
+      "Ma 12°17"
+     ]
+    }
+   }
+  },
+  "D10": {
+   "name": "Dasamsa",
+   "lagna": "12°56 Ta",
+   "houses": {
+    "1": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "2": {
+     "sign": "Ge",
+     "planets": [
+      "Ra 4°10"
+     ]
+    },
+    "3": {
+     "sign": "Cn",
+     "planets": [
+      "Ju 7°14"
+     ]
+    },
+    "4": {
+     "sign": "Le",
+     "planets": [
+      "Ma 3°39"
+     ]
+    },
+    "5": {
+     "sign": "Vi",
+     "planets": [
+      "Mo 14°05"
+     ]
+    },
+    "6": {
+     "sign": "Li",
+     "planets": [
+      "Me 23°31"
+     ]
+    },
+    "7": {
+     "sign": "Sc",
+     "planets": [
+      "Pl 1°26"
+     ]
+    },
+    "8": {
+     "sign": "Sg",
+     "planets": [
+      "Su 26°06",
+      "Ke 4°10"
+     ]
+    },
+    "9": {
+     "sign": "Cp",
+     "planets": [
+      "Ne 17°41"
+     ]
+    },
+    "10": {
+     "sign": "Aq",
+     "planets": [
+      "Ve 1°26",
+      "Ur 15°00"
+     ]
+    },
+    "11": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "12": {
+     "sign": "Ar",
+     "planets": [
+      "Sa 25°18"
+     ]
+    }
+   }
+  },
+  "D11": {
+   "name": "Ekadasamsa",
+   "lagna": "29°13 Cp",
+   "houses": {
+    "1": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "2": {
+     "sign": "Aq",
+     "planets": [
+      "Ju 1°57",
+      "Ur 28°30"
+     ]
+    },
+    "3": {
+     "sign": "Pi",
+     "planets": [
+      "Sa 0°50"
+     ]
+    },
+    "4": {
+     "sign": "Ar",
+     "planets": [
+      "Ne 7°28"
+     ]
+    },
+    "5": {
+     "sign": "Ta",
+     "planets": [
+      "Pl 19°34"
+     ]
+    },
+    "6": {
+     "sign": "Ge",
+     "planets": [
+      "Ra 28°36"
+     ]
+    },
+    "7": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "8": {
+     "sign": "Le",
+     "planets": [
+      "Me 28°52"
+     ]
+    },
+    "9": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "10": {
+     "sign": "Li",
+     "planets": [
+      "Ma 25°01",
+      "Ve 7°34"
+     ]
+    },
+    "11": {
+     "sign": "Sc",
+     "planets": [
+      "Su 7°43",
+      "Mo 21°30"
+     ]
+    },
+    "12": {
+     "sign": "Sg",
+     "planets": [
+      "Ke 28°36"
+     ]
+    }
+   }
+  },
+  "D12": {
+   "name": "Dwadasamsa",
+   "lagna": "15°31 Ge",
+   "houses": {
+    "1": {
+     "sign": "Ge",
+     "planets": [
+      "Ne 27°14"
+     ]
+    },
+    "2": {
+     "sign": "Cn",
+     "planets": [
+      "Ra 23°01"
+     ]
+    },
+    "3": {
+     "sign": "Le",
+     "planets": []
+    },
+    "4": {
+     "sign": "Vi",
+     "planets": [
+      "Sa 6°22"
+     ]
+    },
+    "5": {
+     "sign": "Li",
+     "planets": []
+    },
+    "6": {
+     "sign": "Sc",
+     "planets": []
+    },
+    "7": {
+     "sign": "Sg",
+     "planets": [
+      "Ju 26°41"
+     ]
+    },
+    "8": {
+     "sign": "Cp",
+     "planets": [
+      "Mo 28°55",
+      "Ma 16°23",
+      "Ke 23°01"
+     ]
+    },
+    "9": {
+     "sign": "Aq",
+     "planets": [
+      "Ve 13°43"
+     ]
+    },
+    "10": {
+     "sign": "Pi",
+     "planets": [
+      "Me 4°13",
+      "Ur 12°00"
+     ]
+    },
+    "11": {
+     "sign": "Ar",
+     "planets": [
+      "Pl 7°43"
+     ]
+    },
+    "12": {
+     "sign": "Ta",
+     "planets": [
+      "Su 19°19"
+     ]
+    }
+   }
+  },
+  "D16": {
+   "name": "Shodasamsa",
+   "lagna": "20°42 Le",
+   "houses": {
+    "1": {
+     "sign": "Le",
+     "planets": []
+    },
+    "2": {
+     "sign": "Vi",
+     "planets": [
+      "Pl 20°18"
+     ]
+    },
+    "3": {
+     "sign": "Li",
+     "planets": [
+      "Su 5°46"
+     ]
+    },
+    "4": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 28°33",
+      "Ur 6°00"
+     ]
+    },
+    "5": {
+     "sign": "Sg",
+     "planets": []
+    },
+    "6": {
+     "sign": "Cp",
+     "planets": [
+      "Ju 5°34"
+     ]
+    },
+    "7": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "8": {
+     "sign": "Pi",
+     "planets": [
+      "Ve 8°17"
+     ]
+    },
+    "9": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "10": {
+     "sign": "Ta",
+     "planets": [
+      "Ra 0°41",
+      "Ke 0°41"
+     ]
+    },
+    "11": {
+     "sign": "Ge",
+     "planets": [
+      "Me 25°38",
+      "Sa 28°30",
+      "Ne 16°19"
+     ]
+    },
+    "12": {
+     "sign": "Cn",
+     "planets": [
+      "Ma 11°50"
+     ]
+    }
+   }
+  },
+  "D20": {
+   "name": "Vimsamsa",
+   "lagna": "25°52 Ge",
+   "houses": {
+    "1": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "2": {
+     "sign": "Cn",
+     "planets": [
+      "Me 17°03",
+      "Sa 20°37"
+     ]
+    },
+    "3": {
+     "sign": "Le",
+     "planets": [
+      "Ra 8°21",
+      "Ke 8°21",
+      "Pl 2°52"
+     ]
+    },
+    "4": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "5": {
+     "sign": "Li",
+     "planets": []
+    },
+    "6": {
+     "sign": "Sc",
+     "planets": [
+      "Su 22°13"
+     ]
+    },
+    "7": {
+     "sign": "Sg",
+     "planets": [
+      "Ju 14°28",
+      "Ve 2°52"
+     ]
+    },
+    "8": {
+     "sign": "Cp",
+     "planets": [
+      "Ur 0°00",
+      "Ne 5°23"
+     ]
+    },
+    "9": {
+     "sign": "Aq",
+     "planets": [
+      "Ma 7°18"
+     ]
+    },
+    "10": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "11": {
+     "sign": "Ar",
+     "planets": [
+      "Mo 28°11"
+     ]
+    },
+    "12": {
+     "sign": "Ta",
+     "planets": []
+    }
+   }
+  },
+  "D24": {
+   "name": "Siddhamsa",
+   "lagna": "1°03 Vi",
+   "houses": {
+    "1": {
+     "sign": "Vi",
+     "planets": [
+      "Pl 15°27"
+     ]
+    },
+    "2": {
+     "sign": "Li",
+     "planets": [
+      "Ne 24°28"
+     ]
+    },
+    "3": {
+     "sign": "Sc",
+     "planets": [
+      "Me 8°27",
+      "Sa 12°45"
+     ]
+    },
+    "4": {
+     "sign": "Sg",
+     "planets": [
+      "Mo 27°50",
+      "Ma 2°46",
+      "Ve 27°26"
+     ]
+    },
+    "5": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "6": {
+     "sign": "Aq",
+     "planets": [
+      "Ju 23°22"
+     ]
+    },
+    "7": {
+     "sign": "Pi",
+     "planets": [
+      "Ra 16°02",
+      "Ke 16°02"
+     ]
+    },
+    "8": {
+     "sign": "Ar",
+     "planets": [
+      "Su 8°39"
+     ]
+    },
+    "9": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "10": {
+     "sign": "Ge",
+     "planets": [
+      "Ur 24°00"
+     ]
+    },
+    "11": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "12": {
+     "sign": "Le",
+     "planets": []
+    }
+   }
+  },
+  "D27": {
+   "name": "Bhamsa",
+   "lagna": "19°56 Ge",
+   "houses": {
+    "1": {
+     "sign": "Ge",
+     "planets": [
+      "Ne 23°47"
+     ]
+    },
+    "2": {
+     "sign": "Cn",
+     "planets": [
+      "Mo 20°04",
+      "Ra 29°17"
+     ]
+    },
+    "3": {
+     "sign": "Le",
+     "planets": []
+    },
+    "4": {
+     "sign": "Vi",
+     "planets": [
+      "Ve 15°52"
+     ]
+    },
+    "5": {
+     "sign": "Li",
+     "planets": [
+      "Ur 4°31"
+     ]
+    },
+    "6": {
+     "sign": "Sc",
+     "planets": [
+      "Me 24°31",
+      "Ju 7°32",
+      "Pl 9°53"
+     ]
+    },
+    "7": {
+     "sign": "Sg",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cp",
+     "planets": [
+      "Ke 29°17"
+     ]
+    },
+    "9": {
+     "sign": "Aq",
+     "planets": [
+      "Ma 6°52"
+     ]
+    },
+    "10": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "11": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "12": {
+     "sign": "Ta",
+     "planets": [
+      "Su 13°29",
+      "Sa 29°21"
+     ]
+    }
+   }
+  },
+  "D30": {
+   "name": "Trimsamsa",
+   "lagna": "8°49 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Ur 15°01"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": [
+      "Ma 10°58",
+      "Ju 21°42"
+     ]
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": [
+      "Ve 4°18"
+     ]
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": [
+      "Ne 23°05",
+      "Pl 4°18"
+     ]
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": [
+      "Ra 12°32",
+      "Ke 12°32"
+     ]
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": [
+      "Su 18°19",
+      "Mo 12°17",
+      "Me 10°34",
+      "Sa 15°56"
+     ]
+    },
+    "11": {
+     "sign": "Li",
+     "planets": []
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": []
+    }
+   }
+  },
+  "D40": {
+   "name": "Khavedamsa",
+   "lagna": "21°45 Cp",
+   "houses": {
+    "1": {
+     "sign": "Cp",
+     "planets": [
+      "Su 14°26"
+     ]
+    },
+    "2": {
+     "sign": "Aq",
+     "planets": [
+      "Ma 14°37"
+     ]
+    },
+    "3": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "4": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "5": {
+     "sign": "Ta",
+     "planets": [
+      "Me 4°06",
+      "Sa 11°15"
+     ]
+    },
+    "6": {
+     "sign": "Ge",
+     "planets": [
+      "Ju 28°56"
+     ]
+    },
+    "7": {
+     "sign": "Cn",
+     "planets": [
+      "Mo 26°23"
+     ]
+    },
+    "8": {
+     "sign": "Le",
+     "planets": []
+    },
+    "9": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "10": {
+     "sign": "Li",
+     "planets": [
+      "Ur 0°01",
+      "Pl 5°45"
+     ]
+    },
+    "11": {
+     "sign": "Sc",
+     "planets": []
+    },
+    "12": {
+     "sign": "Sg",
+     "planets": [
+      "Ve 5°44",
+      "Ra 16°43",
+      "Ke 16°43",
+      "Ne 10°47"
+     ]
+    }
+   }
+  },
+  "D45": {
+   "name": "Akshavedamsa",
+   "lagna": "13°13 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Me 0°52",
+      "Sa 8°55",
+      "Ur 7°31"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": [
+      "Ju 2°34",
+      "Ne 19°38"
+     ]
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": [
+      "Pl 6°28"
+     ]
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": [
+      "Ma 1°27",
+      "Ra 18°49",
+      "Ke 18°49"
+     ]
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": [
+      "Mo 3°26"
+     ]
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": [
+      "Su 12°29",
+      "Ve 6°28"
+     ]
+    },
+    "11": {
+     "sign": "Li",
+     "planets": []
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": []
+    }
+   }
+  },
+  "D60": {
+   "name": "Shashtiamsa",
+   "lagna": "17°38 Le",
+   "houses": {
+    "1": {
+     "sign": "Le",
+     "planets": []
+    },
+    "2": {
+     "sign": "Vi",
+     "planets": [
+      "Pl 8°37"
+     ]
+    },
+    "3": {
+     "sign": "Li",
+     "planets": [
+      "Ra 25°05"
+     ]
+    },
+    "4": {
+     "sign": "Sc",
+     "planets": [
+      "Ma 21°56",
+      "Me 21°09"
+     ]
+    },
+    "5": {
+     "sign": "Sg",
+     "planets": [
+      "Su 6°39",
+      "Ve 8°37"
+     ]
+    },
+    "6": {
+     "sign": "Cp",
+     "planets": [
+      "Mo 24°35",
+      "Ur 0°02"
+     ]
+    },
+    "7": {
+     "sign": "Aq",
+     "planets": [
+      "Ne 16°11"
+     ]
+    },
+    "8": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "9": {
+     "sign": "Ar",
+     "planets": [
+      "Ju 13°25",
+      "Ke 25°05"
+     ]
+    },
+    "10": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "11": {
+     "sign": "Ge",
+     "planets": [
+      "Sa 1°53"
+     ]
+    },
+    "12": {
+     "sign": "Cn",
+     "planets": []
+    }
+   }
+  },
+  "D81": {
+   "name": "Navamsa-Navamsa",
+   "lagna": "29°48 Sc",
+   "houses": {
+    "1": {
+     "sign": "Sc",
+     "planets": []
+    },
+    "2": {
+     "sign": "Sg",
+     "planets": [
+      "Ne 11°21"
+     ]
+    },
+    "3": {
+     "sign": "Cp",
+     "planets": [
+      "Ju 22°37",
+      "Pl 29°39"
+     ]
+    },
+    "4": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "5": {
+     "sign": "Pi",
+     "planets": [
+      "Mo 0°12",
+      "Me 13°33",
+      "Ra 27°52"
+     ]
+    },
+    "6": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "7": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "8": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "9": {
+     "sign": "Cn",
+     "planets": []
+    },
+    "10": {
+     "sign": "Le",
+     "planets": [
+      "Su 10°28",
+      "Ve 17°38"
+     ]
+    },
+    "11": {
+     "sign": "Vi",
+     "planets": [
+      "Sa 28°03",
+      "Ke 27°52"
+     ]
+    },
+    "12": {
+     "sign": "Li",
+     "planets": [
+      "Ma 20°36",
+      "Ur 13°33"
+     ]
+    }
+   }
+  },
+  "D108": {
+   "name": "Ashtottaramsa",
+   "lagna": "19°44 Ge",
+   "houses": {
+    "1": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "2": {
+     "sign": "Cn",
+     "planets": [
+      "Ju 0°09"
+     ]
+    },
+    "3": {
+     "sign": "Le",
+     "planets": [
+      "Ra 27°10"
+     ]
+    },
+    "4": {
+     "sign": "Vi",
+     "planets": [
+      "Su 23°58",
+      "Me 8°04"
+     ]
+    },
+    "5": {
+     "sign": "Li",
+     "planets": []
+    },
+    "6": {
+     "sign": "Sc",
+     "planets": [
+      "Mo 20°16",
+      "Ma 27°29",
+      "Ne 5°08",
+      "Pl 9°32"
+     ]
+    },
+    "7": {
+     "sign": "Sg",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "9": {
+     "sign": "Aq",
+     "planets": [
+      "Ke 27°10",
+      "Ur 18°04"
+     ]
+    },
+    "10": {
+     "sign": "Pi",
+     "planets": [
+      "Ve 3°31",
+      "Sa 27°24"
+     ]
+    },
+    "11": {
+     "sign": "Ar",
+     "planets": []
+    },
+    "12": {
+     "sign": "Ta",
+     "planets": []
+    }
+   }
+  },
+  "D144": {
+   "name": "Dwadasamsa-Dwadasamsa",
+   "lagna": "6°19 Sg",
+   "houses": {
+    "1": {
+     "sign": "Sg",
+     "planets": [
+      "Su 21°57",
+      "Mo 17°01"
+     ]
+    },
+    "2": {
+     "sign": "Cp",
+     "planets": []
+    },
+    "3": {
+     "sign": "Aq",
+     "planets": []
+    },
+    "4": {
+     "sign": "Pi",
+     "planets": []
+    },
+    "5": {
+     "sign": "Ar",
+     "planets": [
+      "Me 20°46",
+      "Ra 6°14",
+      "Ne 26°51"
+     ]
+    },
+    "6": {
+     "sign": "Ta",
+     "planets": []
+    },
+    "7": {
+     "sign": "Ge",
+     "planets": []
+    },
+    "8": {
+     "sign": "Cn",
+     "planets": [
+      "Ma 16°38",
+      "Ve 14°41",
+      "Ur 24°05",
+      "Pl 2°42"
+     ]
+    },
+    "9": {
+     "sign": "Le",
+     "planets": []
+    },
+    "10": {
+     "sign": "Vi",
+     "planets": []
+    },
+    "11": {
+     "sign": "Li",
+     "planets": [
+      "Ju 20°12",
+      "Ke 6°14"
+     ]
+    },
+    "12": {
+     "sign": "Sc",
+     "planets": [
+      "Sa 16°33"
+     ]
+    }
+   }
+  }
+ }
+}

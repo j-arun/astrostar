@@ -3032,7 +3032,7 @@ function originalSourceApiPlugin(): Plugin {
             return;
           }
 
-          const rawVariant = (urlObj.searchParams.get('variant') || 'baseline').trim().toLowerCase();
+          const rawVariant = (urlObj.searchParams.get('variant') || 'compact').trim().toLowerCase();
           if (rawVariant !== 'baseline' && rawVariant !== 'compact' && rawVariant !== 'both') {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -3044,12 +3044,24 @@ function originalSourceApiPlugin(): Plugin {
           }
 
           const rawPart = (urlObj.searchParams.get('part') || 'full').trim().toLowerCase();
-          if (rawPart !== 'full' && rawPart !== 'month' && rawPart !== 'static') {
+          if (rawPart !== 'full' && rawPart !== 'month' && rawPart !== 'static' && rawPart !== 'subprompt') {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify({
               success: false,
-              error: `Invalid part "${rawPart}". Expected "full", "month", or "static".`
+              error: `Invalid part "${rawPart}". Expected "full", "month", "static", or "subprompt".`
+            }));
+            return;
+          }
+
+          const rawDomainParam = urlObj.searchParams.get('domain');
+          const resolvedDomain = mod.resolveOriginalSourceDomain(rawDomainParam);
+          if (!resolvedDomain) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({
+              success: false,
+              error: `Invalid domain "${rawDomainParam}". Expected "master", "career" (or "work"), "finance" (or "wealth"), "love" (or "romance"), or "family" (or "home").`
             }));
             return;
           }
@@ -3095,6 +3107,7 @@ function originalSourceApiPlugin(): Plugin {
             monthIndex: parsed.monthIndex,
             variant: rawVariant,
             part: rawPart,
+            domain: resolvedDomain,
             chartSource
           });
 
@@ -3114,7 +3127,7 @@ function originalSourceApiPlugin(): Plugin {
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             const textBody = payload.variant === 'both'
               ? `=== BASELINE (14B) ===\n${payload.baseline.content}\n=== COMPACT ===\n${payload.compact.content}`
-              : payload.content;
+              : (payload.content || '');
             res.end(textBody);
             return;
           }

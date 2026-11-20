@@ -1,9 +1,10 @@
 import originalSourceRulesRaw from './originalSourceRules.txt?raw';
 import originalSourceRulesBaselineRaw from './originalSourceRulesBaseline.txt?raw';
-import { VedicHouseContext } from './types';
+import { OriginalSourceDomain, VedicHouseContext } from './types';
 import { getGrahaTransitPosition, GrahaTransitPosition, NAKSHATRAS } from '../../data/transitEphemeris';
-import { calculateTaraBala, calculateChandraBala } from '../../data/parasharaCalculations';
+import { calculateTaraBala, calculateChandraBala, computeSarvashtakavarga } from '../../data/parasharaCalculations';
 import { getFullVimshottariTimeline } from '../../data/dashaCalculator';
+import { apply001MEEnrichments, DOMAIN_PROMPT_SPECS, VargaChartDef } from '../../data/vargaAndStrengthData';
 import {
   getCleanSignIndex,
   getParasharaAspectEntries
@@ -75,6 +76,64 @@ const COMBUSTION_ORBS: Record<string, number> = {
   Venus: 10,
   Saturn: 15
 };
+
+const SIGN_PRIMARY_LORD_EN: Record<number, string> = {
+  1: 'Mars', 2: 'Venus', 3: 'Mercury', 4: 'Moon',
+  5: 'Sun', 6: 'Mercury', 7: 'Venus', 8: 'Mars',
+  9: 'Jupiter', 10: 'Saturn', 11: 'Saturn', 12: 'Jupiter'
+};
+
+const NAISARGIKA_FRIENDS: Record<string, string[]> = {
+  Sun: ['Moon', 'Mars', 'Jupiter'],
+  Moon: ['Sun', 'Mercury'],
+  Mars: ['Sun', 'Moon', 'Jupiter'],
+  Mercury: ['Sun', 'Venus'],
+  Jupiter: ['Sun', 'Moon', 'Mars'],
+  Venus: ['Mercury', 'Saturn'],
+  Saturn: ['Mercury', 'Venus']
+};
+
+const NAISARGIKA_ENEMIES: Record<string, string[]> = {
+  Sun: ['Venus', 'Saturn'],
+  Moon: [],
+  Mars: ['Mercury'],
+  Mercury: ['Moon'],
+  Jupiter: ['Mercury', 'Venus'],
+  Venus: ['Sun', 'Moon'],
+  Saturn: ['Sun', 'Moon', 'Mars']
+};
+
+function getNaisargikaDignity(planet: string, signIdx: number, isRetro?: boolean): string {
+  if (!signIdx) return '';
+  if (CLASSICAL_EXALT_SIGNS[planet] === signIdx) return 'Exalted';
+  if (CLASSICAL_DEBIL_SIGNS[planet] === signIdx) return isRetro ? 'Debil-Vakra' : 'Debilitated';
+  if ((OWNED_SIGN_INDICES[planet] || []).includes(signIdx)) return 'Own';
+  const signLord = SIGN_PRIMARY_LORD_EN[signIdx];
+  if (!signLord) return '';
+  if ((NAISARGIKA_FRIENDS[planet] || []).includes(signLord)) return 'Friend';
+  if ((NAISARGIKA_ENEMIES[planet] || []).includes(signLord)) return 'Enemy';
+  if (planet === 'Rahu' || planet === 'Ketu') return '';
+  return 'Neutral';
+}
+
+function parseDegreeFloat(degStr?: string): number | null {
+  if (!degStr) return null;
+  const m = String(degStr).match(/(\d{1,2})\s*°\s*(\d{1,2})?(?:\s*'\s*(\d{1,2}))?/);
+  if (!m) return null;
+  const d = parseInt(m[1], 10);
+  const mins = m[2] ? parseInt(m[2], 10) : 0;
+  const secs = m[3] ? parseInt(m[3], 10) : 0;
+  return d + mins / 60 + secs / 3600;
+}
+
+function formatDegreeFromFloat(degInSign: number): string {
+  const norm = ((degInSign % 30) + 30) % 30;
+  const d = Math.floor(norm);
+  const m = Math.floor((norm - d) * 60 + 1e-6);
+  const adjD = m >= 60 ? d + 1 : d;
+  const adjM = m >= 60 ? m - 60 : m;
+  return `${String(adjD).padStart(2, '0')}°${String(adjM).padStart(2, '0')}'`;
+}
 
 const TARA_SHORT_LABEL: Record<number, string> = {
   1: 'Janma',
@@ -229,11 +288,15 @@ export function isCombustAgainstSun(
 }
 
 function formatCompactNeechaBhangaFactors(reasons: string[]): string {
-  const kendraItems: string[] = [];
+  const kendraMap = new Map<string, { hasLagna: boolean; hasMoon: boolean }>();
+  const kendraFrames = new Set<string>();
   const otherItems: string[] = [];
-  const seen = new Set<string>();
+  const otherSeen = new Set<string>();
   for (const rawReason of reasons) {
-    const r = rawReason.replace(/\s*\(H\d+ from (Moon|Lagna)\)/g, '').trim();
+    // Capture Lagna / Moon frame explicitly before stripping verbose parenthesis
+    const hasLagna = /Lagna|H\d+\s+Lagna|from Lagna/i.test(rawReason);
+    const hasMoon = /Moon|H\d+\s+Moon|from Moon/i.test(rawReason);
+    const r = rawReason.replace(/\s*\([^)]*(?:Moon|Lagna)[^)]*\)/gi, '').trim();
     const low = r.toLowerCase();
     let tag = r;
     let isKendra = false;
@@ -268,14 +331,26 @@ function formatCompactNeechaBhangaFactors(reasons: string[]): string {
       tag = m ? `exalt-lord ${m[1]}` : 'exalt-lord';
       isKendra = true;
     }
-    const key = `${isKendra ? 'K:' : ''}${tag}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (isKendra) kendraItems.push(tag);
-    else otherItems.push(tag);
+    if (isKendra) {
+      if (hasLagna) kendraFrames.add('Lagna');
+      if (hasMoon) kendraFrames.add('Moon');
+      const prev = kendraMap.get(tag) || { hasLagna: false, hasMoon: false };
+      kendraMap.set(tag, { hasLagna: prev.hasLagna || hasLagna, hasMoon: prev.hasMoon || hasMoon });
+    } else if (!otherSeen.has(tag)) {
+      otherSeen.add(tag);
+      otherItems.push(tag);
+    }
+  }
+  const kendraItems: string[] = [];
+  for (const [tag, fr] of kendraMap.entries()) {
+    const fTag = fr.hasLagna && fr.hasMoon ? 'L/M' : fr.hasMoon ? 'Moon' : fr.hasLagna ? 'Lagna' : '';
+    kendraItems.push(`${tag}${fTag ? `[${fTag}]` : ''}`);
   }
   const parts: string[] = [];
-  if (kendraItems.length > 0) parts.push(`Kendra(${kendraItems.join(',')})`);
+  if (kendraItems.length > 0) {
+    const fLabel = kendraFrames.size === 2 ? 'Lagna/Moon' : (Array.from(kendraFrames)[0] || 'Lagna/Moon');
+    parts.push(`Kendra[${fLabel}](${kendraItems.join(',')})`);
+  }
   if (otherItems.length > 0) parts.push(...otherItems);
   return parts.length > 0 ? parts.join(',') : 'none';
 }
@@ -364,9 +439,11 @@ interface DailyPlanetRecord {
 export interface OriginalSourcePromptResult {
   staticBlock: string;
   monthSlice: string;
+  subPromptBlock: string;
   fullPrompt: string;
   meta: {
     variant: OriginalSourceVariant;
+    domain: OriginalSourceDomain;
     monthLabel: string;
     dateRange: string;
     charCount: number;
@@ -377,24 +454,28 @@ export interface OriginalSourcePromptResult {
 
 /**
  * Builds the "Original Source" (Original Heartbeat) holistic raw-data prompt.
- * Supports exactly two variants:
- * - 'baseline': Clear, explicit-label layout tailored for quantized private 14B models.
- * - 'compact': Ultra-dense layout stripping redundant spaces/words for Gemini / Claude.
+ * Supports:
+ * - Master Prompt (`domain = 'master'`): D1, D9, Shadbala, 7-Planet Ashtakavarga + As + Sodhya Pindas, Yogas/Doshas, Jaimini + Monthly Ephemeris
+ * - 4 Domain Sub-Prompts (`career`, `finance`, `love`, `family`): Attaches domain-specific Divisional Charts (Vargas), focus houses, karakas, and yogas/doshas
+ * - Two variants (`compact` readable LLM format with spaces, `baseline` full-label 14B format)
  * Completely independent of existing v1/v2/v3 prompts.
- * Zero outcome prose, zero percentages, zero invented scores, zero JSON contracts.
  */
 export function buildOriginalSourcePrompt(
-  context: VedicHouseContext,
-  variant: OriginalSourceVariant = 'baseline'
+  rawContext: VedicHouseContext,
+  variant: OriginalSourceVariant = 'compact',
+  domainArg?: OriginalSourceDomain
 ): OriginalSourcePromptResult {
+  const domain: OriginalSourceDomain = domainArg || rawContext.originalSourceDomain || 'master';
   const isCompact = variant === 'compact';
-  const sep = isCompact ? '|' : ' | ';
-  const listSep = isCompact ? ',' : ', ';
+  // Spaces enabled in both variants for LLM readability as requested
+  const sep = ' | ';
+  const listSep = ', ';
 
-  const lagna = cleanSign(context.natalLagnaSignName) || 'Sagittarius';
-  const moon = cleanSign(context.natalMoonSignName || context.natalJanmaStar?.rashi_name) || 'Scorpio';
+  const lagna = cleanSign(rawContext.natalLagnaSignName) || 'Sagittarius';
+  const moon = cleanSign(rawContext.natalMoonSignName || rawContext.natalJanmaStar?.rashi_name) || 'Scorpio';
   const lagnaIdx = getCleanSignIndex(lagna) || 9;
   const moonIdx = getCleanSignIndex(moon) || 8;
+  const context = apply001MEEnrichments(rawContext, lagnaIdx, moonIdx);
   const janmaStarName = cleanStar(context.natalJanmaStar?.nakshatra_name || 'Anuradha');
   const janmaPada = context.natalJanmaStar?.pada || 2;
 
@@ -403,7 +484,7 @@ export function buildOriginalSourcePrompt(
   // =========================================================================
   const rulesText = (isCompact ? originalSourceRulesRaw : originalSourceRulesBaselineRaw).trim();
 
-  // S2 [LORDSHIPS]
+  // S2 [LORDSHIPS] & S2B [HOUSE LORDS]
   const lordshipEntries = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'].map(p => {
     const signs = OWNED_SIGN_INDICES[p] || [];
     const lHouses = signs.map(s => `L${((s - lagnaIdx + 12) % 12) + 1}`).join(listSep);
@@ -411,22 +492,125 @@ export function buildOriginalSourcePrompt(
     return isCompact ? `${p}:${lHouses}(${mHouses})` : `${p}: ${lHouses} (${mHouses})`;
   });
 
-  // S3 [D1]
-  const d1Lines = (context.flattenedNatalD1 && context.flattenedNatalD1.length > 0)
-    ? context.flattenedNatalD1.map(p => {
+  // S3 [D1] — precompute D1 natal coordinates, combustion, conjunctions, and Parashara aspects
+  const d1Raw = context.flattenedNatalD1 || [];
+  const d1SunRow = d1Raw.find(p => cleanPlanet(p.body_name) === 'Sun');
+  const d1SunSignIdx = d1SunRow ? getCleanSignIndex(d1SunRow.rashi_name) : 0;
+  const d1SunDeg = d1SunRow ? parseDegreeFloat(d1SunRow.degree_sputa) : null;
+  const d1SunLon = d1SunSignIdx && d1SunDeg !== null ? (d1SunSignIdx - 1) * 30 + d1SunDeg : null;
+
+  const d1CoOccupantsBySign = new Map<number, string[]>();
+  const d1PlanetMetaMap = new Map<string, {
+    signIdx: number;
+    signName: string;
+    hL: number;
+    hM: number;
+    degFloat: number | null;
+    degStr: string;
+    isRetro: boolean;
+    dignity: string;
+    combustGapStr: string | null;
+    conjunctWith: string[];
+    aspects: string[];
+  }>();
+
+  for (const p of d1Raw) {
+    const pName = cleanPlanet(p.body_name);
+    const sIdx = getCleanSignIndex(p.rashi_name);
+    if (!pName || !sIdx) continue;
+    const arr = d1CoOccupantsBySign.get(sIdx) || [];
+    if (pName !== 'Lagna') arr.push(pName);
+    d1CoOccupantsBySign.set(sIdx, arr);
+  }
+
+  for (const p of d1Raw) {
+    const pName = cleanPlanet(p.body_name);
+    const sIdx = getCleanSignIndex(p.rashi_name);
+    if (!pName || !sIdx) continue;
+    const hL = p.house_number || (((sIdx - lagnaIdx + 12) % 12) + 1);
+    const hM = ((sIdx - moonIdx + 12) % 12) + 1;
+    const degFloat = parseDegreeFloat(p.degree_sputa);
+    const degStr = cleanDegree(p.degree_sputa) || '-';
+    const isRetro = !!p.is_retrograde;
+    const dignity = pName === 'Lagna' ? '' : getNaisargikaDignity(pName, sIdx, isRetro);
+
+    let combustGapStr: string | null = null;
+    if (pName !== 'Sun' && pName !== 'Lagna' && pName !== 'Rahu' && pName !== 'Ketu' && pName !== 'Mandi' && d1SunLon !== null && degFloat !== null) {
+      const pLon = (sIdx - 1) * 30 + degFloat;
+      if (isCombustAgainstSun(pName, pLon, d1SunLon, isRetro)) {
+        const diff = Math.abs(pLon - d1SunLon);
+        const gap = Math.min(diff, 360 - diff);
+        const gDeg = Math.floor(gap);
+        const gMin = Math.round((gap - gDeg) * 60);
+        combustGapStr = `${gDeg}°${String(gMin).padStart(2, '0')}'`;
+      }
+    }
+
+    const conjunctWith = pName === 'Lagna'
+      ? []
+      : (d1CoOccupantsBySign.get(sIdx) || []).filter(other => other !== pName);
+
+    const aspects = (pName === 'Lagna' || pName === 'Mandi')
+      ? []
+      : getParasharaAspectEntries(pName, sIdx, lagnaIdx, moonIdx).map(a => `${a.label}:${signAbbr(a.targetSign)}(L${a.hLagna}/M${a.hMoon})`);
+
+    d1PlanetMetaMap.set(pName, {
+      signIdx: sIdx,
+      signName: SIGN_LIST_EN[sIdx - 1] || cleanSign(p.rashi_name),
+      hL,
+      hM,
+      degFloat,
+      degStr,
+      isRetro,
+      dignity,
+      combustGapStr,
+      conjunctWith,
+      aspects
+    });
+  }
+
+  const d1Lines = d1Raw.length > 0
+    ? d1Raw.map(p => {
         const pName = cleanPlanet(p.body_name);
         const sName = cleanSign(p.rashi_name);
         const sIdx = getCleanSignIndex(sName);
         const hNum = p.house_number || (sIdx ? ((sIdx - lagnaIdx + 12) % 12) + 1 : '?');
         const deg = cleanDegree(p.degree_sputa) || '-';
         const star = cleanStar(p.nakshatra_name, p.pada) || '-';
-        const rFlag = p.is_retrograde ? `${sep}R` : '';
-        return `${pName}${sep}${sName}${sep}H${hNum}${sep}${deg}${sep}${star}${rFlag}`;
+        const meta = d1PlanetMetaMap.get(pName);
+        const flags: string[] = [];
+        if (p.is_retrograde) flags.push('R');
+        if (meta?.dignity) flags.push(meta.dignity);
+        if (meta?.combustGapStr) flags.push(isCompact ? `Comb(${meta.combustGapStr})` : `Combust(${meta.combustGapStr})`);
+        if (meta && meta.conjunctWith.length > 0) flags.push(`Conj:${meta.conjunctWith.join(',')}`);
+        if (meta && meta.aspects.length > 0) flags.push(`Asp:${meta.aspects.join(',')}`);
+        return `${pName}${sep}${sName}${sep}H${hNum}${sep}${deg}${sep}${star}${flags.length > 0 ? `${sep}${flags.join(listSep)}` : ''}`;
       })
     : ['D1 placements not provided'];
 
-  // S4 [D9] — strictly derived from source data (7 classical planets + Vargottama + R; no invented node Exalted/Debilitated)
-  const computeFallbackD9 = (): NonNullable<VedicHouseContext['flattenedNatalD9']> => {
+  // [HOUSE LORDS] — explicit H1..H12 lord placement lookup table
+  const houseLordEntries: string[] = [];
+  for (let h = 1; h <= 12; h++) {
+    const hSignIdx = ((lagnaIdx + h - 2) % 12) + 1;
+    const lord = SIGN_PRIMARY_LORD_EN[hSignIdx];
+    const lm = d1PlanetMetaMap.get(lord);
+    if (lm) {
+      const f: string[] = [];
+      if (lm.isRetro) f.push('R');
+      if (lm.dignity === 'Own' || lm.dignity === 'Exalted' || lm.dignity.startsWith('Debil')) f.push(lm.dignity);
+      if (lm.combustGapStr) f.push(isCompact ? 'Comb' : 'Combust');
+      const fTag = f.length > 0 ? `(${f.join(',')})` : '';
+      houseLordEntries.push(isCompact ? `L${h}:${lord}@H${lm.hL}${fTag}` : `L${h}:${lord}@H${lm.hL}(M${lm.hM})${fTag}`);
+    } else {
+      houseLordEntries.push(`L${h}:${lord}`);
+    }
+  }
+  const houseLordsBlock = isCompact
+    ? houseLordEntries.join('|')
+    : `${houseLordEntries.slice(0, 6).join(' | ')}\n${houseLordEntries.slice(6).join(' | ')}`;
+
+  // S4 [D9] — strictly derived & verified (7 classical planets + Vargottama + R; Rahu/Ketu always 180 deg opposite)
+  const computeD9FromD1 = (): NonNullable<VedicHouseContext['flattenedNatalD9']> => {
     const d1 = context.flattenedNatalD1 || [];
     if (d1.length === 0) return [];
     const rawItems: Array<{ body_name: string; d9SignIdx: number; rashi_name: string; is_retrograde?: boolean }> = [];
@@ -457,10 +641,32 @@ export function buildOriginalSourcePrompt(
     }));
   };
 
-  const d9Source = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
+  const fallbackD9List = computeD9FromD1();
+  const rawD9Input = (context.flattenedNatalD9 && context.flattenedNatalD9.length > 0)
     ? context.flattenedNatalD9
-    : computeFallbackD9();
+    : fallbackD9List;
 
+  // Ensure D9 Rahu & Ketu are mathematically opposite when D1 coordinates exist
+  const d9LagnaEntry = rawD9Input.find(p => cleanPlanet(p.body_name).toLowerCase() === 'lagna');
+  const d9LagnaIdxResolved = d9LagnaEntry ? getCleanSignIndex(d9LagnaEntry.rashi_name) : 0;
+  const d9RahuRow = rawD9Input.find(p => cleanPlanet(p.body_name) === 'Rahu');
+  const d9KetuRow = rawD9Input.find(p => cleanPlanet(p.body_name) === 'Ketu');
+  const d9RahuS = d9RahuRow ? getCleanSignIndex(d9RahuRow.rashi_name) : 0;
+  const d9KetuS = d9KetuRow ? getCleanSignIndex(d9KetuRow.rashi_name) : 0;
+  const d9NodesOpposite = d9RahuS > 0 && d9KetuS > 0 && ((d9RahuS - d9KetuS + 12) % 12) === 6;
+
+  const d9Source = (!d9NodesOpposite && fallbackD9List.length > 0)
+    ? rawD9Input.map(row => {
+        const cleanB = cleanPlanet(row.body_name);
+        if (cleanB === 'Rahu' || cleanB === 'Ketu') {
+          const derived = fallbackD9List.find(x => cleanPlanet(x.body_name) === cleanB);
+          return derived || row;
+        }
+        return row;
+      })
+    : rawD9Input;
+
+  const d9SignByPlanet = new Map<string, { signIdx: number; signName: string; hD9: number }>();
   let d9Lines: string[] = [];
   if (d9Source.length > 0) {
     const d1SignMap = new Map<string, number>();
@@ -469,13 +675,12 @@ export function buildOriginalSourcePrompt(
       const s = getCleanSignIndex(p.rashi_name);
       if (k && s) d1SignMap.set(k, s);
     });
-    const lagnaRow = d9Source.find(p => cleanPlanet(p.body_name).toLowerCase() === 'lagna');
-    const d9LagnaIdx = lagnaRow ? getCleanSignIndex(lagnaRow.rashi_name) : 0;
     d9Lines = d9Source.map(p => {
       const pName = cleanPlanet(p.body_name);
       const sIdx = getCleanSignIndex(p.rashi_name);
       const sName = sIdx ? SIGN_LIST_EN[sIdx - 1] : cleanSign(p.rashi_name);
-      const hNum = p.house_number || (d9LagnaIdx && sIdx ? ((sIdx - d9LagnaIdx + 12) % 12) + 1 : '?');
+      const hNum = d9LagnaIdxResolved && sIdx ? ((sIdx - d9LagnaIdxResolved + 12) % 12) + 1 : (p.house_number || 1);
+      if (sIdx) d9SignByPlanet.set(pName, { signIdx: sIdx, signName: sName, hD9: hNum });
       const flags: string[] = [];
       if (pName.toLowerCase() !== 'lagna') {
         if (CLASSICAL_EXALT_SIGNS[pName] === sIdx) flags.push('Exalted');
@@ -490,36 +695,178 @@ export function buildOriginalSourcePrompt(
     d9Lines = ['D9 placements not provided'];
   }
 
-  // S5 [SAV]
-  const savDist = context.ashtakavargaPayload?.savPointsDistribution || [];
-  const savLine = savDist.length > 0
-    ? [...savDist].sort((a, b) => a.houseNumber - b.houseNumber).map(s => `H${s.houseNumber}:${s.points}`).join(listSep)
+  // S5 [SHADBALA]
+  const shadbalaBlock = context.shadbalaStrengths && context.shadbalaStrengths.length > 0
+    ? context.shadbalaStrengths.map(s => {
+        if (isCompact) {
+          return `${s.planet} ${s.ratio.toFixed(2)} (${s.total.toFixed(1)}/${s.required}, ${s.percent.toFixed(1)}% ${s.status}) | Sth:${s.sthana.toFixed(1)}, Dig:${s.dig.toFixed(1)}, Kaa:${s.kaala.toFixed(1)}, Che:${s.cheshta.toFixed(1)}, Nai:${s.naisargika.toFixed(1)}, Dri:${s.drik.toFixed(1)} | Ishta:${s.ishtaPhala.toFixed(1)}, Kashta:${s.kashtaPhala.toFixed(1)} | Shadvarga:${s.shadvargaVimsopaka}(${s.shadvargaAmsa}), Shodashavarga:${s.shodashavargaVimsopaka}(${s.shodashavargaAmsa}; ${s.shodashavargaCharts.join('/') || '-'})`;
+        }
+        return `${s.planet} | Ratio: ${s.ratio.toFixed(2)} (${s.total.toFixed(2)}/${s.required}, ${s.percent.toFixed(1)}%, ${s.status}) | Sthana:${s.sthana.toFixed(2)}, Dig:${s.dig.toFixed(2)}, Kaala:${s.kaala.toFixed(2)}, Cheshta:${s.cheshta.toFixed(2)}, Naisargika:${s.naisargika.toFixed(2)}, Drik:${s.drik.toFixed(2)} | Harsha:${s.harsha.toFixed(1)}, Ishta:${s.ishtaPhala.toFixed(2)}, Kashta:${s.kashtaPhala.toFixed(2)} | Vimsopaka: Shadvarga ${s.shadvargaVimsopaka} (${s.shadvargaAmsa}), Dashavarga ${s.dashavargaVimsopaka} (${s.dashavargaAmsa}), Shodashavarga ${s.shodashavargaVimsopaka} (${s.shodashavargaAmsa}; Charts: ${s.shodashavargaCharts.join(', ') || '-'})`;
+      }).join('\n')
+    : 'Shadbala not provided';
+
+  // S6 [SAV], [BAV] (All 7 planets + Lagna As), and [PINDAS]
+  const bphsReport = computeSarvashtakavarga(lagnaIdx, undefined, context.flattenedNatalD1);
+  const savDist = (context.ashtakavargaPayload?.savPointsDistribution && context.ashtakavargaPayload.savTotalSum === 337)
+    ? context.ashtakavargaPayload.savPointsDistribution
+    : bphsReport.allHousesOverview;
+  const savTotalSum = savDist.reduce((acc, s) => acc + s.points, 0);
+  const sortedSav = [...savDist].sort((a, b) => a.houseNumber - b.houseNumber);
+  const maxSavPts = sortedSav.length > 0 ? Math.max(...sortedSav.map(s => s.points)) : 0;
+  const minSavPts = sortedSav.length > 0 ? Math.min(...sortedSav.map(s => s.points)) : 0;
+  const maxSavHouses = sortedSav.filter(s => s.points === maxSavPts).map(s => `H${s.houseNumber}`).join(',');
+  const minSavHouses = sortedSav.filter(s => s.points === minSavPts).map(s => `H${s.houseNumber}`).join(',');
+  const savLine = sortedSav.length > 0
+    ? `${sortedSav.map(s => `H${s.houseNumber}:${s.points}`).join(listSep)} | Sum:${savTotalSum} | Avg:${(savTotalSum / 12).toFixed(1)} | Max:${maxSavHouses}(${maxSavPts}) | Min:${minSavHouses}(${minSavPts})`
     : 'SAV not provided';
 
   const savBySignIdx = new Map<number, number>();
   savDist.forEach(s => savBySignIdx.set(s.signIndex, s.points));
 
-  // S6 [KARAKAS]
+  const bavData = context.ashtakavargaPayload?.bavByPlanet || bphsReport.bavByPlanet;
+  const lagnaBavMap = context.ashtakavargaPayload?.lagnaBav;
+  const formatBavRow = (label: string, pMap: Record<number, number> | undefined, suffixNote = ''): string => {
+    if (!pMap) return `${label}: not provided`;
+    const houseEntries: string[] = [];
+    let total = 0;
+    for (let h = 1; h <= 12; h++) {
+      const sIdx = ((lagnaIdx + h - 2) % 12) + 1;
+      const pts = pMap[sIdx] ?? 0;
+      total += pts;
+      houseEntries.push(`H${h}:${pts}`);
+    }
+    return isCompact
+      ? `${label}(${total}${suffixNote}): ${houseEntries.join(', ')}`
+      : `${label} BAV (${total}${suffixNote}): ${houseEntries.join(', ')}`;
+  };
+  const all7Planets: Array<'Sun' | 'Moon' | 'Mars' | 'Mercury' | 'Jupiter' | 'Venus' | 'Saturn'> = [
+    'Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'
+  ];
+  const bavRows: string[] = bavData
+    ? all7Planets.map(p => formatBavRow(p, bavData[p]))
+    : ['BAV not provided'];
+  if (lagnaBavMap) {
+    bavRows.push(formatBavRow('As(Lagna)', lagnaBavMap, ', excl. SAV'));
+  }
+  const bavBlock = bavRows.join('\n');
+
+  const pindasBlock = context.ashtakavargaPayload?.sodhyaPindas && context.ashtakavargaPayload.sodhyaPindas.length > 0
+    ? (isCompact
+        ? context.ashtakavargaPayload.sodhyaPindas.map(p => `${p.planet}: R${p.rasiPinda}+G${p.grahaPinda}=${p.sodhyaPinda} (${p.pct}%)`).join(' | ')
+        : context.ashtakavargaPayload.sodhyaPindas.map(p => `${p.planet}: Rasi ${p.rasiPinda} + Graha ${p.grahaPinda} = Sodhya ${p.sodhyaPinda} (${p.pct}%)`).join(' | '))
+    : 'Sodhya Pindas not provided';
+
+  // S7 [YOGAS] & [DOSHAS]
+  const yogasBlock = (() => {
+    const yd = context.yogasAndDoshas;
+    if (!yd) return 'Yogas not provided';
+    const rajaStr = yd.rajaYogas.length > 0
+      ? `Raja Yogas (${yd.rajaYogas.length}): ${yd.rajaYogas.map(y => `${y.name} [${y.participants.join(', ')}] (${y.condition})`).join(' | ')}`
+      : 'Raja Yogas: None';
+    const genStr = yd.generalYogas.length > 0
+      ? `General Yogas (${yd.generalYogas.length}): ${yd.generalYogas.map(y => isCompact ? `${y.name} (${y.condition})` : `${y.name}: ${y.condition}`).join(' | ')}`
+      : 'General Yogas: None';
+    return `${rajaStr}\n${genStr}`;
+  })();
+
+  const doshasBlock = (() => {
+    const yd = context.yogasAndDoshas;
+    if (!yd) return 'Doshas not provided';
+    if (yd.doshas.length === 0) return 'None';
+    return yd.doshas.map(d => `${d.name} (${d.status}): ${d.reasons.join('; ')}`).join('\n');
+  })();
+
+  // [JAIMINI] — Deterministic 7-Karaka Scheme, Karakamsa, AL, UL (A12), and Key Arudhas
+  const jaiminiLine = (() => {
+    const sevenPlanets = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+    const karakaRanks = ['AK', 'AmK', 'BK', 'MK', 'PK', 'GK', 'DK'];
+    const ranked = sevenPlanets
+      .map(p => {
+        const m = d1PlanetMetaMap.get(p);
+        return m && m.degFloat !== null
+          ? { planet: p, degFloat: m.degFloat, degStr: m.degStr, hL: m.hL, signIdx: m.signIdx, signName: m.signName }
+          : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.degFloat - a.degFloat);
+
+    if (ranked.length < 7) return 'Jaimini not provided';
+
+    const karakaLine = isCompact
+      ? `Scheme: 7-Karaka | ${ranked.map((r, i) => `${karakaRanks[i]}: ${r.planet} (${r.degStr} H${r.hL})`).join(' | ')}`
+      : `Scheme: 7-Karaka (Sun..Saturn by D1 deg) | ${ranked.map((r, i) => `${karakaRanks[i]}: ${r.planet} (${r.degStr}, H${r.hL} ${r.signName})`).join(' | ')}`;
+
+    const akPlanet = ranked[0].planet;
+    const kkD9 = d9SignByPlanet.get(akPlanet);
+    let kkStr = 'Karakamsa: not provided';
+    if (kkD9) {
+      const kkHL = ((kkD9.signIdx - lagnaIdx + 12) % 12) + 1;
+      const kkHM = ((kkD9.signIdx - moonIdx + 12) % 12) + 1;
+      kkStr = isCompact
+        ? `KK: ${kkD9.signName} (D1 L${kkHL}/M${kkHM}, D9 H${kkD9.hD9})`
+        : `Karakamsa (KK): ${kkD9.signName} (D1 L${kkHL}/M${kkHM}, D9 H${kkD9.hD9})`;
+    }
+
+    const computeArudhaSignIdx = (houseNum: number): number => {
+      const hSignIdx = ((lagnaIdx + houseNum - 2) % 12) + 1;
+      const lord = SIGN_PRIMARY_LORD_EN[hSignIdx];
+      const lordSignIdx = d1PlanetMetaMap.get(lord)?.signIdx || hSignIdx;
+      const steps = ((lordSignIdx - hSignIdx + 12) % 12) + 1;
+      let arudhaSignIdx = ((lordSignIdx + steps - 2) % 12) + 1;
+      const distFromHouse = ((arudhaSignIdx - hSignIdx + 12) % 12) + 1;
+      if (distFromHouse === 1 || distFromHouse === 7) {
+        arudhaSignIdx = ((hSignIdx + 9 - 1) % 12) + 1;
+      }
+      return arudhaSignIdx;
+    };
+
+    const arudhaSpecs: Array<{ label: string; h: number }> = [
+      { label: 'AL(A1)', h: 1 },
+      { label: 'A5', h: 5 },
+      { label: 'A7', h: 7 },
+      { label: 'A10', h: 10 },
+      { label: 'A11', h: 11 },
+      { label: 'UL(A12)', h: 12 }
+    ];
+    const arudhaParts = arudhaSpecs.map(sp => {
+      const sIdx = computeArudhaSignIdx(sp.h);
+      const sName = SIGN_LIST_EN[sIdx - 1];
+      const hL = ((sIdx - lagnaIdx + 12) % 12) + 1;
+      const hM = ((sIdx - moonIdx + 12) % 12) + 1;
+      return `${sp.label}: ${sName} (L${hL}/M${hM})`;
+    });
+
+    return `${karakaLine}\n${kkStr}${sep}${arudhaParts.join(listSep)}`;
+  })();
+
+  // [KARAKAS]
   const karakaItems = [
-    isCompact ? 'Career:H10,Sun,Mercury,Mars' : 'Career: H10, Sun, Mercury, Mars',
-    isCompact ? 'Wealth:H2,H11,Jupiter' : 'Wealth: H2, H11, Jupiter',
-    isCompact ? 'Home:H4,Moon' : 'Home: H4, Moon',
-    isCompact ? 'Love/Progeny:H5,H7,Venus' : 'Love/Progeny: H5, H7, Venus',
-    isCompact ? 'Health:H1,H6,Saturn' : 'Health: H1, H6, Saturn'
+    'Career: H10, Sun, Mercury, Mars',
+    'Wealth: H2, H11, Jupiter',
+    'Home: H4, Moon',
+    'Love/Progeny: H5, H7, Venus',
+    'Health: H1, H6, Saturn'
   ];
 
   const lordshipHeader = isCompact
-    ? `Lagna:${lagna}|JanmaRashi:${moon}|JanmaStar:${janmaStarName} P${janmaPada}\n${lordshipEntries.join('|')}`
+    ? `Lagna: ${lagna} | JanmaRashi: ${moon} | JanmaStar: ${janmaStarName} P${janmaPada}\n${lordshipEntries.join(' | ')}`
     : `Lagna: ${lagna} | JanmaRashi: ${moon} | JanmaStar: ${janmaStarName} P${janmaPada}\n${lordshipEntries.join('\n')}`;
 
-  const karakaBlock = isCompact ? karakaItems.join('|') : karakaItems.join('\n');
+  const karakaBlock = isCompact ? karakaItems.join(' | ') : karakaItems.join('\n');
 
   const staticBlock = [
     `[RULES]\n${rulesText}`,
     `[LORDSHIPS]\n${lordshipHeader}`,
+    `[HOUSE LORDS]\n${houseLordsBlock}`,
     `[D1]\n${d1Lines.join('\n')}`,
     `[D9]\n${d9Lines.join('\n')}`,
+    `[SHADBALA]\n${shadbalaBlock}`,
     `[SAV]\n${savLine}`,
+    `[BAV]\n${bavBlock}`,
+    `[PINDAS]\n${pindasBlock}`,
+    `[YOGAS]\n${yogasBlock}`,
+    `[DOSHAS]\n${doshasBlock}`,
+    `[JAIMINI]\n${jaiminiLine}`,
     `[KARAKAS]\n${karakaBlock}`
   ].join('\n');
 
@@ -538,10 +885,10 @@ export function buildOriginalSourcePrompt(
   const priorDates = [-3, -2, -1].map(off => new Date(day1Utc.getTime() + off * DAY_MS));
   const priorRangeStr = `${priorDates[0].toISOString().slice(5, 10)}..${priorDates[2].toISOString().slice(5, 10)}`;
 
-  // C1 [PERIOD]
+  // C1 [PERIOD] — includes TZ & daily snapshot time explicitly
   const c1Period = isCompact
-    ? `[PERIOD]\n${monthName} ${year}|${rangeStr}|Prior3d:${priorRangeStr}`
-    : `[PERIOD]\n${monthName} ${year} | ${rangeStr} | Prior-3-Day Boundary: ${priorRangeStr}`;
+    ? `[PERIOD]\n${monthName} ${year}|${rangeStr}|TZ:UTC(IST=+05:30)|Snap:12:00 UTC|Prior3d:${priorRangeStr}`
+    : `[PERIOD]\n${monthName} ${year} | ${rangeStr} | TZ: UTC (IST=+05:30) | Daily Snapshot: 12:00 UTC | Prior-3-Day Boundary: ${priorRangeStr}`;
 
   // Build daily ephemeris records for all 9 planets across days 1..daysInMonth (respecting custom overrides)
   type TransitPlacementItem = NonNullable<VedicHouseContext['allTransitPlacements']>[number];
@@ -655,7 +1002,27 @@ export function buildOriginalSourcePrompt(
       const combustStr = combustDays.length > 0 ? `Combust ${formatDayRangesCompact(combustDays)}` : '';
       const motionAndCombust = [motionStr, combustStr].filter(Boolean).join(listSep);
 
-      const degSpan = first.degStr === last.degStr ? first.degStr : `${first.degStr}..${last.degStr}`;
+      // Compute true sign-degree range including stationary turning extremum if planet reverses inside the sign
+      let degSpan = first.degStr === last.degStr ? first.degStr : `${first.degStr}..${last.degStr}`;
+      const hasStationTurn = seg.some(r => r.isRetro) && seg.some(r => !r.isRetro);
+      if (hasStationTurn && !customOverrideMap.has(gKey)) {
+        const scanStartMs = Date.UTC(year, monthIdx, first.day, 0, 0, 0);
+        const scanEndMs = Date.UTC(year, monthIdx, last.day, 23, 59, 0);
+        let minDeg = Infinity;
+        let maxDeg = -Infinity;
+        for (let ms = scanStartMs; ms <= scanEndMs; ms += 3600 * 1000) {
+          const p = getGrahaTransitPosition(gKey, new Date(ms), lagnaIdx, moonIdx);
+          if (p.transit_rashi_index !== sIdx) continue;
+          const dSign = p.degree_in_sign_float;
+          if (dSign < minDeg) minDeg = dSign;
+          if (dSign > maxDeg) maxDeg = dSign;
+        }
+        if (minDeg <= maxDeg) {
+          const minStr = formatDegreeFromFloat(minDeg);
+          const maxStr = formatDegreeFromFloat(maxDeg);
+          degSpan = `${first.degStr}..${last.degStr} (min ${minStr},max ${maxStr})`;
+        }
+      }
 
       // Group consecutive days by nakshatra + pada
       const nakGroups: Array<{ nak: string; pada: number; start: number; end: number }> = [];
@@ -855,23 +1222,12 @@ export function buildOriginalSourcePrompt(
     ...(dtFormatted.length > 0 ? dtFormatted : ['None'])
   ].join('\n');
 
-  // C5 [FAST PLANETS]
+  // C5 [FAST PLANETS] — Moon removed (redundant with full continuous [LUNAR])
   const fastLines = ['Sun', 'Mars', 'Mercury', 'Venus'].flatMap(formatPlanetLines);
-  const moonDaily = rawDailyByGraha.get('Moon') || [];
-  const moonRef = moonDaily[Math.min(14, Math.max(0, moonDaily.length - 1))] || moonDaily[0];
-  const moonRefTara = moonRef ? computeExactTaraShort(janmaStarName, moonRef.nakshatra) : null;
-  const moonRefLabel = isCompact ? 'Moon(d15)' : 'Moon (d15)';
-  const moonRefTaraPart = moonRefTara
-    ? (isCompact ? `(${moonRefTara.tag})` : ` (${moonRefTara.tag})`)
-    : '';
-  const moonRefLine = moonRef && moonRefTara
-    ? `${moonRefLabel}${sep}${moonRef.signName} L${moonRef.hLagna}/M${moonRef.hMoon}${sep}${moonRef.degStr}${sep}${moonRef.nakshatra} P${moonRef.pada}${moonRefTaraPart}`
-    : `${moonRefLabel}${sep}not provided`;
 
   const c5FastPlanets = [
     `[FAST PLANETS]`,
-    ...fastLines,
-    moonRefLine
+    ...fastLines
   ].join('\n');
 
   // C6 [EVENTS]
@@ -902,7 +1258,10 @@ export function buildOriginalSourcePrompt(
         const afterParts = st.afterRange.split(' to ').map(x => shortDate(x.trim())).join('..');
         const label = isCompact ? 'STA' : 'STATION';
         const dtStr = isCompact ? compactYearDate(st.stationDate, year) : st.stationDate;
-        eventLines.push(`${label} ${g} ${turnShort} ${cleanSign(st.signName)} L${st.houseFromLagna}/M${st.houseFromMoon} ${dtStr}${sep}before ${beforeParts}${sep}after ${afterParts}`);
+        const degTag = st.stationDegree
+          ? ` @${st.stationDegree}${st.stationTimeUtc ? ` ${st.stationTimeUtc} UTC` : ''}`
+          : '';
+        eventLines.push(`${label} ${g} ${turnShort} ${cleanSign(st.signName)} L${st.houseFromLagna}/M${st.houseFromMoon} ${dtStr}${degTag}${sep}before ${beforeParts}${sep}after ${afterParts}`);
       }
     } else {
       eventLines.push(isCompact ? 'STA None' : 'STATION None');
@@ -945,67 +1304,197 @@ export function buildOriginalSourcePrompt(
   }
   const c6Events = [`[EVENTS]`, ...eventLines].join('\n');
 
-  // C8 [LUNAR] — per-nakshatra Tara AND explicit ChandraBala (CB:Fav / CB:- or ChandraBala: Fav / -) on EVERY row
-  interface MoonSpan {
-    signIdx: number;
-    signName: string;
-    hMoon: number;
-    days: DailyPlanetRecord[];
-  }
-  const moonSpans: MoonSpan[] = [];
-  for (const rec of moonDaily) {
-    const last = moonSpans[moonSpans.length - 1];
-    if (!last || last.signIdx !== rec.signIdx) {
-      moonSpans.push({ signIdx: rec.signIdx, signName: rec.signName, hMoon: rec.hMoon, days: [rec] });
-    } else {
-      last.days.push(rec);
-    }
-  }
-
+  // C8 [LUNAR] — Continuous sub-daily ephemeris scan (1-minute boundary bisection)
+  // Guarantees ZERO skipped Nakshatras (e.g. Ardra) and emits exact UTC sign/nakshatra change times
   const moonDatesBySignIdx = new Map<number, string[]>();
   const lunarLines: string[] = [];
 
-  for (const ms of moonSpans) {
-    const d1 = ms.days[0];
-    const dLast = ms.days[ms.days.length - 1];
-    const dRangeCompact = d1.day === dLast.day ? `d${d1.day}` : `d${d1.day}-${dLast.day}`;
-    const dRangeLabel = isCompact
-      ? dRangeCompact
-      : (d1.day === dLast.day ? `Day ${d1.day}` : `Day ${d1.day}-${dLast.day}`);
+  const formatUtcStamp = (ms: number, compactMode: boolean): string => {
+    const dt = new Date(ms);
+    const day = dt.getUTCDate();
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const mm = String(dt.getUTCMinutes()).padStart(2, '0');
+    if (compactMode) return `d${day} ${hh}:${mm}`;
+    return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')} ${hh}:${mm}`;
+  };
 
-    const arr = moonDatesBySignIdx.get(ms.signIdx) || [];
-    arr.push(dRangeCompact);
-    moonDatesBySignIdx.set(ms.signIdx, arr);
-
-    // Group consecutive padas of the same nakshatra while tagging EVERY distinct nakshatra with its own Tara
-    const starSeq: Array<{ nak: string; padas: number[] }> = [];
-    for (const x of ms.days) {
-      const prev = starSeq[starSeq.length - 1];
-      if (prev && prev.nak === x.nakshatra) {
-        if (prev.padas[prev.padas.length - 1] !== x.pada) {
-          prev.padas.push(x.pada);
-        }
+  const isMoonOverridden = customOverrideMap.has('Moon');
+  if (isMoonOverridden) {
+    // Custom Moon override fallback (daily aggregation)
+    const moonDaily = rawDailyByGraha.get('Moon') || [];
+    const moonSpans: Array<{ signIdx: number; signName: string; hMoon: number; days: DailyPlanetRecord[] }> = [];
+    for (const rec of moonDaily) {
+      const last = moonSpans[moonSpans.length - 1];
+      if (!last || last.signIdx !== rec.signIdx) {
+        moonSpans.push({ signIdx: rec.signIdx, signName: rec.signName, hMoon: rec.hMoon, days: [rec] });
       } else {
-        starSeq.push({ nak: x.nakshatra, padas: [x.pada] });
+        last.days.push(rec);
       }
     }
-    const starsWithTara = starSeq
-      .map(st => {
-        const tara = computeExactTaraShort(janmaStarName, st.nak);
-        const padaPart = st.padas.map(p => `P${p}`).join('/');
-        return isCompact
-          ? `${st.nak} ${padaPart}(${tara.tag})`
-          : `${st.nak} ${padaPart} (${tara.tag})`;
-      })
-      .join(isCompact ? '->' : ' -> ');
+    for (const ms of moonSpans) {
+      const d1 = ms.days[0];
+      const dLast = ms.days[ms.days.length - 1];
+      const dRangeCompact = d1.day === dLast.day ? `d${d1.day}` : `d${d1.day}-${dLast.day}`;
+      const dRangeLabel = isCompact ? dRangeCompact : (d1.day === dLast.day ? `Day ${d1.day}` : `Day ${d1.day}-${dLast.day}`);
+      const arr = moonDatesBySignIdx.get(ms.signIdx) || [];
+      arr.push(dRangeCompact);
+      moonDatesBySignIdx.set(ms.signIdx, arr);
+      const tara = computeExactTaraShort(janmaStarName, d1.nakshatra);
+      const cb = calculateChandraBala(moonIdx, ms.signIdx);
+      const chandraBalaTag = isCompact ? `CB:${cb.isFavorable ? 'Fav' : '-'}` : `ChandraBala: ${cb.isFavorable ? 'Fav' : '-'}`;
+      const chandraFlag = ms.hMoon === 8 ? `${sep}CHANDRASHTAMA` : '';
+      lunarLines.push(`${dRangeLabel}${sep}${ms.signName} M${ms.hMoon}${sep}${d1.degStr}${sep}${d1.nakshatra} P${d1.pada}(${tara.tag})${sep}${chandraBalaTag}${chandraFlag}`);
+    }
+  } else {
+    const monthStartMs = Date.UTC(year, monthIdx, 1, 0, 0, 0);
+    const monthEndMs = Date.UTC(year, monthIdx, daysInMonth, 23, 59, 0);
 
-    const degRange = d1.degStr === dLast.degStr ? d1.degStr : `${d1.degStr}..${dLast.degStr}`;
-    const cb = calculateChandraBala(moonIdx, ms.signIdx);
-    const chandraBalaTag = isCompact
-      ? `CB:${cb.isFavorable ? 'Fav' : '-'}`
-      : `ChandraBala: ${cb.isFavorable ? 'Fav' : '-'}`;
-    const chandraFlag = ms.hMoon === 8 ? `${sep}CHANDRASHTAMA` : '';
-    lunarLines.push(`${dRangeLabel}${sep}${ms.signName} M${ms.hMoon}${sep}${degRange}${sep}${starsWithTara}${sep}${chandraBalaTag}${chandraFlag}`);
+    const sampleMoonAt = (ms: number) => {
+      const pos = getGrahaTransitPosition('Moon', new Date(ms), lagnaIdx, moonIdx);
+      return {
+        ms,
+        signIdx: pos.transit_rashi_index,
+        signName: SIGN_LIST_EN[pos.transit_rashi_index - 1] || cleanSign(pos.transit_rashi_name),
+        hMoon: pos.relative_to_natal_rashi.house_number,
+        degStr: cleanDegree(pos.degree_sputa),
+        nak: pos.graha_pada_chara.nakshatra_name,
+        pada: pos.graha_pada_chara.pada
+      };
+    };
+
+    const bisectTransition = (
+      tA: number,
+      tB: number,
+      keyFn: (s: ReturnType<typeof sampleMoonAt>) => string
+    ): number => {
+      const kA = keyFn(sampleMoonAt(tA));
+      let lo = tA;
+      let hi = tB;
+      while (hi - lo > 60 * 1000) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (keyFn(sampleMoonAt(mid)) === kA) lo = mid;
+        else hi = mid;
+      }
+      return hi;
+    };
+
+    interface SubSpan {
+      startMs: number;
+      endMs: number;
+      signIdx: number;
+      signName: string;
+      hMoon: number;
+      nak: string;
+      padas: number[];
+      startDeg: string;
+      endDeg: string;
+    }
+
+    // Step 1 hour across entire month and bisect every (sign|nak|pada) transition to 1-min precision
+    const STEP_1H = 60 * 60 * 1000;
+    const rawSubSpans: Array<{ startMs: number; endMs: number; state: ReturnType<typeof sampleMoonAt> }> = [];
+    let curMs = monthStartMs;
+    let curState = sampleMoonAt(curMs);
+    let segStartMs = curMs;
+    const stateKey = (s: ReturnType<typeof sampleMoonAt>) => `${s.signIdx}|${s.nak}|${s.pada}`;
+
+    while (curMs < monthEndMs) {
+      const nextMs = Math.min(monthEndMs, curMs + STEP_1H);
+      const nextState = sampleMoonAt(nextMs);
+      if (stateKey(nextState) !== stateKey(curState)) {
+        const crossMs = bisectTransition(curMs, nextMs, stateKey);
+        rawSubSpans.push({ startMs: segStartMs, endMs: crossMs - 60 * 1000, state: curState });
+        curState = sampleMoonAt(crossMs);
+        segStartMs = crossMs;
+        // Handle edge case of multiple transitions in 1 hour (impossible for Moon ~0.55 deg/hr vs 3.33 deg pada, but safe loop)
+        while (stateKey(sampleMoonAt(nextMs)) !== stateKey(curState) && nextMs - segStartMs > 60 * 1000) {
+          const innerCross = bisectTransition(segStartMs, nextMs, stateKey);
+          rawSubSpans.push({ startMs: segStartMs, endMs: innerCross - 60 * 1000, state: curState });
+          curState = sampleMoonAt(innerCross);
+          segStartMs = innerCross;
+        }
+      }
+      curMs = nextMs;
+    }
+    rawSubSpans.push({ startMs: segStartMs, endMs: monthEndMs, state: curState });
+
+    // Merge into SignSpans containing ordered NakshatraSegments (preserving ALL traversed Nakshatras + Padas + UTC change times)
+    interface NakSeg {
+      nak: string;
+      padas: number[];
+      startMs: number;
+      endMs: number;
+    }
+    interface ContMoonSignSpan {
+      signIdx: number;
+      signName: string;
+      hMoon: number;
+      startMs: number;
+      endMs: number;
+      startDeg: string;
+      endDeg: string;
+      naks: NakSeg[];
+    }
+    const signSpansCont: ContMoonSignSpan[] = [];
+    for (const sub of rawSubSpans) {
+      const endSample = sampleMoonAt(sub.endMs);
+      const lastSign = signSpansCont[signSpansCont.length - 1];
+      if (!lastSign || lastSign.signIdx !== sub.state.signIdx) {
+        signSpansCont.push({
+          signIdx: sub.state.signIdx,
+          signName: sub.state.signName,
+          hMoon: sub.state.hMoon,
+          startMs: sub.startMs,
+          endMs: sub.endMs,
+          startDeg: sub.state.degStr,
+          endDeg: endSample.degStr,
+          naks: [{ nak: sub.state.nak, padas: [sub.state.pada], startMs: sub.startMs, endMs: sub.endMs }]
+        });
+      } else {
+        lastSign.endMs = sub.endMs;
+        lastSign.endDeg = endSample.degStr;
+        const lastNak = lastSign.naks[lastSign.naks.length - 1];
+        if (lastNak && lastNak.nak === sub.state.nak) {
+          if (lastNak.padas[lastNak.padas.length - 1] !== sub.state.pada) {
+            lastNak.padas.push(sub.state.pada);
+          }
+          lastNak.endMs = sub.endMs;
+        } else {
+          lastSign.naks.push({ nak: sub.state.nak, padas: [sub.state.pada], startMs: sub.startMs, endMs: sub.endMs });
+        }
+      }
+    }
+
+    for (const ms of signSpansCont) {
+      const dStartDay = new Date(ms.startMs).getUTCDate();
+      const dEndDay = new Date(ms.endMs).getUTCDate();
+      const dRangeCompact = dStartDay === dEndDay ? `d${dStartDay}` : `d${dStartDay}-${dEndDay}`;
+      const arr = moonDatesBySignIdx.get(ms.signIdx) || [];
+      arr.push(dRangeCompact);
+      moonDatesBySignIdx.set(ms.signIdx, arr);
+
+      const timeRangeLabel = `${formatUtcStamp(ms.startMs, isCompact)}..${formatUtcStamp(ms.endMs, isCompact)}${isCompact ? '' : ' UTC'}`;
+      const starsWithTara = ms.naks
+        .map(st => {
+          const tara = computeExactTaraShort(janmaStarName, st.nak);
+          const padaPart = st.padas.length > 1
+            ? `P${st.padas[0]}-P${st.padas[st.padas.length - 1]}`
+            : `P${st.padas[0]}`;
+          const tWin = `${formatUtcStamp(st.startMs, true)}..${formatUtcStamp(st.endMs, true)}`;
+          return isCompact
+            ? `${st.nak} ${padaPart} ${tWin}(${tara.tag})`
+            : `${st.nak} ${padaPart} ${tWin} UTC (${tara.tag})`;
+        })
+        .join(isCompact ? '->' : ' -> ');
+
+      const degRange = ms.startDeg === ms.endDeg ? ms.startDeg : `${ms.startDeg}..${ms.endDeg}`;
+      const cb = calculateChandraBala(moonIdx, ms.signIdx);
+      const chandraBalaTag = isCompact
+        ? `CB:${cb.isFavorable ? 'Fav' : '-'}`
+        : `ChandraBala: ${cb.isFavorable ? 'Fav' : '-'}`;
+      const chandraFlag = ms.hMoon === 8 ? `${sep}CHANDRASHTAMA` : '';
+      lunarLines.push(`${timeRangeLabel}${sep}${ms.signName} M${ms.hMoon}${sep}${degRange}${sep}${starsWithTara}${sep}${chandraBalaTag}${chandraFlag}`);
+    }
   }
 
   const c8Lunar = [
@@ -1126,6 +1615,75 @@ export function buildOriginalSourcePrompt(
     ].join('\n');
   }
 
+  // SUB-PROMPT BUILDER (Career | Finance | Love | Family)
+  const subPromptBlock = (() => {
+    if (domain === 'master') return '';
+    const spec = DOMAIN_PROMPT_SPECS[domain];
+    const domainUpper = domain.toUpperCase();
+
+    // Spotlight Shadbala & Pindas for primary karakas
+    const karakaShadbala = (context.shadbalaStrengths || [])
+      .filter(s => spec.primaryKarakas.includes(s.planet))
+      .map(s => `${s.planet} ${s.ratio.toFixed(2)} (${s.status}, Dig:${s.dig.toFixed(1)}, Shodashavarga:${s.shodashavargaVimsopaka} ${s.shodashavargaAmsa})`)
+      .join(' | ') || 'not provided';
+
+    // Spotlight SAV & BAV for domain focus houses
+    const focusAshtak = spec.focusHouses.map(h => {
+      const sIdx = ((lagnaIdx + h - 2) % 12) + 1;
+      const savPts = savBySignIdx.get(sIdx) ?? '-';
+      const kBavs = spec.primaryKarakas
+        .slice(0, 3)
+        .map(k => `${k.slice(0, 2)}:${bavData?.[k]?.[sIdx] ?? '-'}`)
+        .join(',');
+      return `H${h}(${signAbbr(SIGN_LIST_EN[sIdx - 1])}) SAV${savPts} [${kBavs}]`;
+    }).join(' | ');
+
+    // Spotlight Yogas & Doshas relevant to domain
+    const yd = context.yogasAndDoshas;
+    const relRaja = (yd?.rajaYogas || []).filter(y => y.domains.includes(domain)).map(y => `${y.name} [${y.participants.join(', ')}]`);
+    const relGen = (yd?.generalYogas || []).filter(y => y.domains.includes(domain)).map(y => y.name);
+    const relDoshas = (yd?.doshas || []).filter(d => d.domains.includes(domain)).map(d => `${d.name} (${d.status}): ${d.reasons[0] || ''}`);
+    const yogaHighlight = [...relRaja, ...relGen].join(', ') || 'See Master [YOGAS]';
+    const doshaHighlight = relDoshas.join(' | ') || 'None specific in domain filter';
+
+    // Format ONLY the domain's Divisional Charts (Vargas)
+    const formatVargaSection = (chart: VargaChartDef): string => {
+      const lagnaLine = `Lagna: ${chart.lagnaSign} ${chart.lagnaDeg}`;
+      const rowGroups: string[] = [];
+      for (let i = 0; i < 12; i += 4) {
+        const chunk = chart.houses.slice(i, i + 4).map(h => {
+          const pStr = h.planets.length > 0 ? h.planets.join(', ') : '-';
+          return `H${h.house} ${h.sign}: ${pStr}`;
+        });
+        rowGroups.push(chunk.join(' | '));
+      }
+      return `[VARGA ${chart.code}: ${chart.name}]\n${lagnaLine}\n${rowGroups.join('\n')}`;
+    };
+
+    const vargaSections = spec.vargaCharts.map(code => {
+      const chart = context.vargaCharts?.[code];
+      if (!chart) return `[VARGA ${code}]\nnot provided`;
+      return formatVargaSection(chart);
+    });
+
+    const d9CrossNote = domain === 'love'
+      ? `Primary Chart Reference: Use Master [D9] (Navamsa) alongside D7 & D30 below, plus UL(A12)/A7/DK from [JAIMINI].`
+      : `Master Cross-Ref: Synthesize with Master [D1] + [D9] and monthly [DASHA]/[LUNAR]/[EVENTS].`;
+
+    return [
+      `[SUB-PROMPT: ${domainUpper}]`,
+      `Domain: ${spec.label} | Focus Houses: ${spec.focusHouses.map(h => `H${h}`).join(', ')} | Primary Karakas: ${spec.primaryKarakas.join(', ')}`,
+      `Guidance: ${spec.focusGuidance}`,
+      d9CrossNote,
+      `[DOMAIN STRENGTHS]`,
+      `Karakas Shadbala: ${karakaShadbala}`,
+      `Focus Houses SAV/BAV: ${focusAshtak}`,
+      `Highlighted Yogas: ${yogaHighlight}`,
+      `Domain Dosha Alert: ${doshaHighlight}`,
+      ...vargaSections
+    ].join('\n');
+  })();
+
   const monthSlice = [
     c1Period,
     c2Dasha,
@@ -1138,15 +1696,19 @@ export function buildOriginalSourcePrompt(
     c9AdGates
   ].join('\n');
 
-  const fullPrompt = `${staticBlock}\n${monthSlice}`;
+  const fullPrompt = subPromptBlock
+    ? `${staticBlock}\n${monthSlice}\n${subPromptBlock}`
+    : `${staticBlock}\n${monthSlice}`;
   const lineCount = fullPrompt.split('\n').length;
 
   return {
     staticBlock,
     monthSlice,
+    subPromptBlock,
     fullPrompt,
     meta: {
       variant,
+      domain,
       monthLabel: `${monthName} ${year}`,
       dateRange: rangeStr,
       charCount: fullPrompt.length,
@@ -1157,31 +1719,21 @@ export function buildOriginalSourcePrompt(
 }
 
 /**
- * Automated Regression Validator for Original Source Prompts.
- * Cross-checks every fact in the generated prompt against source astronomical & chart data:
- * - Required sections (S1..S6, C1..C9)
- * - Forbidden words/scores/interpretive prose
- * - Duplicate lines within sections
- * - Static block immutability (no timestamps, month names)
- * - Every Nakshatra's Tara matches Janma Star Tara calculation
- * - Every [LUNAR] row has accurate ChandraBala: Fav / - and [CHANDRASHTAMA]
- * - Every D9 node line does not invent Exalted/Debilitated flags
- * - AD Chamber uses "natal <Planet> @" and "T:" (never "N:" for transits)
- * - Dasha line includes MD/AD/PD start..end dates and never combines dignity labels with "/"
- * - Every Combust date, Transit sign/house, Aspect, and SAV value matches source ephemeris
- * - All month-slice dates stay inside the month or prior-3-day boundary window
+ * Automated Regression Validator for Original Source Prompts (Master + 4 Domain Sub-Prompts).
  */
 export function validateOriginalSourcePrompt(
   result: OriginalSourcePromptResult,
-  context: VedicHouseContext,
-  variant: OriginalSourceVariant = result.meta?.variant || 'baseline'
+  rawContext: VedicHouseContext,
+  variant: OriginalSourceVariant = result.meta?.variant || 'compact',
+  domainArg?: OriginalSourceDomain
 ): { valid: boolean; errors: string[] } {
+  const domain: OriginalSourceDomain = domainArg || result.meta?.domain || rawContext.originalSourceDomain || 'master';
   const isCompact = variant === 'compact';
   const errors: string[] = [];
   const { staticBlock, fullPrompt } = result;
 
-  const year = context.selectedYear;
-  const monthIdx = context.selectedMonth;
+  const year = rawContext.selectedYear;
+  const monthIdx = rawContext.selectedMonth;
   const mNumStr = String(monthIdx + 1).padStart(2, '0');
   const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
   const monthStartIso = `${year}-${mNumStr}-01`;
@@ -1189,15 +1741,17 @@ export function validateOriginalSourcePrompt(
   const priorStartDt = new Date(Date.UTC(year, monthIdx, 1 - 3, 12, 0, 0));
   const priorStartIso = priorStartDt.toISOString().slice(0, 10);
 
-  const lagna = cleanSign(context.natalLagnaSignName) || 'Sagittarius';
-  const moon = cleanSign(context.natalMoonSignName || context.natalJanmaStar?.rashi_name) || 'Scorpio';
+  const lagna = cleanSign(rawContext.natalLagnaSignName) || 'Sagittarius';
+  const moon = cleanSign(rawContext.natalMoonSignName || rawContext.natalJanmaStar?.rashi_name) || 'Scorpio';
   const lagnaIdx = getCleanSignIndex(lagna) || 9;
   const moonIdx = getCleanSignIndex(moon) || 8;
+  const context = apply001MEEnrichments(rawContext, lagnaIdx, moonIdx);
   const janmaStarName = cleanStar(context.natalJanmaStar?.nakshatra_name || 'Anuradha') || 'Anuradha';
 
-  // 1. Required sections
+  // 1. Required Master sections
   const requiredSections = [
-    '[RULES]', '[LORDSHIPS]', '[D1]', '[D9]', '[SAV]', '[KARAKAS]',
+    '[RULES]', '[LORDSHIPS]', '[HOUSE LORDS]', '[D1]', '[D9]',
+    '[SHADBALA]', '[SAV]', '[BAV]', '[PINDAS]', '[YOGAS]', '[DOSHAS]', '[JAIMINI]', '[KARAKAS]',
     '[PERIOD]', '[DASHA]', '[SLOW PLANETS]', '[DOUBLE TRANSIT]',
     '[FAST PLANETS]', '[EVENTS]', '[HOUSE MAP]', '[LUNAR]', '[AD CHAMBER/GATES]'
   ];
@@ -1207,21 +1761,46 @@ export function validateOriginalSourcePrompt(
     }
   }
 
-  // 1b. Compaction hygiene checks (both variants: zero underscores, zero blank lines; compact: zero padded " | ")
+  // 1a. Domain Sub-Prompt & Varga exclusivity validation
+  if (domain === 'master') {
+    if (result.subPromptBlock || /^\[SUB-PROMPT:/m.test(fullPrompt) || /^\[VARGA D\d+:/mi.test(fullPrompt)) {
+      errors.push('Master prompt must not attach [SUB-PROMPT:] or divisional [VARGA D2..D144] charts');
+    }
+  } else {
+    const spec = DOMAIN_PROMPT_SPECS[domain];
+    const subTag = `[SUB-PROMPT: ${domain.toUpperCase()}]`;
+    if (!fullPrompt.includes(subTag)) {
+      errors.push(`Missing required domain header: ${subTag}`);
+    }
+    if (!fullPrompt.includes('[DOMAIN STRENGTHS]')) {
+      errors.push(`Missing [DOMAIN STRENGTHS] in ${subTag}`);
+    }
+    for (const code of spec.vargaCharts) {
+      if (!fullPrompt.includes(`[VARGA ${code}:`)) {
+        errors.push(`Domain "${domain}" missing expected divisional chart [VARGA ${code}:`);
+      }
+    }
+    // Verify no extraneous divisional charts from other domains leaked in
+    const attachedVargas = Array.from(fullPrompt.matchAll(/\[VARGA (D\d+):/g)).map(m => m[1]);
+    for (const vCode of attachedVargas) {
+      if (!spec.vargaCharts.includes(vCode)) {
+        errors.push(`Domain "${domain}" leaked unrelated divisional chart ${vCode} (allowed: ${spec.vargaCharts.join(', ')})`);
+      }
+    }
+  }
+
+  // 1b. Compaction hygiene checks (zero underscores, zero blank lines)
   if (fullPrompt.includes('_')) {
     errors.push('Prompt contains underscore "_" character (must be zero-underscore text)');
   }
   if (fullPrompt.includes('\n\n')) {
     errors.push('Prompt contains blank line gap "\\n\\n" (must be strictly single-newline)');
   }
-  if (isCompact && fullPrompt.includes(' | ')) {
-    errors.push('Compact prompt contains padded " | " spaces (must use compact "|")');
-  }
 
-  // 2. Forbidden words / prose / scores
+  // 2. Forbidden words / prediction-outcome probability prose
   const forbiddenPatterns: Array<{ label: string; regex: RegExp }> = [
     { label: 'probab', regex: /probab/i },
-    { label: '%', regex: /%/ },
+    { label: 'outcome-%', regex: /\b\d+(?:\.\d+)?%\s*(?:chance|likely|likelihood|odds|confidence|success)\b/i },
     { label: 'Auspicious', regex: /\bAuspicious\b/i },
     { label: 'Dusthana Placement', regex: /Dusthana Placement/i },
     { label: 'Standard Placement', regex: /Standard Placement/i },
@@ -1257,7 +1836,7 @@ export function validateOriginalSourcePrompt(
   // Helper to split sections cleanly (handles single-newline section boundaries)
   const sectionBody = (tag: string): string => {
     const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n\\[(?:RULES|LORDSHIPS|D1|D9|SAV|KARAKAS|PERIOD|DASHA|SLOW PLANETS|DOUBLE TRANSIT|FAST PLANETS|EVENTS|HOUSE MAP|LUNAR|AD CHAMBER\\/GATES)\\]|$)`);
+    const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n\\[(?:RULES|LORDSHIPS|HOUSE LORDS|D1|D9|SHADBALA|SAV|BAV|PINDAS|YOGAS|DOSHAS|JAIMINI|KARAKAS|PERIOD|DASHA|SLOW PLANETS|DOUBLE TRANSIT|FAST PLANETS|EVENTS|HOUSE MAP|LUNAR|AD CHAMBER\\/GATES|SUB-PROMPT:[^\\]]+|DOMAIN STRENGTHS|VARGA [^\\]]+)\\]|$)`);
     const m = fullPrompt.match(re);
     return m ? m[1] : '';
   };
@@ -1276,12 +1855,39 @@ export function validateOriginalSourcePrompt(
     }
   }
 
-  // 5. D9 Node Flag check (no invented Exalted/Debilitated for Rahu/Ketu)
+  // 5. D9 Node Flag check + Rahu/Ketu strict 180-degree opposition check
   const d9Lines = sectionBody('[D9]').split('\n').filter(Boolean);
+  let d9RahuSign = '';
+  let d9KetuSign = '';
   for (const line of d9Lines) {
     if (/^(Rahu|Ketu)\b/i.test(line) && /(Exalted|Debilitated)/i.test(line)) {
       errors.push(`D9 Node flag violation (invented Exalted/Debilitated): "${line}"`);
     }
+    const rm = line.match(/^Rahu\s*\|\s*([A-Za-z]+)\s*\|/);
+    if (rm) d9RahuSign = rm[1];
+    const km = line.match(/^Ketu\s*\|\s*([A-Za-z]+)\s*\|/);
+    if (km) d9KetuSign = km[1];
+  }
+  if (d9RahuSign && d9KetuSign) {
+    const rIdx = getCleanSignIndex(d9RahuSign);
+    const kIdx = getCleanSignIndex(d9KetuSign);
+    if (rIdx && kIdx && ((rIdx - kIdx + 12) % 12) !== 6) {
+      errors.push(`[D9] Rahu (${d9RahuSign}) and Ketu (${d9KetuSign}) are NOT opposite (must be 6 signs / 180 deg apart)`);
+    }
+  }
+
+  // 5b. SAV sum === 337 check & [FAST PLANETS] Moon removal check
+  const savBody = sectionBody('[SAV]');
+  const savNums = Array.from(savBody.matchAll(/H\d+:(\d+)/g)).map(m => parseInt(m[1], 10));
+  if (savNums.length === 12) {
+    const sum = savNums.reduce((a, b) => a + b, 0);
+    if (sum !== 337) {
+      errors.push(`[SAV] sum is ${sum}, must equal exact Parashara 337 bindus`);
+    }
+  }
+  const fastBody = sectionBody('[FAST PLANETS]');
+  if (/^Moon(?:\s*\(| \|)/m.test(fastBody)) {
+    errors.push(`[FAST PLANETS] contains redundant Moon line (owned by [LUNAR])`);
   }
 
   // 6. Dasha checks (MD/AD/PD dates present, no combined dignity label like "Swakshetra/Neecha")
@@ -1318,8 +1924,8 @@ export function validateOriginalSourcePrompt(
 
   // 8. Every Nakshatra Tara check across [SLOW PLANETS], [FAST PLANETS], and [LUNAR]
   const sortedNaks = [...NAKSHATRAS].sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  // Matches compact grouped ("Swati P3 d1-2/P4 d3-6(Mitra T8)"), baseline per-pada ("Swati P3 d1-2 (Mitra T8)"), and lunar ("Pushya P1/P2 (Janma T1)")
-  const nakTaraRegex = new RegExp(`(${sortedNaks})\\s+(?:P[1-4](?:\\s+d\\d+(?:-\\d+)?)?(?:/P[1-4](?:\\s+d\\d+(?:-\\d+)?)?)*)\\s*\\(([A-Za-z ]+?)\\s+T(\\d)\\)`, 'g');
+  // Matches compact, baseline, and timed lunar nakshatra tags (e.g., "Ardra P1-P4 d26 14:52..d27 12:38(Mitra T8)")
+  const nakTaraRegex = new RegExp(`(${sortedNaks})\\s+(?:P[1-4](?:-P[1-4])?(?:\\s+(?:d\\d+\\s+\\d{2}:\\d{2}\\.\\.(?:d\\d+\\s+)?\\d{2}:\\d{2}(?:\\s+UTC)?|d\\d+(?:-\\d+)?))?(?:/P[1-4](?:\\s+d\\d+(?:-\\d+)?)?)*)\\s*\\(([A-Za-z ]+?)\\s+T(\\d)\\)`, 'g');
 
   for (const secTag of ['[SLOW PLANETS]', '[FAST PLANETS]', '[LUNAR]']) {
     const secText = sectionBody(secTag);
@@ -1339,39 +1945,34 @@ export function validateOriginalSourcePrompt(
     }
   }
 
-  // 9. [LUNAR] CB:Fav/- (or ChandraBala: Fav / -) & CHANDRASHTAMA & daily ephemeris sign comparison
-  const lunarLines = sectionBody('[LUNAR]').split('\n').filter(l => /^(?:Day\s+|d)\d+/.test(l));
+  // 9. [LUNAR] continuous nakshatra sequence (no skipped stars!), CB:Fav/-, CHANDRASHTAMA, & sign cross-check
+  const lunarLines = sectionBody('[LUNAR]').split('\n').filter(Boolean);
   if (lunarLines.length === 0) {
     errors.push('[LUNAR] has no day rows');
   }
-  const coveredLunarDays = new Set<number>();
+  const lunarNakSequence: number[] = [];
   const isMoonOverridden = (context.allTransitPlacements || []).some(tp => tp.is_custom && cleanPlanet(tp.graha_key) === 'Moon');
   for (const lLine of lunarLines) {
-    const dayMatch = lLine.match(/^(?:Day\s+|d)(\d+)(?:-(\d+))?\s*\|/);
     const signMatch = lLine.match(/\|\s*([A-Za-z]+)\s+M(\d+)\s*\|/);
-    if (!dayMatch || !signMatch) {
+    if (!signMatch) {
       errors.push(`Unrecognized [LUNAR] row format: "${lLine}"`);
       continue;
     }
-    const ldStart = parseInt(dayMatch[1], 10);
-    const ldEnd = dayMatch[2] ? parseInt(dayMatch[2], 10) : ldStart;
     const rSignIdx = getCleanSignIndex(signMatch[1]);
     const rHouseM = parseInt(signMatch[2], 10);
     const expectedHouseM = ((rSignIdx - moonIdx + 12) % 12) + 1;
     if (rHouseM !== expectedHouseM) {
       errors.push(`[LUNAR] M# house mismatch for ${signMatch[1]}: got M${rHouseM}, expected M${expectedHouseM}`);
     }
-    if (!isMoonOverridden) {
-      for (let d = ldStart; d <= ldEnd; d++) {
-        coveredLunarDays.add(d);
-        const dt = new Date(Date.UTC(year, monthIdx, d, 12, 0, 0));
-        const mPos = getGrahaTransitPosition('Moon', dt, lagnaIdx, moonIdx);
-        if (mPos.transit_rashi_index !== rSignIdx) {
-          errors.push(`[LUNAR] date-sign mismatch on Day ${d}: prompt says ${signMatch[1]}, ephemeris says ${mPos.transit_rashi_name}`);
-          break;
-        }
-      }
+
+    // Verify no skipped Moon Nakshatra in chronological order
+    let nm: RegExpExecArray | null;
+    nakTaraRegex.lastIndex = 0;
+    while ((nm = nakTaraRegex.exec(lLine)) !== null) {
+      const nIdx = NAKSHATRAS.indexOf(nm[1]);
+      if (nIdx !== -1) lunarNakSequence.push(nIdx);
     }
+
     const expectedFav = calculateChandraBala(moonIdx, rSignIdx).isFavorable;
     const favTag = isCompact ? 'CB:Fav' : 'ChandraBala: Fav';
     const dashTag = isCompact ? 'CB:-' : 'ChandraBala: -';
@@ -1390,8 +1991,14 @@ export function validateOriginalSourcePrompt(
       errors.push(`[LUNAR] non-M8 row falsely flagged CHANDRASHTAMA: "${lLine}"`);
     }
   }
-  if (!isMoonOverridden && coveredLunarDays.size !== daysInMonth) {
-    errors.push(`[LUNAR] day coverage incomplete: covered ${coveredLunarDays.size} of ${daysInMonth} days`);
+  if (!isMoonOverridden) {
+    for (let i = 1; i < lunarNakSequence.length; i++) {
+      const prevN = lunarNakSequence[i - 1];
+      const currN = lunarNakSequence[i];
+      if (currN !== prevN && currN !== (prevN + 1) % 27) {
+        errors.push(`[LUNAR] skipped Nakshatra detected: ${NAKSHATRAS[prevN]} -> ${NAKSHATRAS[currN]}`);
+      }
+    }
   }
 
   // [HOUSE MAP] L#/M# house cross-check
@@ -1477,7 +2084,7 @@ export function validateOriginalSourcePrompt(
         }
         const expectedMotionStr = formatContinuousRanges(actualMotions);
         const expectedCombustStr = actualCombustDays.length > 0 ? `Combust ${formatDayRangesCompact(actualCombustDays)}` : '';
-        const expectedMotionAndCombust = [expectedMotionStr, expectedCombustStr].filter(Boolean).join(isCompact ? ',' : ', ');
+        const expectedMotionAndCombust = [expectedMotionStr, expectedCombustStr].filter(Boolean).join(', ');
         if (parts[2] !== expectedMotionAndCombust) {
           errors.push(`Motion/Combust mismatch for ${gKey} d${dStart}-${dEnd}: prompt="${parts[2]}", ephemeris="${expectedMotionAndCombust}"`);
         }

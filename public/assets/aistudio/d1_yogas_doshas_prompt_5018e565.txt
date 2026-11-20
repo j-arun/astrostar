@@ -1,0 +1,120 @@
+NATAL CHART DATA (D1 RASHI), YOGAS AND DOSHAS
+
+Conventions: whole-sign houses. House 1 is the Lagna sign; houses run in zodiac order from there. 'R' means retrograde. 'Nakshatra lord' is the ruling planet of the nakshatra. Degrees are within the sign. Signs are given in English with the Tamil name in brackets.
+
+### D1 PLACEMENTS ###
+Lagna: Sagittarius (Dhanus), 16°33', House 1. Nakshatra Purva Ashadha pada 1 (nakshatra lord Venus).
+Venus (Sukra): Sagittarius (Dhanus), House 1, 06°08'. Nakshatra Mula pada 2 (nakshatra lord Ketu). Retrograde: no.
+Sun (Surya): Capricorn (Makaram), House 2, 11°37'. Nakshatra Shravana pada 1 (nakshatra lord Moon). Retrograde: no.
+Mercury (Budha): Capricorn (Makaram), House 2, 05°15'. Nakshatra Uttara Ashadha pada 3 (nakshatra lord Sun). Retrograde: yes.
+Jupiter (Guru): Pisces (Meenam), House 4, 24°42'. Nakshatra Revathi pada 3 (nakshatra lord Mercury). Retrograde: no.
+Ketu: Aries (Mesham), House 5, 24°25'. Nakshatra Bharani pada 4 (nakshatra lord Venus). Retrograde: no.
+Mars (Sevvai): Taurus (Rishabam), House 6, 21°23'. Nakshatra Rohini pada 4 (nakshatra lord Moon). Retrograde: no.
+Saturn (Sani): Cancer (Katakam), House 8, 05°57'. Nakshatra Pushya pada 1 (nakshatra lord Saturn). Retrograde: yes.
+Mandi (Gulika): Virgo (Kanni), House 10, 14°42'. Nakshatra Hasta pada 2 (nakshatra lord Moon). Retrograde: no.
+Rahu: Libra (Thulaam), House 11, 24°25'. Nakshatra Vishakha pada 2 (nakshatra lord Jupiter). Retrograde: no.
+Moon (Chandra): Scorpio (Vrischigam), House 12, 07°24'. Nakshatra Anuradha pada 2 (nakshatra lord Saturn). Retrograde: no.
+
+### D1 CHART BY HOUSE ###
+House 1 - Sagittarius (Dhanus): Lagna, Venus
+House 2 - Capricorn (Makaram): Sun, Mercury (R)
+House 3 - Aquarius (Kumbam): empty
+House 4 - Pisces (Meenam): Jupiter
+House 5 - Aries (Mesham): Ketu
+House 6 - Taurus (Rishabam): Mars
+House 7 - Gemini (Mithunam): empty
+House 8 - Cancer (Katakam): Saturn (R)
+House 9 - Leo (Simham): empty
+House 10 - Virgo (Kanni): Mandi
+House 11 - Libra (Thulaam): Rahu
+House 12 - Scorpio (Vrischigam): Moon
+
+### RAJA YOGAS (2) ###
+Dharma Karmadhipati Raja yoga [D1] - participants: Sun, Mercury
+  Condition: If the lords of dharma sthana (9th) and karma sthana (10th) form a raja yoga, it is known by this special name. The 9th house is the most important trine and the 10th house is the most important quadrant.
+  Effects: One born with this yoga is sincere, devoted and righteous. He is fortunate.
+  Check: Lagna is Sagittarius: 9th lord is Sun (Leo), 10th lord is Mercury (Virgo); both sit together in Capricorn (house 2).
+Vipareetha Raja yoga [D1] - participants: Mars, Moon
+  Condition: The 6th, 8th and 12th houses are known as trik sthanas or dusthanas (bad houses). This yoga forms when a lord of these houses occupies a dusthana, when two such lords that own no kendra or trikona conjoin in another house, or when all three conjoin in the 3rd or 11th house. Apart from these lords and the lagna lord, none of the planets from the Sun to Saturn may share the sign; Rahu and Ketu are not counted.
+  Effects: One having this yoga experiences tremendous success, typically after an initial struggle. Vipareeta means extreme.
+  Check: Lagna is Sagittarius: Mars is 12th lord (Scorpio) placed in house 6; Moon is 8th lord (Cancer) placed in house 12.
+
+### GENERAL YOGAS (19 listed) ###
+1. Vosi Yoga [D1]
+  Condition: There is a planet other than Moon in the 12th house from Sun
+  Effects: You will be skillful, charitable, famous, learned and strong.
+2. Nipuna Yoga [D1]
+  Condition: Sun and Mercury are together (in one sign).
+  Effects: You will be intelligent and skillful in all works. You will be well known, respected and happy. This yoga is the most powerful in divisional charts like D-10. In rasi chart also, it can give results if Mercury is not combust.
+3. Sunaphaa Yoga [D1]
+  Condition: There are planets other than Sun in the 2nd house from Moon
+  Effects: You will become a person of authority or an equal. You are intelligent, wealthy and famous. You will have self-earned wealth.
+4. Hamsa Yoga [D1]
+  Condition: Jupiter should be in Sagittarius, Pisces or Cancer and he should be in 1st, 4th, 7th or 10th from lagna.
+  Effects: You are a great man of ethery nature. You are swan-like. You have spiritual strength and purity. You are respected by everyone. You are very passionate. You may become a person of authority. You may have all comforts. You enjoy life fully. You are a clever conversationalist and endowed with good speech.
+5. Daama Yoga [D1]
+  Condition: The seven planets occupy exactly 6 distinct signs among them.
+  Effects: One born with this yoga is very rich and famous. This person has many children. This person has many gems. This person helps others. Daama means a wreath. Some authors call this Daamini yoga.
+6. Subha Yoga [D1]
+  Condition: Lagna has benefics or has “subha kartari – benefics in 12th and 2nd house from Lagna.
+  Effects: One born with this yoga has eloquence, good looks and character
+7. Harihara Brahma Yoga [D1]
+  Condition: Either of these holds:
+    Variant 1 (Main): If benefics occupy the 4th, 10th and 11th houses counted from lagna lord, then this yoga is present.
+    Variant 2 (Another variation): If (1) Jupiter is in a quadrant from the 9th lord, (2) Venus is in a quadrant from the 11th lord, and, (3) Mercury is in a quadrant from the 1st lord or 10th lord, then this yoga is present.
+  Effects: One born with this yoga is happy, learned and blessed with wealth and children. Brahma is the creator of this universe. Lagna rules birth and the Creator is represented in a chart by lagna lord.
+8. Saraswathi Yoga [D1]
+  Condition: If (1) each of Mercury, Jupiter and Venus occupies a quadrant or a trine or the 2nd house (not necessarily together) and (2) Jupiter is in an own or friendly or exaltation sign, then this yoga is present.
+  Effects: One born with this yoga is very learned, skillful, intelligent, rich and famous. Person is praised by all. Saraswathi is the goddess of learning.
+9. Parijatha Yoga [D1]
+  Condition: The lord of the sign in which the Lagna lord is placed, and the lord of that planet's sign, are in a Kendra or Thrikona from the Lagna.
+  Effects: You will be happy in the middle and last parts of life, receiving honors from those in authority or the government. You will be wealthy, famous, and generous.
+10. Sareera Soukhya Yoga [D1]
+  Condition: The Lagna lord, Jupiter, or Venus is placed in a Kendra house.
+  Effects: You will enjoy excellent physical health, a long life, and luxury.
+11. Swaveeryaddhana Yoga [D1]
+  Condition: Any one of the following variants holds.
+    Variant 1 (ref 130): The Lagna lord, being the strongest planet, occupies a kendra in conjunction with Jupiter, and the 2nd lord is in Vaiseshikamsa.
+    Variant 2 (ref 131): The lord of the sign occupied by the lord of the navamsa that the Lagna lord is in is strong, and is in a kendra or trine from the 2nd lord or in his own or exaltation sign.
+    Variant 3 (ref 132): The 2nd lord is in a kendra or trine from the Lagna lord, or the 2nd lord, being a benefic, is in deep exaltation or in conjunction with an exalted planet.
+  Effects: You will earn wealth solely through your own efforts, hard work, and personal prowess, without much ancestral help.
+12. Anthya Vayasi Dhana Yoga [D1]
+  Condition: The lords of the 2nd, 9th, and 11th houses are placed in the 12th, 6th, or 8th houses from each other but associated with benefics.
+  Effects: You will accumulate and enjoy great wealth and prosperity during the later years or the final stage of your life.
+13. Matrumooladdhana Yoga [D1]
+  Condition: The 2nd lord is associated with the 4th lord or placed in the 4th house with strong benefic influence.
+  Effects: You will inherit or gain wealth and assets through your mother or from your maternal side of the family.
+14. Yuddha Praveena Yoga [D1]
+  Condition: The lord of the Navamsa occupied by the 3rd lord's Navamsa lord is placed in its own Varga.
+  Effects: The person becomes a capable strategist and an expert in warfare and tactical combat.
+15. Bandhu Pujya Yoga [D1]
+  Condition: The 4th house or the 4th lord should have the association or aspect of Jupiter.
+  Effects: The person will be respected by his relatives and friends.
+16. Nishkapata Yoga [D1]
+  Condition: Either variant holds.
+    Variant 1 (ref 205): The 4th house must be occupied by a benefic, or a planet in exaltation, friendly or own house, or the 4th house must be a benefic sign.
+    Variant 2 (ref 206): Lord of Lagna should join the 4th in conjunction with or aspected by a benefic or occupy Parvata or Uttamamsa.
+  Effects: The person will be pure-hearted and hates secrecy and hypocrisy.
+17. Maathru Sneha Yoga [D1]
+  Condition: Any one of the three variations holds.
+    Variant 1 (First variation): The Lagna (1st house) and the 4th house have the same planetary ruler. The 1st and 4th houses can have common lords only in respect of Ge/Vi (Me) or Sg/Pi (Ju).
+    Variant 2 (Second variation): The lords of the 1st and 4th houses are either natural or temporal friends.
+    Variant 3 (Third variation): The Lagna lord (1st house ruler) and the 4th house lord are aspected by benefics.
+  Effects: Cordial relations will prevail between mother and son.
+18. Vaahana Yoga [D1]
+  Condition: The lord of Lagna must join the 4th, 11th or the 9th.
+  Effects: The native will acquire material comforts and conveyances.
+19. Bhaagya Yoga [D1]
+  Condition: Strong benefic should be in Lagna, the 3rd or 5th, simultaneously aspecting the 9th.
+  Effects: The subject will be extremely fortunate, pleasure-loving and rich.
+
+### DOSHAS (1 present) ###
+Pitru Dosha - Status: Present
+  Description: Pitru Dosha is described as an obligation carried down the ancestral line. It is reckoned from the Sun, the significator of the father, together with the 9th house, the house of the father and the forebears, and the lord of the 9th: when all three are under the influence of Mars, Saturn, Rahu or Ketu, by conjunction or by aspect, the combination is held to be present. Classically associated with obstruction in matters of lineage and continuity, alongside an indication of duties owed to the forebears. Remedial observances are prescribed for it. There is pitru dosha in this horoscope for the following reasons: The Sun, the 9th house and the lord of the 9th house are all under the influence of Mars, Saturn, Rahu or Ketu, by conjunction or by aspect. Later traditional practice also lists broader indicators; those met in this chart are listed below for reference. Either sun, moon, rahu or ketu has been afflicted by malefic planets like Mars or Saturn
+  Reasons:
+    - The Sun, the 9th house and the lord of the 9th house are all under the influence of Mars, Saturn, Rahu or Ketu, by conjunction or by aspect.
+    - Later traditional practice also lists broader indicators; those met in this chart are listed below for reference.
+    - Either sun, moon, rahu or ketu has been afflicted by malefic planets like Mars or Saturn
+
+### SUMMARY ###
+Yogas listed above: 21 (Raja yogas 2, General yogas 19). Doshas present: 1 (Pitru Dosha). The software summary card shows 32 total yogas (2 Raja, 30 general); that count is not matched by the 21 listed.

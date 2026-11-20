@@ -8,6 +8,8 @@ export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'cla
 
 export type AstroPromptVersion = 'v1' | 'v2' | 'v3';
 
+export type OriginalSourceDomain = 'master' | 'career' | 'finance' | 'love' | 'family';
+
 export interface PromptVersionDefinition {
   id: AstroPromptVersion;
   name: string;
@@ -314,6 +316,16 @@ export interface VedicHouseContext {
   ashtakavargaPayload?: {
     targetHousePoints: number;
     targetHouseStrength: string;
+    savTotalSum?: number;
+    bavByPlanet?: Record<string, Record<number, number>>;
+    lagnaBav?: Record<number, number>;
+    sodhyaPindas?: Array<{
+      planet: string;
+      rasiPinda: number;
+      grahaPinda: number;
+      sodhyaPinda: number;
+      pct: number;
+    }>;
     savPointsDistribution: Array<{
       houseNumber: number;
       signIndex: number;
@@ -322,6 +334,62 @@ export interface VedicHouseContext {
       status: string;
     }>;
   };
+  personId?: string;
+  originalSourceDomain?: OriginalSourceDomain;
+  shadbalaStrengths?: Array<{
+    planet: string;
+    ratio: number;
+    total: number;
+    required: number;
+    percent: number;
+    status: 'Strong' | 'Weak';
+    sthana: number;
+    dig: number;
+    kaala: number;
+    cheshta: number;
+    naisargika: number;
+    drik: number;
+    harsha: number;
+    ishtaPhala: number;
+    kashtaPhala: number;
+    shadvargaAmsa: string;
+    shadvargaVimsopaka: number;
+    dashavargaAmsa: string;
+    dashavargaVimsopaka: number;
+    shodashavargaAmsa: string;
+    shodashavargaVimsopaka: number;
+    shodashavargaCharts: string[];
+  }>;
+  yogasAndDoshas?: {
+    rajaYogas: Array<{
+      name: string;
+      participants: string[];
+      condition: string;
+      domains: OriginalSourceDomain[];
+    }>;
+    generalYogas: Array<{
+      name: string;
+      condition: string;
+      domains: OriginalSourceDomain[];
+    }>;
+    doshas: Array<{
+      name: string;
+      status: string;
+      reasons: string[];
+      domains: OriginalSourceDomain[];
+    }>;
+  };
+  vargaCharts?: Record<string, {
+    code: string;
+    name: string;
+    lagnaSign: string;
+    lagnaDeg: string;
+    houses: Array<{
+      house: number;
+      sign: string;
+      planets: string[];
+    }>;
+  }>;
   dashaLordsDossier?: Array<{
     role: string;
     lordName: string;

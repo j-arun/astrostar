@@ -1,6 +1,9 @@
-R0:Use only provided data.Never calculate positions.If missing say "not provided".Cite data per claim.
-R1:Dual Gochara:read every transit from Lagna(L#) and Moon(M#) together;state both L#/M# per trigger.
-R2:Slow planets:check Jupiter/Saturn ingresses(incl.Prior3d),Adisara,Vakra,DoubleTransit(Jup+Sat touching same sign=major trigger),aspects(Jup 5/7/9,Sat 3/7/10,Mar 4/7/8,others 7) with L#/M# occupied+aspected.
-R3:Dasha:D1+D9=natal capacity;MD/AD/PD lords=delivery via natal dignity,D1 lordships,L#/M# transit.
-R4:Compare before/after dates for Stations(STA),Parivartana(PAR:sign/bhava exchange),NeechaBhanga(NB:cancellation).
-R5:SAV>=28 smooth,<25 friction.Taras:T1 Janma(sensitive),Good[T2 Sampat,T4 Kshema,T6 Sadhana,T8 Mitra,T9 ParamaMitra],Friction[T3 Vipat,T5 Pratyak,T7 Naidhana].Weigh daily CB(ChandraBala:Fav/-) and Chandrashtama(M8).
+R0:Use only provided data (Parashara/Jaimini). Never calculate positions. Cite planet, L#/M#, UTC date/time per claim. If absent say "not provided".
+R1:Dual Gochara:read every transit from Lagna (L#) and Moon (M#) together; state both L#/M# per trigger.
+R2:Slow planets:check Jup/Sat ingresses (incl. Prior3d = 3d before month start), Adisara (accelerated), Vakra (retro), DoubleTransit (Jup+Sat touching same sign), aspects (Jup 5/7/9, Sat 3/7/10, Mar 4/7/8, others 7) with L#/M# occ+asp.
+R3:Dasha/Jaimini/Strengths:Master includes D1, D9, [HOUSE LORDS], [SHADBALA] (ratio >=1.0 Strong/<1.0 Weak, Sthana/Dig/Kaala/Cheshta/Drik, Ishta/Kashta, Vimsopaka), [YOGAS], [DOSHAS] (incl. Pitru Dosha), [JAIMINI] (7-Karaka AK..DK, KK=Karakamsa, AL, UL)=natal capacity; MD/AD/PD=delivery via natal dignity/Comb/Conj, D1 lordships, L#/M# transit.
+R4:Events:STA=station (@deg turning degree), PAR=Parivartana, NB=NeechaBhanga. NB Kendra[L/M] counts H1/4/7/10 from L=Lagna and/or M=Moon (tr-disp=transit dispositor, natal-disp=natal dispositor, exalt-lord=exaltation lord).
+R5:Ashtakavarga/Taras/CB:SAV >=28 strong, 25-27 neutral, <25 friction (sum=337); [BAV] has all 7 planets + As Lagna (excluded from SAV) + [PINDAS] (Rasi+Graha=Sodhya). Taras: T1 Janma(sensitive), Good[T2 Sampat,T4 Kshema,T6 Sadhana,T8 Mitra,T9 ParamaMitra], Friction[T3 Vipat,T5 Pratyak,T7 Naidhana]. CB:Fav=favorable ChandraBala(M1,3,6,7,10,11); CB:-=not favorable(M2,4,5,9,12); CHANDRASHTAMA=M8.
+R6:AD CHAMBER/GATES:ADCHAMBER=active AD lord natal seat+ruled houses(T:/Asp:); Gates G#=Moon-ignited Nakshatra-Sign transit chokepoints.
+R7:Domain Sub-Prompts:Master gives D1+D9 only; when [SUB-PROMPT: CAREER|FINANCE|LOVE|FAMILY] is attached, synthesize using its domain houses, karakas, highlighted yogas/doshas, and domain-specific Divisional Charts (Career:D10 | Finance:D2,D11,D4 | Love:D9,D7,D30 | Family:D4,D12,D7,D16).
+R8:Legend:L#/M#=house from D1 Lagna/Moon; H#=house from that chart Lagna; d#=day (HH:MM UTC); P#=pada 1-4; R=retro; Comb=combust; Conj=conjunct; N:/T:/Asp:=natal/transit/aspects.

@@ -256,8 +256,8 @@ export const sampleNatalPlacements: NatalPlacement[] = [
     person_id: "001ME",
     chart_type: "D9",
     body_name: "Rahu",
-    rashi_name: "Mithunam (Gemini)",
-    house_number: 11,
+    rashi_name: "Rishabam (Taurus)",
+    house_number: 10,
     is_retrograde: false
   },
   {

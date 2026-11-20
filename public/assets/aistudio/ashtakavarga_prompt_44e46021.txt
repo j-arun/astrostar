@@ -1,0 +1,27 @@
+ASHTAKAVARGA (bindus). Lagna: Sagittarius. Houses are whole-sign from Lagna.
+Codes: Su Sun, Mo Moon, Ma Mars, Me Mercury, Ju Jupiter, Ve Venus, Sa Saturn, As Ascendant (Lagna). SAV bands: 0-20 low, 21-27 medium, 28-56 high.
+SAV (Sarvashtakavarga) total 337, average 28.1, max 35 (H11 Libra), min 22 (H7 Gemini, H8 Cancer).
+BAV (Bhinnashtakavarga) totals: Su 48, Mo 49, Ma 39, Me 54, Ju 56, Ve 52, Sa 39, As 49. As is not part of the SAV sum.
+
+House | Sign | SAV | planet bindus
+H1 Sagittarius SAV 26 | Su2 Mo2 Ma3 Me6 Ju5 Ve5 Sa3 As4
+H2 Capricorn SAV 30 | Su5 Mo3 Ma3 Me6 Ju5 Ve5 Sa3 As4
+H3 Aquarius SAV 27 | Su4 Mo3 Ma4 Me5 Ju3 Ve4 Sa4 As4
+H4 Pisces SAV 31 | Su4 Mo5 Ma4 Me5 Ju5 Ve6 Sa2 As4
+H5 Aries SAV 24 | Su3 Mo4 Ma2 Me3 Ju5 Ve4 Sa3 As6
+H6 Taurus SAV 31 | Su5 Mo4 Ma6 Me5 Ju6 Ve2 Sa3 As3
+H7 Gemini SAV 22 | Su3 Mo4 Ma3 Me4 Ju5 Ve2 Sa1 As3
+H8 Cancer SAV 22 | Su3 Mo4 Ma2 Me3 Ju2 Ve5 Sa3 As4
+H9 Leo SAV 27 | Su5 Mo4 Ma2 Me5 Ju4 Ve4 Sa3 As4
+H10 Virgo SAV 32 | Su4 Mo6 Ma2 Me4 Ju7 Ve4 Sa5 As4
+H11 Libra SAV 35 | Su4 Mo6 Ma4 Me5 Ju5 Ve6 Sa5 As6
+H12 Scorpio SAV 30 | Su6 Mo4 Ma4 Me3 Ju4 Ve5 Sa4 As3
+
+PINDAS (Rasi + Graha = Sodhya):
+Mars: Rasi 94, Graha 79, Sodhya 173 (100%)
+Mercury: Rasi 91, Graha 69, Sodhya 160 (92%)
+Jupiter: Rasi 78, Graha 55, Sodhya 133 (77%)
+Sun: Rasi 81, Graha 43, Sodhya 124 (72%)
+Venus: Rasi 74, Graha 47, Sodhya 121 (70%)
+Saturn: Rasi 91, Graha 15, Sodhya 106 (61%)
+Moon: Rasi 76, Graha 18, Sodhya 94 (54%)

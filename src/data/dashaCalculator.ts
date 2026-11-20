@@ -101,40 +101,56 @@ export function getFullVimshottariTimeline(): [string, string, string, string, s
       continue;
     }
 
-    const mdStartMs = new Date(md.start).getTime();
-    const mdEndMs = new Date(md.end).getTime();
-    const mdTotalMs = mdEndMs - mdStartMs;
+    // Consistent Calendar-Month Vimshottari Arithmetic (adds exact years/months/fractional days from md.start)
+    const addCalendarMonthsOffset = (baseIso: string, monthsFloat: number): string => {
+      const [by, bm, bd] = baseIso.split('-').map(Number);
+      const intM = Math.floor(monthsFloat + 1e-9);
+      const fracM = Math.max(0, monthsFloat - intM);
+      const extraDays = Math.round(fracM * 30.436875);
+      const totalMonthsZero = (by * 12 + (bm - 1)) + intM;
+      const ty = Math.floor(totalMonthsZero / 12);
+      const tm = totalMonthsZero % 12; // 0..11
+      const maxDayInMonth = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+      const clampedDay = Math.min(bd, maxDayInMonth);
+      const targetMs = Date.UTC(ty, tm, clampedDay) + extraDays * 24 * 60 * 60 * 1000;
+      const outIso = new Date(targetMs).toISOString().slice(0, 10);
+      return outIso > md.end ? md.end : outIso;
+    };
 
+    const mdTotalMonths = md.totalYears * 12;
     const mdIdx = LORDS.findIndex(l => l.name === md.lord);
-
-    let adStartMs = mdStartMs;
+    let cumAdMonthsStart = 0;
 
     for (let i = 0; i < 9; i++) {
       const adLord = LORDS[(mdIdx + i) % 9];
-      const adFraction = adLord.years / 120.0;
-      const adSpanMs = mdTotalMs * adFraction;
-      const adEndMs = Math.min(mdEndMs, adStartMs + adSpanMs);
+      const adSpanMonths = mdTotalMonths * (adLord.years / 120.0);
+      const cumAdMonthsEnd = cumAdMonthsStart + adSpanMonths;
 
       const adIdx = LORDS.findIndex(l => l.name === adLord.name);
-      let pdStartMs = adStartMs;
+      let cumPdMonthsStart = cumAdMonthsStart;
 
       for (let j = 0; j < 9; j++) {
         const pdLord = LORDS[(adIdx + j) % 9];
-        const pdSpanMs = (adEndMs - adStartMs) * (pdLord.years / 120.0);
-        const pdEndMs = (j === 8) ? adEndMs : pdStartMs + pdSpanMs;
+        const pdSpanMonths = adSpanMonths * (pdLord.years / 120.0);
+        const cumPdMonthsEnd = cumPdMonthsStart + pdSpanMonths;
+
+        const pdStartIso = addCalendarMonthsOffset(md.start, cumPdMonthsStart);
+        const pdEndIso = (i === 8 && j === 8)
+          ? md.end
+          : (j === 8 ? addCalendarMonthsOffset(md.start, cumAdMonthsEnd) : addCalendarMonthsOffset(md.start, cumPdMonthsEnd));
 
         intervals.push([
           md.lord,
           adLord.name,
           pdLord.name,
-          new Date(pdStartMs).toISOString().slice(0, 10),
-          new Date(pdEndMs).toISOString().slice(0, 10)
+          pdStartIso,
+          pdEndIso
         ]);
 
-        pdStartMs = pdEndMs;
+        cumPdMonthsStart = cumPdMonthsEnd;
       }
 
-      adStartMs = adEndMs;
+      cumAdMonthsStart = cumAdMonthsEnd;
     }
   }
 
@@ -287,8 +303,8 @@ export function getVimshottariDashaForDate(
     totalDays: 164,
     mdStartDate: "2013-04-02",
     mdEndDate: "2033-04-02",
-    adStartDate: "2023-12-03",
-    adEndDate: "2027-02-02"
+    adStartDate: "2026-02-02",
+    adEndDate: "2029-04-02"
   };
 }
 

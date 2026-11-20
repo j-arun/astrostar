@@ -51,7 +51,8 @@ import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
 import { LocalBatchSchedulerModal } from './LocalBatchSchedulerModal';
 import { OriginalSourcePromptModal } from './OriginalSourcePromptModal';
-import { LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
+import { OriginalSourceDomain, LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
+import { apply001MEEnrichments } from '../data/vargaAndStrengthData';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
 import { analyzeVedicWindowEvents } from '../services/vedicEventsEngine';
 import { buildEventManufacturingSnapshot } from '../services/eventManufacturingBuilder';
@@ -581,6 +582,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   const [liveEventEngineSuperset, setLiveEventEngineSuperset] = useState<EventManufacturingSupersetPayload | null>(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [isOriginalSourceModalOpen, setIsOriginalSourceModalOpen] = useState<boolean>(false);
+  const [originalSourceInitialDomain, setOriginalSourceInitialDomain] = useState<OriginalSourceDomain>('master');
 
   const [geminiKeyInput, setGeminiKeyInput] = useState<string>(() => {
     return (typeof window !== 'undefined' ? localStorage.getItem('astro_gemini_api_key') : '') || '';
@@ -1017,6 +1019,8 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       }));
 
     const ctx: VedicHouseContext = {
+      personId: activeProfile.person_id || '001ME',
+      originalSourceDomain: originalSourceInitialDomain,
       isComprehensiveMonthly: true,
       activeDomainFilter: 'all',
       isEventActive: false,
@@ -1163,7 +1167,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       })()
     };
 
-    return ctx;
+    return apply001MEEnrichments(ctx, natalLagnaIdx, natalRashiIdx);
   };
 
   const handleOpenMonthlyReport = (overrideProvider?: LLMProviderId, autoRun: boolean = true) => {
@@ -1489,16 +1493,35 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               <span>Schedule 14B Batch</span>
             </button>
 
-            {/* BUTTON 3: ORIGINAL SOURCE (ORIGINAL HEARTBEAT) PROMPT GENERATOR */}
-            <button
-              type="button"
-              onClick={() => setIsOriginalSourceModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 font-bold transition text-xs cursor-pointer active:scale-95"
-              title={`Generate Original Source (Original Heartbeat) standalone prompt for ${MONTH_NAMES[selectedMonth]} ${selectedYear} (copy & paste externally)`}
-            >
-              <Activity className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Original Source</span>
-            </button>
+            {/* BUTTON 3: ORIGINAL SOURCE MASTER + 4 DOMAIN PROMPT LAUNCHER */}
+            <div className="flex items-center rounded-xl bg-slate-950 border border-emerald-500/40 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  setOriginalSourceInitialDomain('master');
+                  setIsOriginalSourceModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 font-bold transition text-xs cursor-pointer"
+                title={`Master Prompt (D1 + D9 Base) for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
+              >
+                <Activity className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Master</span>
+              </button>
+              {(['career', 'finance', 'love', 'family'] as OriginalSourceDomain[]).map((dom) => (
+                <button
+                  key={dom}
+                  type="button"
+                  onClick={() => {
+                    setOriginalSourceInitialDomain(dom);
+                    setIsOriginalSourceModalOpen(true);
+                  }}
+                  className="px-2.5 py-2 border-l border-slate-800 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-200 font-semibold transition text-xs capitalize cursor-pointer"
+                  title={`Open ${dom.toUpperCase()} prompt (Master + ${dom} Sub-Prompt) for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
+                >
+                  {dom}
+                </button>
+              ))}
+            </div>
 
             {/* PD Micro-Focus Mode Slider */}
             <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 shadow-inner">
@@ -2645,6 +2668,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
         buildContextForSelectedMonth={() => buildMonthlyHouseContext()}
         selectedMonthName={MONTH_NAMES[selectedMonth]}
         selectedYear={selectedYear}
+        initialDomain={originalSourceInitialDomain}
       />
     </div>
   );

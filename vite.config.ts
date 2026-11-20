@@ -3102,12 +3102,15 @@ function originalSourceApiPlugin(): Plugin {
             }
           }
 
+          const questionParam = urlObj.searchParams.get('question') ?? urlObj.searchParams.get('q') ?? undefined;
+
           const payload = mod.generateOriginalSourceApiPayload({
             year: parsed.year,
             monthIndex: parsed.monthIndex,
             variant: rawVariant,
             part: rawPart,
             domain: resolvedDomain,
+            question: questionParam,
             chartSource
           });
 

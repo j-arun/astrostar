@@ -454,17 +454,89 @@ The Master Prompt has two blocks (**Static Chart Block** + **Monthly Ephemeris S
 
 ### 2. What is Added in Each of the **4 Domain Sub-Prompts**
 
-When you select **Career**, **Finance**, **Love**, or **Family** in the UI or pass `&domain=...` in `GET /api/content`, the engine appends `[SUB-PROMPT: <DOMAIN>]`, `[DOMAIN STRENGTHS]` (karaka Shadbala + focus house SAV/BAV + filtered Yogas & Doshas), and **only that domain's Divisional Varga charts** from `charts_by_house.json` / PostgreSQL `natal_placement_detail`:
+When you select **Career**, **Finance**, **Love**, or **Family** in the UI or pass `&domain=...` in `GET /api/content`, the engine appends `[SUB-PROMPT: <DOMAIN>]`, concise frontier domain constraints, `[DOMAIN STRENGTHS]` (karaka Shadbala + focus house SAV/BAV + filtered Yogas & Doshas), **only that domain's Divisional Varga charts**, the locked **`[OUTPUT STRUCTURE]` (including `## 5. Readout`)**, and finally **`[FOCUS QUESTION]`** at the very end for KV cache reuse:
 
 | Prompt Type | Master Charts | Divisional Charts Attached | Focus Houses & Karakas | What Gets Highlighted in `[DOMAIN STRENGTHS]` |
 | :--- | :--- | :--- | :--- | :--- |
-| **Master** (`master`) | **`D1`, `D9`** only | *None* (`D2..D144` omitted) | All H1–H12 baseline | Full foundational chart + monthly ephemeris for all-domain overview. |
-| **Career** (`career`) | `D1`, `D9` | **`D10` (Dasamsa)** | **H10, H6, H11, H2, H9, H1** · *Mercury, Sun, Saturn, Mars, Jupiter* | Career Shadbala (`Dig`/`Shodashavarga`), H10(`32`)/H6(`31`)/H11(`35`) SAV/BAV, *Dharma Karmadhipati Raja*, *Vipareetha Raja*, *Nipuna*, *Hamsa*, *Saraswathi* yogas + full 12-house **D10 Dasamsa** placements (Virgo Lagna, Exalted Saturn H2, Vakra Mercury, etc.). |
-| **Finance** (`finance`) | `D1`, `D9` | **`D2` (Hora)**, **`D11` (Ekadasamsa)**, **`D4` (Chaturthamsa)** | **H2, H11, H5, H9, H4, H8** · *Jupiter, Venus, Mercury, Saturn, Mars* | Wealth/Pinda strength, H2(`30`)/H11(`35`)/H4(`31`)/H9(`27`) SAV/BAV, *Swaveeryaddhana*, *Anthya Vayasi Dhana*, *Vipareetha Raja*, *Matrumooladdhana* yogas + **D2 Hora** (Solar/Lunar wealth), **D11 Ekadasamsa** (gains), & **D4 Chaturthamsa** (fixed assets). |
-| **Love** (`love`) | `D1`, **`D9` (Navamsa)** | **`D7` (Saptamsa)**, **`D30` (Trimsamsa)** | **H5, H7, H12, H11, H1** · *Venus, Jupiter, Mercury, Moon* | Explicitly anchors on Master **`[D9]` Navamsa** (including fixed `Rahu Taurus H10` + `Venus` / `Mandi` opposite `Ketu Scorpio H4`) & Jaimini **`UL (A12)`, `A7`, `DK (Mercury)`**, flags H7(`22`)/H5(`24`) SAV vs H11(`35`)/H12(`30`) SAV + Venus(`52`) & Jupiter(`56`) BAV, *Saraswathi*, *Subha*, *Nishkapata* yogas + **D7 Saptamsa** (intimacy/progeny/creative bond) & **D30 Trimsamsa** (relationship vulnerabilities/friction). |
-| **Family** (`family`) | `D1`, `D9` | **`D4` (Chaturthamsa)**, **`D12` (Dwadasamsa)**, **`D7` (Saptamsa)**, **`D16` (Shodasamsa)** | **H4, H2, H5, H9, H3** · *Moon, Jupiter, Sun, Venus, Mars* | Spotlights **`Pitru Dosha (Present)`** (ancestral/paternal obligation & Sun/H9 affliction), *Maathru Sneha*, *Matrumooladdhana*, *Bandhu Pujya*, *Hamsa*, *Vaahana* yogas, H4(`31`)/H2(`30`)/H5(`24`)/H9(`27`) SAV/BAV, **D4 Chaturthamsa** (home/domestic peace), **D12 Dwadasamsa** (parents & lineage), **D7 Saptamsa** (children/family expansion), & **D16 Shodasamsa** (vehicles, comforts, property happiness). |
+| **Master** (`master`) | **`D1`, `D9`** only | *None* (`D2..D144` omitted) | All H1–H12 baseline | Full foundational chart + monthly ephemeris for all-domain overview. *(Appends `[FOCUS QUESTION]` only if `&question=` is passed.)* |
+| **Career** (`career`) | `D1`, `D9` | **`D10` (Dasamsa)** | **H10, H6, H11, H2, H9, H1** · *Mercury, Sun, Saturn, Mars, Jupiter* | Career Shadbala (`Dig`/`Shodashavarga`), H10(`32`)/H6(`31`)/H11(`35`) SAV/BAV, *Dharma Karmadhipati Raja*, *Vipareetha Raja*, *Nipuna*, *Hamsa*, *Saraswathi* yogas + full 12-house **D10 Dasamsa** (`Taurus 12°56'` Lagna). |
+| **Finance** (`finance`) | `D1`, `D9` | **`D2` (Hora)**, **`D11` (Ekadasamsa)**, **`D4` (Chaturthamsa)** | **H2, H11, H5, H9, H4, H8** · *Jupiter, Venus, Mercury, Saturn, Mars* | Wealth/Pinda strength, H2(`30`)/H11(`35`)/H4(`31`)/H9(`27`) SAV/BAV, *Swaveeryaddhana*, *Anthya Vayasi Dhana*, *Vipareetha Raja*, *Matrumooladdhana* yogas + **D2 Hora**, **D11 Ekadasamsa**, & **D4 Chaturthamsa**. |
+| **Love** (`love`) | `D1`, **`D9` (Navamsa)** | **`D7` (Saptamsa)**, **`D30` (Trimsamsa)** | **H5, H7, H12, H11, H1** · *Venus, Jupiter, Mercury, Moon* | Explicitly anchors on Master **`[D9]` Navamsa** (including fixed `Rahu Taurus H10` + `Venus` / `Mandi` opposite `Ketu Scorpio H4`) & Jaimini **`UL (A12)`, `A7`, `DK (Mercury)`**, flags H7(`22`)/H5(`24`) SAV vs H11(`35`)/H12(`30`) SAV + Venus(`52`) & Jupiter(`56`) BAV, *Saraswathi*, *Subha*, *Nishkapata* yogas + **D7 Saptamsa** & **D30 Trimsamsa**. |
+| **Family** (`family`) | `D1`, `D9` | **`D4` (Chaturthamsa)**, **`D12` (Dwadasamsa)**, **`D7` (Saptamsa)**, **`D16` (Shodasamsa)** | **H4, H2, H5, H9, H3** · *Moon, Jupiter, Sun, Venus, Mars* | Spotlights **`Pitru Dosha (Present)`** (ancestral/paternal obligation & Sun/H9 affliction), *Maathru Sneha*, *Matrumooladdhana*, *Bandhu Pujya*, *Hamsa*, *Vaahana* yogas, H4(`31`)/H2(`30`)/H5(`24`)/H9(`27`) SAV/BAV, **D4**, **D12 Dwadasamsa**, **D7**, & **D16 Shodasamsa**. |
 
-> All 22 Varga charts (`D1`–`D144`, `001ME`) stored in PostgreSQL `natal_placement_detail` are embedded in `src/data/vargaAndStrengthData.ts` so the frontend & REST endpoint run identically with zero extra database roundtrips.
+#### Frontier Prompt Design & `## 5. Readout` (Option B)
+Each of the 4 domain prompts automatically appends **`[OUTPUT STRUCTURE]`** + **`[FOCUS QUESTION]`** at the bottom without lecturing frontier models (Gemini Pro / Claude / OpenAI) on how to do astrology:
+- **Zero-Lecture Domain Rules:** Tells the LLM the strict domain scope (`ONLY <DOMAIN>`), requires using ALL provided data (`D1`, `D9`, strengths, monthly ephemeris, and attached `[VARGA]` charts) without inventing positions or adding disclaimers/counselor advice, and sets the dual Lagna (`L#`) + Moon (`M#`) & Moon sitting/7th-aspect timing rule.
+- **Preserved 4 Astrological Sections (`## 1..## 4`) with Full Citations:**
+  1. `## 1. <Domain> Overview (Lagna L# + Moon Lagna M# + Dasha + <Vargas>)`
+  2. `## 2. <Domain> Event Timeline & Rating Matrix` (`| Date Range | <Event> | Moon Trigger (Sitting / 7th Aspect + Tara / ChandraBala) | Probability (%) | Rating (1-3) |`)
+  3. `## 3. Detailed <Domain> Event Breakdown (When & How Each Happens)`
+  4. `## 4. Specific <Domain> Dates to Be Very Careful`
+- **New `## 5. Readout` (Option B — Always Present, Zero Astrological Jargon):**
+  - Strictly forbids all astrological terminology (no planets, signs, houses `L#/M#/H#`, Dasha, Nakshatra, Tara, Varga, SAV, or Yoga names).
+  - Always renders two fixed plain-language sub-headings with calm, real-world scenarios and specific calendar dates:
+    - `### 1. Month Summary` — overall tone and practical flow of the month.
+    - `### 2. Answer to Focus Question (or Key Practical Takeaways if FULL READING)` — clear, direct answer to `[FOCUS QUESTION]`, or crisp real-world takeaways when running a full monthly scan.
+- **KV-Cache Optimization (`[FOCUS QUESTION]` at Tail):**
+  - `[FOCUS QUESTION]` is placed **after** `[OUTPUT STRUCTURE]` as the final block of the prompt (`defaults` to `FULL CAREER READING`, `FULL FINANCE READING`, `FULL RELATIONSHIP READING`, or `FULL FAMILY READING`).
+  - Everything before `[FOCUS QUESTION]` remains **100% byte-identical** across runs for the same month & domain, maximizing Run-1 question efficiency and prefix KV cache hits across chat/API turns; follow-ups in the same chat thread are instructed to answer concisely without repeating all 5 sections.
+
+> All 23 Varga charts (`D1` & `D9` in Master + 21 Divisional Varga charts `D2..D144` for `001ME` stored in PostgreSQL `natal_placement_detail`) are embedded in `src/data/vargaAndStrengthData.ts` so the frontend & REST endpoint run identically with zero extra database roundtrips.
+
+---
+
+### 3. Merged Prompt Section-by-Section Map & Complete 23-Chart Coverage
+
+When you request a domain prompt (`Career`, `Finance`, `Love`, or `Family`), `buildOriginalSourcePrompt` merges **3 contiguous parts** into one prompt (`Static Block + Month Slice + Domain Sub-Prompt`). Here is **every section sent** and **which D-charts travel inside each section**:
+
+| Merge Order | Prompt Section Tag | Sent In | D-Charts Included / Referenced |
+| :-: | :--- | :--- | :--- |
+| **1** | `[RULES]` | All (`Master` + all 4 Domains) | Rules `R0–R8` explaining how to read `D1`, `D9`, and attached `[VARGA D#]` charts. |
+| **2** | `[LORDSHIPS]` | All | `D1` Lagna, Janma Rashi, Janma Star & sign lordships (`Sun..Saturn`). |
+| **3** | `[HOUSE LORDS]` | All | `D1` H1–H12 lord natal house, dignity, retrograde & combustion table. |
+| **4** | **`[D1]`** | All | **D1 (Rashi Chart)** — Sagittarius Lagna `16°33'` (full 11-body natal table, dignity, combustion, conjunctions, Parashara aspects). |
+| **5** | **`[D9]`** | All | **D9 (Navamsa Chart)** — Leo Lagna (full 11-body dharma/marriage chart with verified 180° Rahu Taurus H10 ↔ Ketu Scorpio H4 opposition). |
+| **6** | `[SHADBALA]` | All | Planetary strength Virupas (`Sun..Saturn`) + Vimsopaka (`Shadvarga`/`Dashavarga`/`Shodashavarga` chart count metadata only — not full chart grids). |
+| **7** | `[SAV]` | All | `D1` Sarvashtakavarga 12-house totals calibrated to `337` bindus. |
+| **8** | `[BAV]` | All | `D1` Bhinnashtakavarga 12-house rows for all 7 planets + `As` Lagna (`49`). |
+| **9** | `[PINDAS]` | All | Rasi Pinda, Graha Pinda, Sodhya Pinda & `%` for all 7 planets. |
+| **10** | `[YOGAS]` | All | `D1` 2 Raja Yogas + 19 General Yogas. |
+| **11** | `[DOSHAS]` | All | `D1` `Pitru Dosha (Present)`. |
+| **12** | `[JAIMINI]` | All | `D1` 7-Karaka scheme (`AK..DK`), `D9` `Karakamsa (KK)`, and `D1` Arudhas (`AL, A5, A7, A10, A11, UL/A12`). |
+| **13** | `[KARAKAS]` | All | Domain house & karaka legend. |
+| **14–22** | `[PERIOD]`, `[DASHA]`, `[SLOW PLANETS]`, `[DOUBLE TRANSIT]`, `[FAST PLANETS]`, `[EVENTS]`, `[HOUSE MAP]`, `[LUNAR]`, `[AD CHAMBER/GATES]` | All | **No Varga grids** — pure monthly transit ephemeris mapped onto `D1` Lagna (`L#`) and Janma Rashi (`M#`) frames, plus active Dasha & continuous Nakshatra/Tara timing. |
+| **23** | `[SUB-PROMPT: <DOMAIN>]` | Domains only (`Career`, `Finance`, `Love`, `Family`) | Minimal frontier scope, use-all-data rules, Citation Split (`Sections 1-4` Vedic citations vs `Section 5 Readout` zero jargon), and follow-up thread rule. *(Omitted in `Master`.)* |
+| **24** | `[DOMAIN STRENGTHS]` | Domains only | Filtered `Shadbala`, focus-house `SAV/BAV`, highlighted `Yogas` & `Doshas` for the selected domain. *(Omitted in `Master`.)* |
+| **25+** | **`[VARGA D#: <Name>]`** | Domains only (exclusive per domain) | **Full 12-house Divisional Chart grids attached exclusively per domain:**<br>• **Career:** **`D10`** (Total charts in prompt: **`D1, D9, D10`**)<br>• **Finance:** **`D2, D11, D4`** (Total charts in prompt: **`D1, D9, D2, D4, D11`**)<br>• **Love:** **`D7, D30`** (Total charts in prompt: **`D1, D9, D7, D30`**)<br>• **Family:** **`D4, D12, D7, D16`** (Total charts in prompt: **`D1, D9, D4, D7, D12, D16`**) |
+| **26** | **`[OUTPUT STRUCTURE]`** | Domains only | Locked 4-section Astrological Output Structure (`## 1..## 4`) + new `## 5. Readout` (Option B: `### 1. Month Summary` & `### 2. Answer to Focus Question`). *(Omitted in `Master`.)* |
+| **27** | **`[FOCUS QUESTION]`** | Domains (always) / Master (optional) | Placed **last** for KV-cache prefix alignment. Defaults to `FULL <DOMAIN> READING`, or injects user `&question=...`. |
+
+#### Complete 23-Chart Varga Inventory (`001ME` in PostgreSQL `natal_placement_detail`)
+| Varga | Name | `001ME` Lagna | Where Sent & Role |
+| :--- | :--- | :--- | :--- |
+| **`D1`** | Rashi (Root Physical Chart) | Sagittarius `16°33'` | **Master** (All Prompts) — Root physical life, houses, transits & dashas. |
+| **`D2`** | Hora (Wealth Dualities) | Virgo `2°35'` | **Finance** — Liquid wealth, Sun/Moon solar-lunar earnings balance. |
+| `D3` | Drekkana (Siblings / Courage) | Aries `18°52'` | Stored in DB (`natal_placement_detail`) & `vargaAndStrengthData.ts`; *omitted from the 4 core prompts to keep token budget lean*. |
+| **`D4`** | Chaturthamsa (Property & Home) | Gemini `5°10'` | **Finance** (fixed assets/real estate) & **Family** (domestic residence & peace). |
+| `D5` | Panchamsa (Fame / Spiritual Merit) | Sagittarius `21°28'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved (omitted from the 4 core prompts)*. |
+| `D6` | Shashtamsa (Health / Litigation) | Cancer `7°45'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved (for a future Health prompt)*. |
+| **`D7`** | Saptamsa (Progeny & Partnership Fruit) | Pisces `24°03'` | **Love** (romantic fulfillment/creative bond) & **Family** (children & lineage continuation). |
+| `D8` | Ashtamsa (Longevity / Sudden Events) | Sagittarius `10°21'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| **`D9`** | Navamsa (Marriage, Dharma & Fruit) | Leo | **Master** (All Prompts) — Primary partner/spouse chart in **Love**; overall planetary strength & fructification across every domain. |
+| **`D10`** | Dasamsa (Profession & Authority) | Taurus `12°56'` | **Career** — Primary work, promotion, authority, role shift & karma chart. |
+| **`D11`** | Ekadasamsa (Gains & Windfalls) | Capricorn `29°13'` | **Finance** — Income channels, bonuses, investments & financial gains. |
+| **`D12`** | Dwadasamsa (Parents & Lineage) | Gemini `15°31'` | **Family** — Mother, father, ancestral lineage & elder karmic patterns (`Pitru Dosha`). |
+| **`D16`** | Shodasamsa (Comforts & Vehicles) | Leo `20°42'` | **Family** — Household happiness, vehicles, luxuries & emotional comfort. |
+| `D20` | Vimsamsa (Spiritual Practice) | Gemini `25°52'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D24` | Siddhamsa (Education / Learning) | Virgo `1°03'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D27` | Bhamsa (Innate Stamina / Strength) | Gemini `19°56'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| **`D30`** | Trimsamsa (Miseries & Stressors) | Sagittarius `8°49'` | **Love** — Highlights hidden emotional/relationship friction, misunderstandings & karmic vulnerabilities. |
+| `D40` | Khavedamsa (Maternal Auspiciousness) | Capricorn `21°45'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D45` | Akshavedamsa (Paternal Character) | Sagittarius `13°13'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D60` | Shashtiamsa (Past-Life / Fine Karma) | Leo `17°38'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D81` | Navamsa-Navamsa | Scorpio `29°48'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D108` | Ashtottaramsa | Gemini `19°44'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
+| `D144` | Dwadasamsa-Dwadasamsa | Sagittarius `6°19'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
 
 ---
 
@@ -480,10 +552,11 @@ Serves the deterministic **Master Prompt** or any of the **4 Domain Prompts** (`
 | Parameter | Values | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `date` | `"May 2026"`, `"may-2026"`, `"4/2026"`, `"2026-04"`, `"202605"`, `"Nov 2026"` | Current month | Target month & year (or `?month=11&year=2026`). |
-| `domain` | `master` \| `career` (`work`) \| `finance` (`wealth`) \| `love` (`romance`) \| `family` (`home`) | `master` | Selects Master Base (`D1+D9`) or Master + Domain Sub-Prompt + Divisional Varga charts. |
+| `domain` | `master` \| `career` (`work`) \| `finance` (`wealth`) \| `love` (`romance`) \| `family` (`home`) | `master` | Selects Master Base (`D1+D9`) or Master + Domain Sub-Prompt + Divisional Varga charts + Output Structure (`Readout`). |
+| `question` (or `q`) | Any URL-encoded string | `FULL <DOMAIN> READING` | Optional Run-1 Focus Question placed at the very end (`[FOCUS QUESTION]`) so the prefix before it stays byte-identical for KV caching. |
 | `variant` | `compact` \| `baseline` \| `both` | `compact` | `compact` (readable LLM-compact with spaces), `baseline` (full verbose 14B labels), or `both`. |
-| `part` | `full` \| `static` \| `month` \| `subprompt` | `full` | `full` (complete prompt), `static` (`[RULES]..[KARAKAS]`), `month` (`[PERIOD]..[AD CHAMBER/GATES]`), or `subprompt` (`[SUB-PROMPT: ...]` + Vargas only). |
-| `format` | `json` \| `text` | `json` | `json` (metadata + prompt strings + `vargaChartsAttached`) or `text` (raw `text/plain`). |
+| `part` | `full` \| `static` \| `month` \| `subprompt` | `full` | `full` (complete prompt), `static` (`[RULES]..[KARAKAS]`), `month` (`[PERIOD]..[AD CHAMBER/GATES]`), or `subprompt` (`[SUB-PROMPT: ...]` + Vargas + `[OUTPUT STRUCTURE]` + `[FOCUS QUESTION]`). |
+| `format` | `json` \| `text` | `json` | `json` (metadata + prompt strings + `vargaChartsAttached` + `focusQuestion`) or `text` (raw `text/plain`). |
 | `personId` | Stored profile ID | `001ME` | Optional profile override from `stored_persons.json`. |
 
 ### Invocation Examples (All Domains & Formats)
@@ -495,16 +568,16 @@ curl "http://localhost:3000/api/content?date=Nov+2026&domain=master&variant=comp
 
 #### Option 2: Domain Prompts (Career / Finance / Love / Family) — Raw Text Ready to Paste
 ```bash
-# Career Prompt (Master + D10 Dasamsa)
+# Career Prompt (Master + D10 Dasamsa + Output Structure + Readout)
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=career&variant=compact&format=text"
 
-# Finance Prompt (Master + D2 Hora, D11 Ekadasamsa, D4 Chaturthamsa)
+# Finance Prompt (Master + D2 Hora, D11 Ekadasamsa, D4 Chaturthamsa + Readout)
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=finance&variant=compact&format=text"
 
-# Love Prompt (Master D9 Navamsa + D7 Saptamsa, D30 Trimsamsa)
-curl "http://localhost:3000/api/content?date=Nov+2026&domain=love&variant=compact&format=text"
+# Love Prompt with Run-1 Focus Question appended at tail (preserves KV cache prefix)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=love&variant=compact&format=text&question=Should+I+initiate+talks+around+Nov+14%3F"
 
-# Family Prompt (Master + D4, D12 Dwadasamsa, D7, D16 Shodasamsa + Pitru Dosha)
+# Family Prompt (Master + D4, D12 Dwadasamsa, D7, D16 Shodasamsa + Pitru Dosha + Readout)
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=family&variant=compact&format=text"
 ```
 
@@ -521,6 +594,7 @@ curl "http://localhost:3000/api/content?date=2026-11&domain=love&variant=both"
 ### UI Usage (Unified Implementation)
 In the Monthly Transit View top toolbar, the segmented **Master | Career | Finance | Love | Family** button group opens the **Original Source Prompt Builder** modal directly on the chosen prompt type for the currently selected month/year. Inside the modal you can:
 - Switch seamlessly between **Master**, **Career**, **Finance**, **Love**, and **Family** (all powered by `buildOriginalSourcePrompt`)
+- Enter an optional Run-1 **Focus Question** (automatically placed at the bottom in `[FOCUS QUESTION]` to answer inside `## 5. Readout` while keeping the entire KV cache prefix untouched)
 - Toggle **Compact (LLM Readable)** *(default)* vs **Baseline (14B Private)**
 - Inspect tabs (**Full Prompt**, **Master Static**, **Month Slice**, and **`<Domain>` Sub-Prompt**)
 - One-click **Copy** or **Download `.txt`**

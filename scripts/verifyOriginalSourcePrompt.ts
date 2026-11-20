@@ -462,16 +462,42 @@ async function main() {
       allFailures.push('[API payload] variant=both Nov 2026 failed validation or tokenSavings check');
     }
 
-    // 6. All 4 Domain Sub-Prompts + Varga exclusivity checks
+    // 6. All 4 Domain Sub-Prompts + Varga exclusivity + Output Structure + Readout Option B + KV-Cache tail checks
     const domainExpectations: Array<{
       domain: 'career' | 'finance' | 'love' | 'family';
       expectedVargas: string[];
       forbiddenVargas: string[];
+      expectedMatrixTitle: string;
+      expectedDefaultQuestion: string;
     }> = [
-      { domain: 'career', expectedVargas: ['D10'], forbiddenVargas: ['D2', 'D4', 'D7', 'D11', 'D12', 'D16', 'D30'] },
-      { domain: 'finance', expectedVargas: ['D2', 'D11', 'D4'], forbiddenVargas: ['D7', 'D10', 'D12', 'D16', 'D30'] },
-      { domain: 'love', expectedVargas: ['D7', 'D30'], forbiddenVargas: ['D2', 'D4', 'D10', 'D11', 'D12', 'D16'] },
-      { domain: 'family', expectedVargas: ['D4', 'D12', 'D7', 'D16'], forbiddenVargas: ['D2', 'D10', 'D11', 'D30'] }
+      {
+        domain: 'career',
+        expectedVargas: ['D10'],
+        forbiddenVargas: ['D2', 'D4', 'D7', 'D11', 'D12', 'D16', 'D30'],
+        expectedMatrixTitle: '## 2. Career Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL CAREER READING'
+      },
+      {
+        domain: 'finance',
+        expectedVargas: ['D2', 'D11', 'D4'],
+        forbiddenVargas: ['D7', 'D10', 'D12', 'D16', 'D30'],
+        expectedMatrixTitle: '## 2. Financial Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL FINANCE READING'
+      },
+      {
+        domain: 'love',
+        expectedVargas: ['D7', 'D30'],
+        forbiddenVargas: ['D2', 'D4', 'D10', 'D11', 'D12', 'D16'],
+        expectedMatrixTitle: '## 2. Relationship Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL RELATIONSHIP READING'
+      },
+      {
+        domain: 'family',
+        expectedVargas: ['D4', 'D12', 'D7', 'D16'],
+        forbiddenVargas: ['D2', 'D10', 'D11', 'D30'],
+        expectedMatrixTitle: '## 2. Family Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL FAMILY READING'
+      }
     ];
 
     for (const de of domainExpectations) {
@@ -495,6 +521,40 @@ async function main() {
           allFailures.push(`[Domain ${de.domain}] leaked forbidden [VARGA ${fv}:]`);
         }
       }
+      const requiredTailTokens = [
+        '[OUTPUT STRUCTURE]',
+        de.expectedMatrixTitle,
+        'Probability (%) | Rating (1-3) |',
+        '## 5. Readout (Plain Real-World Scenarios Only - Zero Astrological Terms)',
+        '### 1. Month Summary',
+        '### 2. Answer to Focus Question (or Key Practical Takeaways if FULL READING)',
+        `[FOCUS QUESTION]\n${de.expectedDefaultQuestion}`
+      ];
+      for (const tok of requiredTailTokens) {
+        if (!domRes.fullPrompt.includes(tok)) {
+          allFailures.push(`[Domain ${de.domain}] missing Output Structure / Readout token: "${tok}"`);
+        }
+      }
+
+      // KV-Cache prefix byte-identity check with custom Run-1 Focus Question
+      const customQ = 'What happens between Nov 12 and Nov 20?';
+      const customRes = generateOriginalSourceApiPayload({
+        year: 2026,
+        monthIndex: 10,
+        variant: 'compact',
+        part: 'full',
+        domain: de.domain,
+        question: customQ
+      });
+      if (!customRes.validated || !customRes.fullPrompt.endsWith(`[FOCUS QUESTION]\n${customQ}`)) {
+        allFailures.push(`[Domain ${de.domain}] custom Focus Question not appended cleanly at prompt tail`);
+      }
+      const prefixDefault = domRes.fullPrompt.split('\n[FOCUS QUESTION]\n')[0];
+      const prefixCustom = customRes.fullPrompt.split('\n[FOCUS QUESTION]\n')[0];
+      if (prefixDefault !== prefixCustom) {
+        allFailures.push(`[Domain ${de.domain}] KV-Cache prefix broken when custom ?question= is supplied!`);
+      }
+
       const subOnly = generateOriginalSourceApiPayload({
         year: 2026,
         monthIndex: 10,
@@ -506,8 +566,21 @@ async function main() {
         allFailures.push(`[Domain ${de.domain}] part=subprompt missing [SUB-PROMPT: ${de.domain.toUpperCase()}] header`);
       }
       console.log(
-        `PASS Domain [${de.domain.toUpperCase()}]: ${domRes.meta.lineCount}L, ${domRes.meta.charCount}c (~${domRes.meta.estTokens}t) | Vargas: ${de.expectedVargas.join(', ')}`
+        `PASS Domain [${de.domain.toUpperCase()}]: ${domRes.meta.lineCount}L, ${domRes.meta.charCount}c (~${domRes.meta.estTokens}t) | Vargas: ${de.expectedVargas.join(', ')} | Readout Option B + KV Prefix OK`
       );
+    }
+
+    // Master optional ?question= KV-cache tail check
+    const masterWithQ = generateOriginalSourceApiPayload({
+      year: 2026,
+      monthIndex: 10,
+      variant: 'compact',
+      part: 'full',
+      domain: 'master',
+      question: 'Key priority windows this month?'
+    });
+    if (!masterWithQ.validated || masterWithQ.fullPrompt.split('\n[FOCUS QUESTION]\n')[0] !== apiCompact.fullPrompt) {
+      allFailures.push('[Master] custom ?question= did not preserve exact byte-identical Master prefix');
     }
 
     if (allFailures.length > 0) {
@@ -516,7 +589,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 4 DOMAIN SUB-PROMPTS + API PARSER/PAYLOAD CHECKS PASSED (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 4 DOMAIN SUB-PROMPTS + READOUT + KV PREFIX + API CHECKS PASSED (0 mismatches).`);
   } finally {
     await server.close();
   }

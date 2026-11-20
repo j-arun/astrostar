@@ -251,7 +251,8 @@ export function buildMonthlyVedicContext(
   year: number,
   monthIndex: number,
   chartSource?: ChartSourceOverride,
-  domain: OriginalSourceDomain = 'master'
+  domain: OriginalSourceDomain = 'master',
+  focusQuestion?: string
 ): VedicHouseContext {
   const person = chartSource?.person || samplePersonMaster;
   const placements = (chartSource?.placements && chartSource.placements.length > 0)
@@ -418,6 +419,7 @@ export function buildMonthlyVedicContext(
   const baseContext: VedicHouseContext = {
     personId: person.person_id || '001ME',
     originalSourceDomain: domain,
+    focusQuestion,
     isComprehensiveMonthly: true,
     activeDomainFilter: 'all',
     isEventActive: false,
@@ -489,15 +491,16 @@ export function generateOriginalSourceApiPayload(options: {
   variant?: ApiVariantParam;
   part?: PromptPart;
   domain?: OriginalSourceDomain;
+  question?: string;
   chartSource?: ChartSourceOverride;
 }) {
-  const { year, monthIndex, variant = 'compact', part = 'full', domain = 'master', chartSource } = options;
-  const context = buildMonthlyVedicContext(year, monthIndex, chartSource, domain);
+  const { year, monthIndex, variant = 'compact', part = 'full', domain = 'master', question, chartSource } = options;
+  const context = buildMonthlyVedicContext(year, monthIndex, chartSource, domain, question);
   const vargaChartsAttached = DOMAIN_PROMPT_SPECS[domain].vargaCharts;
 
   if (variant === 'both') {
-    const baseRes = buildOriginalSourcePrompt(context, 'baseline', domain);
-    const compRes = buildOriginalSourcePrompt(context, 'compact', domain);
+    const baseRes = buildOriginalSourcePrompt(context, 'baseline', domain, question);
+    const compRes = buildOriginalSourcePrompt(context, 'compact', domain, question);
     const baseVal = validateOriginalSourcePrompt(baseRes, context, 'baseline', domain);
     const compVal = validateOriginalSourcePrompt(compRes, context, 'compact', domain);
     return {
@@ -505,6 +508,7 @@ export function generateOriginalSourceApiPayload(options: {
       variant: 'both' as const,
       part,
       domain,
+      focusQuestion: compRes.meta.focusQuestion,
       vargaChartsAttached,
       monthLabel: baseRes.meta.monthLabel,
       year,
@@ -534,13 +538,14 @@ export function generateOriginalSourceApiPayload(options: {
     };
   }
 
-  const singleRes = buildOriginalSourcePrompt(context, variant, domain);
+  const singleRes = buildOriginalSourcePrompt(context, variant, domain, question);
   const singleVal = validateOriginalSourcePrompt(singleRes, context, variant, domain);
   return {
     success: singleVal.valid,
     variant,
     part,
     domain,
+    focusQuestion: singleRes.meta.focusQuestion,
     vargaChartsAttached,
     monthLabel: singleRes.meta.monthLabel,
     year,

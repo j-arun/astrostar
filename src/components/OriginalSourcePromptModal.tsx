@@ -13,7 +13,8 @@ import {
   Coins,
   Heart,
   Home,
-  Compass
+  Compass,
+  HelpCircle
 } from 'lucide-react';
 import { OriginalSourceDomain, VedicHouseContext } from '../services/llm/types';
 import {
@@ -54,6 +55,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
   const [selectedDomain, setSelectedDomain] = useState<OriginalSourceDomain>(initialDomain);
   const [variant, setVariant] = useState<OriginalSourceVariant>('compact');
   const [activeTab, setActiveTab] = useState<PromptTab>('full');
+  const [focusQuestion, setFocusQuestion] = useState<string>('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,10 +80,10 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
     if (!isOpen) return null;
     const ctx = buildContextForSelectedMonth();
     return {
-      baseline: buildOriginalSourcePrompt(ctx, 'baseline', selectedDomain),
-      compact: buildOriginalSourcePrompt(ctx, 'compact', selectedDomain)
+      baseline: buildOriginalSourcePrompt(ctx, 'baseline', selectedDomain, focusQuestion),
+      compact: buildOriginalSourcePrompt(ctx, 'compact', selectedDomain, focusQuestion)
     };
-  }, [isOpen, buildContextForSelectedMonth, selectedMonthName, selectedYear, selectedDomain]);
+  }, [isOpen, buildContextForSelectedMonth, selectedMonthName, selectedYear, selectedDomain, focusQuestion]);
 
   if (!isOpen || !generatedPair) return null;
 
@@ -243,6 +245,31 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
           </div>
         </div>
 
+        {/* Optional Run-1 Focus Question (Appended LAST after [OUTPUT STRUCTURE] for KV Cache Reuse) */}
+        <div className="px-5 py-2 bg-slate-900 border-b border-slate-800 flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 whitespace-nowrap">
+            <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Focus Question:</span>
+          </div>
+          <input
+            type="text"
+            value={focusQuestion}
+            onChange={(e) => { setFocusQuestion(e.target.value); setCopiedKey(null); }}
+            placeholder={`Optional Run-1 question (defaults to "${domainSpec.defaultQuestion}") — placed at prompt tail for KV cache hit`}
+            className="flex-1 bg-slate-950 border border-slate-800 focus:border-emerald-500/60 focus:outline-none rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500"
+          />
+          {focusQuestion && (
+            <button
+              type="button"
+              onClick={() => { setFocusQuestion(''); setCopiedKey(null); }}
+              className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold cursor-pointer"
+              title="Clear question"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         {/* Format Variant & Section Tabs */}
         <div className="px-5 py-2 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -370,7 +397,11 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
                 ? 'src/services/llm/originalSourceRulesBaseline.txt'
                 : 'src/services/llm/originalSourceRules.txt'}
             </code>
-            {' '}| Same unified engine powers UI &amp; <code className="text-emerald-300">GET /api/content?domain={selectedDomain}&amp;variant={variant}</code>
+            {' '}| Same unified engine powers UI &amp;{' '}
+            <code className="text-emerald-300">
+              GET /api/content?domain={selectedDomain}&amp;variant={variant}
+              {focusQuestion.trim() ? `&question=${encodeURIComponent(focusQuestion.trim())}` : ''}
+            </code>
           </span>
           <button
             type="button"

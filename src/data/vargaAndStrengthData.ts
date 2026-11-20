@@ -11,11 +11,18 @@ export interface DomainPromptSpec {
   id: OriginalSourceDomain;
   label: string;
   shortLabel: string;
+  topicUpper: string;
+  overviewTitle: string;
+  matrixTitle: string;
+  vargaTagLabel: string;
+  eventColumnLabel: string;
+  breakdownTitle: string;
+  cautionTitle: string;
+  defaultQuestion: string;
   description: string;
   vargaCharts: string[];
   focusHouses: number[];
   primaryKarakas: string[];
-  focusGuidance: string;
 }
 
 export const DOMAIN_PROMPT_SPECS: Record<OriginalSourceDomain, DomainPromptSpec> = {
@@ -23,51 +30,86 @@ export const DOMAIN_PROMPT_SPECS: Record<OriginalSourceDomain, DomainPromptSpec>
     id: 'master',
     label: 'Master Prompt (All-Domain Base)',
     shortLabel: 'Master',
+    topicUpper: 'ALL DOMAINS',
+    overviewTitle: 'Holistic Overview',
+    matrixTitle: 'Key Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D9',
+    eventColumnLabel: 'Key Event',
+    breakdownTitle: 'Detailed Event Breakdown',
+    cautionTitle: 'Specific Dates to Be Very Careful',
+    defaultQuestion: 'FULL MONTHLY READING',
     description: 'Complete foundational chart (D1, D9, Shadbala, 7-Planet Ashtakavarga + As + Sodhya Pindas, Yogas & Doshas, Jaimini) + Monthly Ephemeris.',
     vargaCharts: ['D1', 'D9'],
     focusHouses: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    primaryKarakas: ['Jupiter', 'Venus', 'Saturn', 'Mercury', 'Sun', 'Moon', 'Mars'],
-    focusGuidance: 'Full holistic baseline across all life domains using D1 and D9 only (no D2..D144 divisional attachments).'
+    primaryKarakas: ['Jupiter', 'Venus', 'Saturn', 'Mercury', 'Sun', 'Moon', 'Mars']
   },
   career: {
     id: 'career',
     label: 'Career Prompt (Work & Authority)',
     shortLabel: 'Career',
-    description: 'Master Prompt + Career Sub-Prompt attaching D10 (Dasamsa), H10/H6/H11/H2 focus, Shadbala Dig/Cheshta, Dharma-Karmadhipati & Vipareetha Raja Yogas.',
+    topicUpper: 'CAREER & PROFESSION',
+    overviewTitle: 'Career & Profession Overview',
+    matrixTitle: 'Career Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D10',
+    eventColumnLabel: 'Career Event',
+    breakdownTitle: 'Detailed Career Event Breakdown',
+    cautionTitle: 'Specific Career Dates to Be Very Careful',
+    defaultQuestion: 'FULL CAREER READING',
+    description: 'Master Prompt + Career Sub-Prompt attaching D10 (Dasamsa), Output Structure + Readout, and optional Focus Question.',
     vargaCharts: ['D10'],
     focusHouses: [10, 6, 11, 2, 9, 1],
-    primaryKarakas: ['Mercury', 'Sun', 'Saturn', 'Mars', 'Jupiter'],
-    focusGuidance: 'Analyze profession, authority, job continuity vs role change, promotion, and daily work friction by combining D1 H10/H6/H11 with D10 (Dasamsa) lordships and placements.'
+    primaryKarakas: ['Mercury', 'Sun', 'Saturn', 'Mars', 'Jupiter']
   },
   finance: {
     id: 'finance',
     label: 'Finance Prompt (Wealth & Assets)',
     shortLabel: 'Finance',
-    description: 'Master Prompt + Finance Sub-Prompt attaching D2 (Hora), D11 (Ekadasamsa), D4 (Chaturthamsa), H2/H11/H5/H4/H8 focus, Dhana Yogas & Sodhya Pindas.',
+    topicUpper: 'FINANCE & WEALTH',
+    overviewTitle: 'Finance & Wealth Overview',
+    matrixTitle: 'Financial Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D2/D4/D11',
+    eventColumnLabel: 'Financial Event',
+    breakdownTitle: 'Detailed Financial Event Breakdown',
+    cautionTitle: 'Specific Financial Dates to Be Very Careful',
+    defaultQuestion: 'FULL FINANCE READING',
+    description: 'Master Prompt + Finance Sub-Prompt attaching D2 (Hora), D11 (Ekadasamsa), D4 (Chaturthamsa), Output Structure + Readout, and optional Focus Question.',
     vargaCharts: ['D2', 'D11', 'D4'],
     focusHouses: [2, 11, 5, 9, 4, 8],
-    primaryKarakas: ['Jupiter', 'Venus', 'Mercury', 'Saturn', 'Mars'],
-    focusGuidance: 'Analyze liquid cashflow, accumulated savings, windfalls, debt/PF/institutional payouts, and fixed property/asset accumulation across D2 (Hora), D11 (Ekadasamsa), and D4 (Chaturthamsa).'
+    primaryKarakas: ['Jupiter', 'Venus', 'Mercury', 'Saturn', 'Mars']
   },
   love: {
     id: 'love',
     label: 'Love Prompt (Romance & Marriage)',
     shortLabel: 'Love',
-    description: 'Master Prompt + Love Sub-Prompt attaching D7 (Saptamsa) & D30 (Trimsamsa) alongside Master D9 (Navamsa), H5/H7/H12/H11, UL/A7/DK & Venus/Jupiter BAV.',
+    topicUpper: 'LOVE & RELATIONSHIPS',
+    overviewTitle: 'Love & Relationship Overview',
+    matrixTitle: 'Relationship Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D9/D7/D30',
+    eventColumnLabel: 'Relationship Event',
+    breakdownTitle: 'Detailed Relationship Event Breakdown',
+    cautionTitle: 'Specific Relationship Dates to Be Very Careful',
+    defaultQuestion: 'FULL RELATIONSHIP READING',
+    description: 'Master Prompt (incl. D9 Navamsa) + Love Sub-Prompt attaching D7 (Saptamsa) & D30 (Trimsamsa), Output Structure + Readout, and optional Focus Question.',
     vargaCharts: ['D7', 'D30'],
     focusHouses: [5, 7, 12, 11, 1],
-    primaryKarakas: ['Venus', 'Jupiter', 'Mercury', 'Moon'],
-    focusGuidance: 'Analyze romantic attraction, relationship trajectory, marriage/committed bond, intimacy, and emotional stressors using Master D9 (Navamsa) paired with D7 (Saptamsa) and D30 (Trimsamsa).'
+    primaryKarakas: ['Venus', 'Jupiter', 'Mercury', 'Moon']
   },
   family: {
     id: 'family',
     label: 'Family Prompt (Home, Lineage & Parents)',
     shortLabel: 'Family',
-    description: 'Master Prompt + Family Sub-Prompt attaching D4 (Chaturthamsa), D12 (Dwadasamsa), D7 (Saptamsa), D16 (Shodasamsa), Pitru Dosha & maternal/domestic yogas.',
+    topicUpper: 'FAMILY, HOME & LINEAGE',
+    overviewTitle: 'Family & Home Overview',
+    matrixTitle: 'Family Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D4/D7/D12/D16',
+    eventColumnLabel: 'Family Event',
+    breakdownTitle: 'Detailed Family Event Breakdown',
+    cautionTitle: 'Specific Family Dates to Be Very Careful',
+    defaultQuestion: 'FULL FAMILY READING',
+    description: 'Master Prompt + Family Sub-Prompt attaching D4, D12, D7, D16, Pitru Dosha alert, Output Structure + Readout, and optional Focus Question.',
     vargaCharts: ['D4', 'D12', 'D7', 'D16'],
     focusHouses: [4, 2, 5, 9, 3],
-    primaryKarakas: ['Moon', 'Jupiter', 'Sun', 'Venus', 'Mars'],
-    focusGuidance: 'Analyze domestic peace, mother/father/parents, children, ancestral lineage obligations (Pitru Dosha), home/vehicle comforts, and relocation across D4, D12, D7, and D16.'
+    primaryKarakas: ['Moon', 'Jupiter', 'Sun', 'Venus', 'Mars']
   }
 };
 

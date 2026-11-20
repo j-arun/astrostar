@@ -336,6 +336,7 @@ export interface VedicHouseContext {
   };
   personId?: string;
   originalSourceDomain?: OriginalSourceDomain;
+  focusQuestion?: string;
   shadbalaStrengths?: Array<{
     planet: string;
     ratio: number;

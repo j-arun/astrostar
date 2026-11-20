@@ -444,6 +444,7 @@ export interface OriginalSourcePromptResult {
   meta: {
     variant: OriginalSourceVariant;
     domain: OriginalSourceDomain;
+    focusQuestion?: string;
     monthLabel: string;
     dateRange: string;
     charCount: number;
@@ -456,16 +457,23 @@ export interface OriginalSourcePromptResult {
  * Builds the "Original Source" (Original Heartbeat) holistic raw-data prompt.
  * Supports:
  * - Master Prompt (`domain = 'master'`): D1, D9, Shadbala, 7-Planet Ashtakavarga + As + Sodhya Pindas, Yogas/Doshas, Jaimini + Monthly Ephemeris
- * - 4 Domain Sub-Prompts (`career`, `finance`, `love`, `family`): Attaches domain-specific Divisional Charts (Vargas), focus houses, karakas, and yogas/doshas
+ * - 4 Domain Sub-Prompts (`career`, `finance`, `love`, `family`): Attaches domain-specific Divisional Charts (Vargas), minimal Frontier rules, 4-section Output Structure + Option B Readout, and trailing [FOCUS QUESTION] for KV cache reuse
  * - Two variants (`compact` readable LLM format with spaces, `baseline` full-label 14B format)
  * Completely independent of existing v1/v2/v3 prompts.
  */
 export function buildOriginalSourcePrompt(
   rawContext: VedicHouseContext,
   variant: OriginalSourceVariant = 'compact',
-  domainArg?: OriginalSourceDomain
+  domainArg?: OriginalSourceDomain,
+  focusQuestionArg?: string
 ): OriginalSourcePromptResult {
   const domain: OriginalSourceDomain = domainArg || rawContext.originalSourceDomain || 'master';
+  const rawQuestion = focusQuestionArg !== undefined ? focusQuestionArg : rawContext.focusQuestion;
+  const cleanQuestion = (rawQuestion || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/_/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
   const isCompact = variant === 'compact';
   // Spaces enabled in both variants for LLM readability as requested
   const sep = ' | ';
@@ -1620,6 +1628,7 @@ export function buildOriginalSourcePrompt(
     if (domain === 'master') return '';
     const spec = DOMAIN_PROMPT_SPECS[domain];
     const domainUpper = domain.toUpperCase();
+    const resolvedQuestion = cleanQuestion || spec.defaultQuestion;
 
     // Spotlight Shadbala & Pindas for primary karakas
     const karakaShadbala = (context.shadbalaStrengths || [])
@@ -1666,21 +1675,49 @@ export function buildOriginalSourcePrompt(
       return formatVargaSection(chart);
     });
 
-    const d9CrossNote = domain === 'love'
-      ? `Primary Chart Reference: Use Master [D9] (Navamsa) alongside D7 & D30 below, plus UL(A12)/A7/DK from [JAIMINI].`
-      : `Master Cross-Ref: Synthesize with Master [D1] + [D9] and monthly [DASHA]/[LUNAR]/[EVENTS].`;
+    const masterAnchorNote = domain === 'love'
+      ? `Primary Chart Reference: Evaluate ALL Master [D1], [D9] (Navamsa), [JAIMINI] (UL/A12, A7, DK), strength tables, monthly ephemeris, and [VARGA D7]/[VARGA D30] below.`
+      : `Primary Chart Reference: Evaluate ALL Master [D1], [D9], strength tables, monthly ephemeris, and attached [VARGA] charts (${spec.vargaCharts.join(', ')}) below.`;
+
+    const domainRulesLines = [
+      `Scope: Act strictly as a Senior Vedic Astrologer (Parashara & Jaimini). Using ONLY the provided natal, strength, yoga/dosha, monthly transit/dasha/lunar ephemeris, and attached ${spec.vargaTagLabel} charts, deliver a deep prediction ONLY for ${spec.topicUpper}.`,
+      masterAnchorNote,
+      `Constraints: Never say "excerpt", "hypothetical", or add disclaimers/counselor advice. Never invent or recalculate positions. Weigh both Lagna (L#) and Moon (M#), and time windows when Transit Moon is sitting in or 7th-aspecting active houses/significators with Tara and ChandraBala.`,
+      `Citation Split: Sections 1-4 MUST cite exact planets, L#/M# houses, Dasha, Varga, SAV/BAV, Tara, CB, and UTC dates behind every statement. Section 5 (Readout) MUST contain ZERO astrological terms (no planets, signs, houses, Dasha, Nakshatra, Tara, Varga, SAV, or Yoga names)—use calm, objective real-world scenarios and specific calendar dates only. Rating Scale: 3 = Highly Likely | 2 = Most Likely | 1 = Possible.`,
+      `Follow-ups: Use [OUTPUT STRUCTURE] below for this initial reading. For any follow-up question in the same thread, answer directly and concisely without repeating all 5 sections unless asked.`
+    ];
+
+    const outputStructureLines = [
+      `[OUTPUT STRUCTURE]`,
+      `## 1. ${spec.overviewTitle} (Lagna L# + Moon Lagna M# + Dasha + ${spec.vargaTagLabel})`,
+      `## 2. ${spec.matrixTitle}`,
+      `| Date Range | ${spec.eventColumnLabel} | Moon Trigger (Sitting / 7th Aspect + Tara / ChandraBala) | Probability (%) | Rating (1-3) |`,
+      `## 3. ${spec.breakdownTitle} (When & How Each Happens)`,
+      `- Event [#], Date Range + Moon Sitting/Aspect, Probability % & Rating (1-3), Mechanism.`,
+      `## 4. ${spec.cautionTitle}`,
+      `[Exact caution dates and practical triggers to avoid.]`,
+      `## 5. Readout (Plain Real-World Scenarios Only - Zero Astrological Terms)`,
+      `### 1. Month Summary`,
+      `### 2. Answer to Focus Question (or Key Practical Takeaways if FULL READING)`
+    ];
+
+    const focusQuestionBlock = [
+      `[FOCUS QUESTION]`,
+      resolvedQuestion
+    ];
 
     return [
       `[SUB-PROMPT: ${domainUpper}]`,
       `Domain: ${spec.label} | Focus Houses: ${spec.focusHouses.map(h => `H${h}`).join(', ')} | Primary Karakas: ${spec.primaryKarakas.join(', ')}`,
-      `Guidance: ${spec.focusGuidance}`,
-      d9CrossNote,
+      ...domainRulesLines,
       `[DOMAIN STRENGTHS]`,
       `Karakas Shadbala: ${karakaShadbala}`,
       `Focus Houses SAV/BAV: ${focusAshtak}`,
       `Highlighted Yogas: ${yogaHighlight}`,
       `Domain Dosha Alert: ${doshaHighlight}`,
-      ...vargaSections
+      ...vargaSections,
+      ...outputStructureLines,
+      ...focusQuestionBlock
     ].join('\n');
   })();
 
@@ -1696,8 +1733,14 @@ export function buildOriginalSourcePrompt(
     c9AdGates
   ].join('\n');
 
+  const resolvedMetaQuestion = domain === 'master'
+    ? (cleanQuestion || undefined)
+    : (cleanQuestion || DOMAIN_PROMPT_SPECS[domain].defaultQuestion);
+
   const fullPrompt = subPromptBlock
     ? `${staticBlock}\n${monthSlice}\n${subPromptBlock}`
+    : cleanQuestion
+    ? `${staticBlock}\n${monthSlice}\n[FOCUS QUESTION]\n${cleanQuestion}`
     : `${staticBlock}\n${monthSlice}`;
   const lineCount = fullPrompt.split('\n').length;
 
@@ -1709,6 +1752,7 @@ export function buildOriginalSourcePrompt(
     meta: {
       variant,
       domain,
+      focusQuestion: resolvedMetaQuestion,
       monthLabel: `${monthName} ${year}`,
       dateRange: rangeStr,
       charCount: fullPrompt.length,
@@ -1761,10 +1805,10 @@ export function validateOriginalSourcePrompt(
     }
   }
 
-  // 1a. Domain Sub-Prompt & Varga exclusivity validation
+  // 1a. Domain Sub-Prompt, Varga exclusivity, Output Structure (including Readout Option B), and trailing Focus Question validation
   if (domain === 'master') {
-    if (result.subPromptBlock || /^\[SUB-PROMPT:/m.test(fullPrompt) || /^\[VARGA D\d+:/mi.test(fullPrompt)) {
-      errors.push('Master prompt must not attach [SUB-PROMPT:] or divisional [VARGA D2..D144] charts');
+    if (result.subPromptBlock || /^\[SUB-PROMPT:/m.test(fullPrompt) || /^\[VARGA D\d+:/mi.test(fullPrompt) || /^\[OUTPUT STRUCTURE\]/m.test(fullPrompt)) {
+      errors.push('Master prompt must not attach [SUB-PROMPT:], [OUTPUT STRUCTURE], or divisional [VARGA D2..D144] charts');
     }
   } else {
     const spec = DOMAIN_PROMPT_SPECS[domain];
@@ -1787,6 +1831,28 @@ export function validateOriginalSourcePrompt(
         errors.push(`Domain "${domain}" leaked unrelated divisional chart ${vCode} (allowed: ${spec.vargaCharts.join(', ')})`);
       }
     }
+    const requiredStructureTokens = [
+      '[OUTPUT STRUCTURE]',
+      `## 1. ${spec.overviewTitle}`,
+      `## 2. ${spec.matrixTitle}`,
+      `| Date Range | ${spec.eventColumnLabel} | Moon Trigger (Sitting / 7th Aspect + Tara / ChandraBala) | Probability (%) | Rating (1-3) |`,
+      `## 3. ${spec.breakdownTitle}`,
+      `## 4. ${spec.cautionTitle}`,
+      '## 5. Readout (Plain Real-World Scenarios Only - Zero Astrological Terms)',
+      '### 1. Month Summary',
+      '### 2. Answer to Focus Question (or Key Practical Takeaways if FULL READING)',
+      '[FOCUS QUESTION]'
+    ];
+    for (const tok of requiredStructureTokens) {
+      if (!fullPrompt.includes(tok)) {
+        errors.push(`Domain "${domain}" missing required Output Structure / Readout token: "${tok}"`);
+      }
+    }
+    const osIdx = fullPrompt.indexOf('[OUTPUT STRUCTURE]');
+    const fqIdx = fullPrompt.indexOf('[FOCUS QUESTION]');
+    if (osIdx !== -1 && fqIdx !== -1 && fqIdx <= osIdx) {
+      errors.push(`Domain "${domain}" [FOCUS QUESTION] must appear AFTER [OUTPUT STRUCTURE] to preserve KV cache prefix`);
+    }
   }
 
   // 1b. Compaction hygiene checks (zero underscores, zero blank lines)
@@ -1797,7 +1863,11 @@ export function validateOriginalSourcePrompt(
     errors.push('Prompt contains blank line gap "\\n\\n" (must be strictly single-newline)');
   }
 
-  // 2. Forbidden words / prediction-outcome probability prose
+  // 2. Forbidden words / prediction-outcome probability prose (scanned ONLY against factual data before [OUTPUT STRUCTURE] and [FOCUS QUESTION])
+  const factualDataOnlyPrompt = fullPrompt
+    .split('\n[OUTPUT STRUCTURE]')[0]
+    .split('\n[FOCUS QUESTION]')[0];
+
   const forbiddenPatterns: Array<{ label: string; regex: RegExp }> = [
     { label: 'probab', regex: /probab/i },
     { label: 'outcome-%', regex: /\b\d+(?:\.\d+)?%\s*(?:chance|likely|likelihood|odds|confidence|success)\b/i },
@@ -1818,8 +1888,8 @@ export function validateOriginalSourcePrompt(
     { label: 'PeakGate', regex: /\bPeakGate\b/i }
   ];
   for (const fp of forbiddenPatterns) {
-    if (fp.regex.test(fullPrompt)) {
-      errors.push(`Forbidden token found in output: ${fp.label}`);
+    if (fp.regex.test(factualDataOnlyPrompt)) {
+      errors.push(`Forbidden token found in factual prompt data: ${fp.label}`);
     }
   }
 
@@ -1836,7 +1906,7 @@ export function validateOriginalSourcePrompt(
   // Helper to split sections cleanly (handles single-newline section boundaries)
   const sectionBody = (tag: string): string => {
     const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n\\[(?:RULES|LORDSHIPS|HOUSE LORDS|D1|D9|SHADBALA|SAV|BAV|PINDAS|YOGAS|DOSHAS|JAIMINI|KARAKAS|PERIOD|DASHA|SLOW PLANETS|DOUBLE TRANSIT|FAST PLANETS|EVENTS|HOUSE MAP|LUNAR|AD CHAMBER\\/GATES|SUB-PROMPT:[^\\]]+|DOMAIN STRENGTHS|VARGA [^\\]]+)\\]|$)`);
+    const re = new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n\\[(?:RULES|LORDSHIPS|HOUSE LORDS|D1|D9|SHADBALA|SAV|BAV|PINDAS|YOGAS|DOSHAS|JAIMINI|KARAKAS|PERIOD|DASHA|SLOW PLANETS|DOUBLE TRANSIT|FAST PLANETS|EVENTS|HOUSE MAP|LUNAR|AD CHAMBER\\/GATES|SUB-PROMPT:[^\\]]+|DOMAIN STRENGTHS|VARGA [^\\]]+|OUTPUT STRUCTURE|FOCUS QUESTION)\\]|$)`);
     const m = fullPrompt.match(re);
     return m ? m[1] : '';
   };

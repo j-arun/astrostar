@@ -1493,7 +1493,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               <span>Schedule 14B Batch</span>
             </button>
 
-            {/* BUTTON 3: ORIGINAL SOURCE MASTER + 4 DOMAIN PROMPT LAUNCHER */}
+            {/* BUTTON 3: ORIGINAL SOURCE MASTER + 5 DOMAIN PROMPT LAUNCHER */}
             <div className="flex items-center rounded-xl bg-slate-950 border border-emerald-500/40 overflow-hidden">
               <button
                 type="button"
@@ -1507,7 +1507,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
                 <Activity className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Master</span>
               </button>
-              {(['career', 'finance', 'love', 'family'] as OriginalSourceDomain[]).map((dom) => (
+              {(['career', 'finance', 'love', 'family', 'health'] as OriginalSourceDomain[]).map((dom) => (
                 <button
                   key={dom}
                   type="button"

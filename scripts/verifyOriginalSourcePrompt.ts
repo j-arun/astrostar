@@ -484,9 +484,9 @@ async function main() {
       allFailures.push('[API payload] variant=both Nov 2026 failed validation or tokenSavings check');
     }
 
-    // 6. All 4 Domain Sub-Prompts + Varga exclusivity + Output Structure + Readout Option B + KV-Cache tail checks
+    // 6. All 5 Domain Sub-Prompts + Varga exclusivity + Output Structure + Readout Option B + KV-Cache tail checks
     const domainExpectations: Array<{
-      domain: 'career' | 'finance' | 'love' | 'family';
+      domain: 'career' | 'finance' | 'love' | 'family' | 'health';
       expectedVargas: string[];
       forbiddenVargas: string[];
       expectedMatrixTitle: string;
@@ -495,30 +495,37 @@ async function main() {
       {
         domain: 'career',
         expectedVargas: ['D10'],
-        forbiddenVargas: ['D2', 'D4', 'D7', 'D11', 'D12', 'D16', 'D30'],
+        forbiddenVargas: ['D2', 'D4', 'D6', 'D7', 'D8', 'D11', 'D12', 'D16', 'D27', 'D30'],
         expectedMatrixTitle: '## 2. Career Event Timeline & Rating Matrix',
         expectedDefaultQuestion: 'FULL CAREER READING'
       },
       {
         domain: 'finance',
         expectedVargas: ['D2', 'D11', 'D4'],
-        forbiddenVargas: ['D7', 'D10', 'D12', 'D16', 'D30'],
+        forbiddenVargas: ['D6', 'D7', 'D8', 'D10', 'D12', 'D16', 'D27', 'D30'],
         expectedMatrixTitle: '## 2. Financial Event Timeline & Rating Matrix',
         expectedDefaultQuestion: 'FULL FINANCE READING'
       },
       {
         domain: 'love',
         expectedVargas: ['D7', 'D30'],
-        forbiddenVargas: ['D2', 'D4', 'D10', 'D11', 'D12', 'D16'],
+        forbiddenVargas: ['D2', 'D4', 'D6', 'D8', 'D10', 'D11', 'D12', 'D16', 'D27'],
         expectedMatrixTitle: '## 2. Relationship Event Timeline & Rating Matrix',
         expectedDefaultQuestion: 'FULL RELATIONSHIP READING'
       },
       {
         domain: 'family',
         expectedVargas: ['D4', 'D12', 'D7', 'D16'],
-        forbiddenVargas: ['D2', 'D10', 'D11', 'D30'],
+        forbiddenVargas: ['D2', 'D6', 'D8', 'D10', 'D11', 'D27', 'D30'],
         expectedMatrixTitle: '## 2. Family Event Timeline & Rating Matrix',
         expectedDefaultQuestion: 'FULL FAMILY READING'
+      },
+      {
+        domain: 'health',
+        expectedVargas: ['D6', 'D8', 'D27', 'D30'],
+        forbiddenVargas: ['D2', 'D4', 'D7', 'D10', 'D11', 'D12', 'D16'],
+        expectedMatrixTitle: '## 2. Health Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL HEALTH READING'
       }
     ];
 
@@ -621,7 +628,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 4 DOMAIN SUB-PROMPTS + READOUT + KV PREFIX + API CHECKS PASSED (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 5 DOMAIN SUB-PROMPTS + READOUT + KV PREFIX + API CHECKS PASSED (0 mismatches).`);
   } finally {
     await server.close();
   }

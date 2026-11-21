@@ -912,7 +912,7 @@ export function buildOriginalSourcePrompt(
     'Wealth: L2, L11, L5, L9, L4, Jupiter, Venus, Mercury, Saturn, Mars',
     'Home/Family: L4, L2, L5, L9, L3, Moon, Jupiter, Sun, Venus, Mars',
     'Love/Progeny: L5, L7, L12, L11, Venus, Jupiter, Mercury, Moon',
-    'Health: L1, L6, L8, Saturn, Sun, Mars'
+    'Health: L1, L6, L8, L12, L4, L2, Saturn, Sun, Mars, Moon, Jupiter'
   ];
 
   const lordshipHeader = isCompact
@@ -1994,7 +1994,7 @@ export function buildOriginalSourcePrompt(
     ...(triggerRows.length > 0 ? triggerRows.map(r => r.line) : ['None'])
   ].join('\n');
 
-  // SUB-PROMPT BUILDER (Career | Finance | Love | Family)
+  // SUB-PROMPT BUILDER (Career | Finance | Love | Family | Health)
   const subPromptBlock = (() => {
     if (domain === 'master') return '';
     const spec = DOMAIN_PROMPT_SPECS[domain];

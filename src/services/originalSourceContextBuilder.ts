@@ -23,6 +23,7 @@ export function resolveOriginalSourceDomain(input?: string | null): OriginalSour
   if (raw === 'finance' || raw === 'wealth' || raw === 'money' || raw === 'financial') return 'finance';
   if (raw === 'love' || raw === 'romance' || raw === 'relationship' || raw === 'marriage' || raw === 'relationships') return 'love';
   if (raw === 'family' || raw === 'home' || raw === 'parents' || raw === 'lineage') return 'family';
+  if (raw === 'health' || raw === 'vitality' || raw === 'wellness' || raw === 'medical' || raw === 'body' || raw === 'illness') return 'health';
   return null;
 }
 

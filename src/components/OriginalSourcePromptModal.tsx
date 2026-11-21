@@ -12,6 +12,7 @@ import {
   Briefcase,
   Coins,
   Heart,
+  HeartPulse,
   Home,
   Compass,
   HelpCircle
@@ -34,14 +35,15 @@ interface OriginalSourcePromptModalProps {
 
 type PromptTab = 'full' | 'static' | 'month' | 'subprompt';
 
-const DOMAIN_ORDER: OriginalSourceDomain[] = ['master', 'career', 'finance', 'love', 'family'];
+const DOMAIN_ORDER: OriginalSourceDomain[] = ['master', 'career', 'finance', 'love', 'family', 'health'];
 
 const DOMAIN_ICONS: Record<OriginalSourceDomain, React.ReactNode> = {
   master: <Compass className="w-3.5 h-3.5" />,
   career: <Briefcase className="w-3.5 h-3.5" />,
   finance: <Coins className="w-3.5 h-3.5" />,
   love: <Heart className="w-3.5 h-3.5" />,
-  family: <Home className="w-3.5 h-3.5" />
+  family: <Home className="w-3.5 h-3.5" />,
+  health: <HeartPulse className="w-3.5 h-3.5" />
 };
 
 export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps> = ({
@@ -100,7 +102,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
       : activeTab === 'month'
       ? generated.monthSlice
       : activeTab === 'subprompt'
-      ? generated.subPromptBlock || 'Select Career, Finance, Love, or Family to view its attached Domain Sub-Prompt & Varga charts.'
+      ? generated.subPromptBlock || 'Select Career, Finance, Love, Family, or Health to view its attached Domain Sub-Prompt & Varga charts.'
       : generated.fullPrompt;
 
   const handleCopy = async (textToCopy: string, key: string) => {
@@ -208,7 +210,7 @@ export const OriginalSourcePromptModal: React.FC<OriginalSourcePromptModalProps>
           </div>
         </div>
 
-        {/* Prompt Type Selector: Master + 4 Domain Sub-Prompts */}
+        {/* Prompt Type Selector: Master + 5 Domain Sub-Prompts */}
         <div className="px-5 py-2.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             {DOMAIN_ORDER.map((dom) => {

@@ -3061,7 +3061,7 @@ function originalSourceApiPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify({
               success: false,
-              error: `Invalid domain "${rawDomainParam}". Expected "master", "career" (or "work"), "finance" (or "wealth"), "love" (or "romance"), or "family" (or "home").`
+              error: `Invalid domain "${rawDomainParam}". Expected "master", "career" (or "work"), "finance" (or "wealth"), "love" (or "romance"), "family" (or "home"), or "health" (or "vitality").`
             }));
             return;
           }

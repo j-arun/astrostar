@@ -110,6 +110,23 @@ export const DOMAIN_PROMPT_SPECS: Record<OriginalSourceDomain, DomainPromptSpec>
     vargaCharts: ['D4', 'D12', 'D7', 'D16'],
     focusHouses: [4, 2, 5, 9, 3],
     primaryKarakas: ['Moon', 'Jupiter', 'Sun', 'Venus', 'Mars']
+  },
+  health: {
+    id: 'health',
+    label: 'Health Prompt (Vitality, Illness & Recovery)',
+    shortLabel: 'Health',
+    topicUpper: 'HEALTH & VITALITY',
+    overviewTitle: 'Health & Vitality Overview',
+    matrixTitle: 'Health Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D6/D8/D27/D30',
+    eventColumnLabel: 'Health Event',
+    breakdownTitle: 'Detailed Health Event Breakdown',
+    cautionTitle: 'Specific Health Dates to Be Very Careful',
+    defaultQuestion: 'FULL HEALTH READING',
+    description: 'Master Prompt + Health Sub-Prompt attaching D6 (Shashtamsa), D8 (Ashtamsa), D27 (Bhamsa), D30 (Trimsamsa), Output Structure + Readout, and optional Focus Question.',
+    vargaCharts: ['D6', 'D8', 'D27', 'D30'],
+    focusHouses: [1, 6, 8, 12, 4, 2],
+    primaryKarakas: ['Saturn', 'Sun', 'Mars', 'Moon', 'Jupiter']
   }
 };
 
@@ -423,25 +440,25 @@ export const D1_YOGAS_AND_DOSHAS_001ME: YogaDoshaData = {
       name: 'Vipareetha Raja Yoga',
       participants: ['Mars', 'Moon'],
       condition: 'L12 Mars in L6 Taurus; L8 Moon in L12 Scorpio (Debilitated with Natal Neecha Bhanga: success after struggle)',
-      domains: ['career', 'finance']
+      domains: ['career', 'finance', 'health']
     },
     {
       name: 'Neecha Bhanga Raja Yoga (Moon)',
       participants: ['Moon', 'Venus', 'Mars'],
       condition: 'Natal Moon debilitated in Scorpio (L12/M1); cancelled by exaltation lord Venus in Kendra (L1 Lagna), dispositor Mars in Kendra (M7 from Moon / L6 Taurus), and L1 Jupiter 9th aspect',
-      domains: ['career', 'finance', 'love', 'family']
+      domains: ['career', 'finance', 'love', 'family', 'health']
     }
   ],
   generalYogas: [
     { name: 'Vosi Yoga', condition: 'Venus in 12th from Sun (L1 Sagittarius)', domains: ['career', 'finance'] },
     { name: 'Nipuna Yoga', condition: 'Sun+Mercury conjoined in L2 Capricorn (attenuated by Mercury natal combustion)', domains: ['career'] },
     { name: 'Sunaphaa Yoga', condition: 'Venus in 2nd from NB-strengthened Moon (M2 / L1 Sagittarius; self-earned authority)', domains: ['finance', 'career'] },
-    { name: 'Hamsa Yoga', condition: 'Jupiter in Own Kendra L4 Pisces (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family'] },
+    { name: 'Hamsa Yoga', condition: 'Jupiter in Own Kendra L4 Pisces (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family', 'health'] },
     { name: 'Daama Yoga', condition: '7 planets occupy 6 distinct signs (wealth, children, generosity)', domains: ['finance', 'family'] },
-    { name: 'Subha Yoga', condition: 'Natural benefic Venus occupies L1 Sagittarius', domains: ['love', 'family'] },
+    { name: 'Subha Yoga', condition: 'Natural benefic Venus occupies L1 Sagittarius', domains: ['love', 'family', 'health'] },
     { name: 'Saraswathi Yoga', condition: 'Mercury (L2), Jupiter (L4 Own), Venus (L1) in Kendra/2nd (learning, prosperity)', domains: ['career', 'finance', 'love'] },
     { name: 'Parijatha Yoga', condition: 'L1 dispositor Jupiter in Own Kendra L4 Pisces (mid/late-life honors)', domains: ['career', 'finance'] },
-    { name: 'Sareera Soukhya Yoga', condition: 'L1 Jupiter (L4) and Venus (L1) in Kendras (vitality, comfort)', domains: ['love', 'family'] },
+    { name: 'Sareera Soukhya Yoga', condition: 'L1 Jupiter (L4) and Venus (L1) in Kendras (vitality, comfort)', domains: ['love', 'family', 'health'] },
     { name: 'Swaveeryaddhana Yoga', condition: 'L2 Saturn (L8 Cancer) in 5th trine from L1 Jupiter (L4 Pisces)', domains: ['finance'] },
     { name: 'Matrumooladdhana Yoga', condition: 'L4 Jupiter (L4 Pisces) casts 5th aspect onto L2 Saturn (L8 Cancer)', domains: ['finance', 'family'] },
     { name: 'Bandhu Pujya Yoga', condition: 'L4 Pisces occupied by Own-sign Jupiter (respect from relatives/family)', domains: ['family'] },

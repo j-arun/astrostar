@@ -278,6 +278,10 @@ async function main() {
           savTotalSum: savResult.savTotalSum,
           bavByPlanet: savResult.bavByPlanet
         },
+        personProfile: {
+          age: samplePersonMaster.age,
+          dateOfBirth: samplePersonMaster.date_of_birth
+        },
         eventManufacturingSuperset
       };
 
@@ -325,75 +329,93 @@ async function main() {
           assertNotContains(/\(\s*\)/, 'empty parentheses in [D1] nakshatra names');
           assertNotContains(/^Ketu \|.*Exalted/m, 'Ketu Exalted in [D9]');
           assertNotContains(/^Rahu \|.*Exalted/m, 'Rahu Exalted in [D9]');
-          assertNotContains(/Moon\s*\(d\d+\)/, 'redundant Moon line in [FAST PLANETS]');
+          assertNotContains(/Moon\s*\(2026-11-/m, 'redundant Moon line in [FAST PLANETS]');
+          assertNotContains(/\bd\d+(?:-\d+)?\b/, 'lowercase d# day shorthand');
+          assertNotContains(/Bhaagya Yoga/i, 'false Bhaagya Yoga');
+          assertNotContains(/Harihara Brahma Yoga/i, 'false Harihara Brahma Yoga');
+          assertNotContains(/Pitru Dosha[^\n]*Rahu/i, 'false Rahu in Pitru Dosha');
+          assertNotContains(/natal-disp Moon\[Lagna/i, 'false natal-disp Moon[Lagna] in NB line');
+          assertNotContains(/natal-disp Venus\[Moon/i, 'false natal-disp Venus[Moon] in NB line');
+          assertNotContains(/tr-disp Venus\[L\/M\]/, 'ambiguous tr-disp Venus[L/M] in NB line');
+          assertNotContains(/NB Sun[^\n]*2026-11-01[^\n]*tr-disp Venus/, 'premature tr-disp Venus on 11-01..11-05 before Virgo ingress');
+          assertContains('[CONVENTIONS]', '[CONVENTIONS] section');
+          assertContains('[PERSON]', '[PERSON] section');
+          assertContains('[TRIGGER WINDOWS]', '[TRIGGER WINDOWS] section');
           assertContains('Rahu | Taurus | H10', '[D9] Rahu in Taurus H10 opposite Ketu Scorpio H4');
           assertContains('Ketu | Scorpio | H4', '[D9] Ketu in Scorpio H4');
-          assertContains('Mercury | Capricorn | H2', '[D1] Mercury in Capricorn H2');
+          assertContains('Mercury | Capricorn | L2/M3', '[D1] Mercury in Capricorn L2/M3');
+          assertContains(/Moon \| Scorpio \| L12\/M1 \|.*NB\(/, '[D1] Natal Moon Neecha Bhanga flag');
           assertContains('Sum:337', 'authentic Parashara SAV sum 337');
-          assertContains('H7:22', 'calibrated SAV H7=22');
-          assertContains('H8:22', 'calibrated SAV H8=22');
-          assertContains('H10:32', 'calibrated SAV H10=32');
-          assertContains('H11:35', 'calibrated SAV H11=35');
-          assertContains('Combust d1-9', 'Mercury data-computed Combust d1-9');
+          assertContains('L7:22', 'calibrated SAV L7=22');
+          assertContains('L8:22', 'calibrated SAV L8=22');
+          assertContains('L10:32', 'calibrated SAV L10=32');
+          assertContains('L11:35', 'calibrated SAV L11=35');
+          assertContains(/Combust 2026-11-01\.\.2026-11-10T\d{2}:\d{2}Z/, 'Mercury continuous-scan Combust 2026-11-01..2026-11-10');
           assertContains('MD Venus 2013-04-02..2033-04-02', 'MD Venus start..end dates');
           assertContains('AD Saturn 2026-02-02..2029-04-02', 'AD Saturn start..end dates');
           assertContains('PD Mercury 2026-08-03..2027-01-14', 'PD Mercury start..end dates');
-          assertContains(/Ardra P1-P4 d26 \d{2}:\d{2}\.\.d27 \d{2}:\d{2}/, 'Lunar Ardra d26-27 continuous scan');
+          assertContains(/SD\s*\(?Mercury/, 'Sookshma Dasha SD line in [DASHA]');
+          assertContains(/Ardra P1-P4 2026-11-26T\d{2}:\d{2}Z\.\.2026-11-27T\d{2}:\d{2}Z/, 'Lunar Ardra Nov 26-27 continuous scan');
           assertContains(/Ardra .*?\(Mitra T8\)/, 'Lunar Ardra (Mitra T8)');
-          assertContains(/Kendra\[[^\]]+\]/, 'NB Kendra frame clarification');
-          assertNotContains(/tr-disp Moon\[[^\]]+\],.*tr-disp Moon\[/, 'duplicate tr-disp Moon inside NB line');
+          assertContains(/Sit:[^\n]+7thAsp:/, '[LUNAR] precomputed Sit and 7thAsp');
+          assertContains(/Kendra\[(?:Lagna|Moon|Lagna\+Moon)\]/, 'NB Kendra frame clarification');
           assertContains('As(Lagna)', '[BAV] Lagna As BAV row');
           assertContains('Pitru Dosha', '[DOSHAS] Pitru Dosha');
-          assertContains('Raja Yogas (2)', '[YOGAS] 2 Raja Yogas');
-          assertContains('General Yogas (19)', '[YOGAS] 19 General Yogas');
+          assertContains('Raja Yogas (3)', '[YOGAS] 3 Raja Yogas (incl. Moon NB Raja Yoga)');
+          assertContains('General Yogas (15)', '[YOGAS] 15 General Yogas');
+          assertContains('Neecha Bhanga Raja Yoga (Moon)', '[YOGAS] Neecha Bhanga Raja Yoga (Moon)');
           assertContains('Dharma Karmadhipati Raja Yoga', '[YOGAS] Dharma Karmadhipati Raja Yoga');
 
           if (variant === 'baseline') {
-            assertContains(/Mercury \| Capricorn \| H2 \|.*Combust\(/, '[D1] natal Mercury Combust flag');
-            assertContains('L7:Mercury@H2(M3)(R,Combust)', '[HOUSE LORDS] L7 Mercury@H2');
+            assertContains(/Mercury \| Capricorn \| L2\/M3 \|.*Combust\(/, '[D1] natal Mercury Combust flag');
+            assertContains('L7:Mercury@L2(M3)(R,Combust)', '[HOUSE LORDS] L7 Mercury@L2(M3)');
             assertContains('AK: Jupiter (', '[JAIMINI] AK Jupiter');
             assertContains('DK: Mercury (', '[JAIMINI] DK Mercury');
             assertContains('Venus BAV (52):', '[BAV] Venus 52 bindus');
             assertContains('Jupiter BAV (56):', '[BAV] Jupiter 56 bindus');
             assertContains('Saturn: Rasi 91 + Graha 15 = Sodhya 106', '[PINDAS] Saturn Sodhya Pinda');
-            assertContains('TZ: UTC (IST=+05:30) | Daily Snapshot: 12:00 UTC', '[PERIOD] timezone and snapshot time');
+            assertContains('TZ: UTC (IST=+05:30', '[PERIOD] timezone header');
             assertContains('ChandraBala: Fav', 'ChandraBala: Fav on favorable Moon spans');
             assertContains('ChandraBala: -', 'ChandraBala: - on unfavorable Moon spans');
-            assertContains(/Swati P3 d1-2 \(Mitra T8\), Swati P4 d3-6 \(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
-            assertContains(/Vishakha P1 d7-9 \(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
-            assertContains(/Anuradha P1 d20-22 \(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
-            assertContains(/Mercury \| Libra .*Vishakha P1 d1-2 \(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
-            assertContains(/Mercury \| Libra .*Vishakha P1 d25-27 \(Parama Mitra T9\)/, 'Mercury d25-27 Vishakha (Parama Mitra T9)');
-            assertContains(/Pushya P1-P4 d1 \d{2}:\d{2}\.\.d1 \d{2}:\d{2} UTC \(Janma T1\) -> Ashlesha P1-P4 d1 \d{2}:\d{2}\.\.d2 \d{2}:\d{2} UTC \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
+            assertContains(/Swati P3 2026-11-01\.\.2026-11-03 \(Mitra T8\), Swati P4 2026-11-03\.\.2026-11-06 \(Mitra T8\)/, 'Sun Swati (Mitra T8)');
+            assertContains(/Vishakha P1 2026-11-06\.\.2026-11-09 \(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
+            assertContains(/Anuradha P1 2026-11-19\.\.2026-11-23 \(Janma T1\)/, 'Sun Anuradha (Janma T1)');
+            assertContains(/Mercury \| Libra .*Vishakha P1 2026-11-01\.\.2026-11-03 \(Parama Mitra T9\)/, 'Mercury Nov 1-3 Vishakha (Parama Mitra T9)');
+            assertContains(/Mercury \| Libra .*Vishakha P1 2026-11-25\.\.2026-11-27 \(Parama Mitra T9\)/, 'Mercury Nov 25-27 Vishakha (Parama Mitra T9)');
+            assertContains(/Pushya P1-P4 2026-11-01T\d{2}:\d{2}Z\.\.2026-11-01T\d{2}:\d{2}Z \(Janma T1\) -> Ashlesha P1-P4 2026-11-01T\d{2}:\d{2}Z\.\.2026-11-02T\d{2}:\d{2}Z \(Sampat T2\)/, 'Lunar Pushya (Janma T1) -> Ashlesha (Sampat T2)');
             assertContains('ADCHAMBER: natal Saturn @ Cancer (L8/M9)', 'ADCHAMBER natal Saturn @ Cancer');
             assertContains('L2/M3 Capricorn (T: Moon)', 'T: Moon in ADCHAMBER Ruled');
             assertContains('L3/M4 Aquarius (T: Rahu', 'T: Rahu in ADCHAMBER Ruled');
-            assertContains('Libra L11/M12 (Swakshetra) d1-5; Virgo L10/M11 (Neecha) d6-22; Libra L11/M12 (Swakshetra) d23-30', 'MD Venus per-segment dignity');
-            assertContains(/STATION Mercury Retrograde -> Direct Libra L11\/M12 2026-11-14 @\d{2}°\d{2}'/, 'STATION explicit event with degree');
-            assertContains('NEECHABHANGA Venus Virgo L10/M11 2026-11-06..2026-11-13', 'NEECHABHANGA explicit event');
+            assertContains(/Libra L11\/M12 \(Swakshetra\) 2026-11-01\.\.2026-11-05T\d{2}:\d{2}Z; Virgo L10\/M11 \(Neecha\) 2026-11-05T\d{2}:\d{2}Z\.\.2026-11-22T\d{2}:\d{2}Z; Libra L11\/M12 \(Swakshetra\) 2026-11-22T\d{2}:\d{2}Z\.\.2026-11-30/, 'MD Venus continuous per-segment dignity');
+            assertContains(/STATION Mercury Retrograde -> Direct Libra L11\/M12 2026-11-13T15:5\dZ \[IST 2026-11-13\] @\d{2}°\d{2}'/, 'STATION Mercury exact 1-min 2026-11-13T15:5xZ timestamp with degree');
+            assertContains(/STATION Venus Retrograde -> Direct Virgo L10\/M11 2026-11-14T00:2\dZ \[IST 2026-11-14\] @\d{2}°\d{2}'/, 'STATION Venus exact 1-min 2026-11-14T00:2xZ [IST 2026-11-14] with degree');
+            assertContains(/PARIVARTANA Moon<->Mars Scorpio<->Cancer L12<->L8 M1<->M9 2026-11-09T20:5\dZ\.\.2026-11-12T08:4\dZ/, 'PARIVARTANA Moon<->Mars exact continuous UTC span');
+            assertContains(/NEECHABHANGA Venus Virgo L10\/M11 2026-11-05T\d{2}:\d{2}Z\.\.2026-11-14T00:2\dZ/, 'NEECHABHANGA Venus Vakra segment synced to station');
           } else {
-            assertContains(/Mercury \| Capricorn \| H2 \|.*Comb\(/, '[D1] natal Mercury Comb flag');
-            assertContains('L7:Mercury@H2(R,Comb)', '[HOUSE LORDS] L7 Mercury@H2');
+            assertContains(/Mercury \| Capricorn \| L2\/M3 \|.*Comb\(/, '[D1] natal Mercury Comb flag');
+            assertContains('L7:Mercury@L2(R,Comb)', '[HOUSE LORDS] L7 Mercury@L2');
             assertContains('AK: Jupiter (', '[JAIMINI] AK: Jupiter');
             assertContains('DK: Mercury (', '[JAIMINI] DK: Mercury');
             assertContains('Venus(52):', '[BAV] Venus(52)');
             assertContains('Jupiter(56):', '[BAV] Jupiter(56)');
             assertContains('Saturn: R91+G15=106', '[PINDAS] Saturn compact Pinda');
-            assertContains('TZ:UTC(IST=+05:30)|Snap:12:00 UTC', '[PERIOD] compact timezone and snapshot');
+            assertContains('TZ:UTC(IST=+05:30)', '[PERIOD] compact timezone');
             assertContains('CB:Fav', 'CB:Fav on favorable Moon spans');
             assertContains('CB:-', 'CB:- on unfavorable Moon spans');
-            assertContains(/Swati P3 d1-2\/P4 d3-6\(Mitra T8\)/, 'Sun d1-6 Swati (Mitra T8)');
-            assertContains(/Vishakha P1 d7-9\/P2 d10-12\/P3 d13-16\(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
-            assertContains(/Anuradha P1 d20-22\/P2 d23-25\/P3 d26-29\/P4 d30\(Janma T1\)/, 'Sun d20-30 Anuradha (Janma T1)');
-            assertContains(/Mercury \| Libra.*Vishakha P1 d1-2\(Parama Mitra T9\)/, 'Mercury d1-2 Vishakha (Parama Mitra T9)');
-            assertContains(/Mercury \| Libra.*Vishakha P1 d25-27\/P2 d28-29\/P3 d30\(Parama Mitra T9\)/, 'Mercury d25-30 Vishakha (Parama Mitra T9)');
-            assertContains(/Pushya P1-P4 d1 \d{2}:\d{2}\.\.d1 \d{2}:\d{2}\(Janma T1\)->Ashlesha P1-P4 d1 \d{2}:\d{2}\.\.d2 \d{2}:\d{2}\(Sampat T2\)/, 'Lunar Pushya (Janma T1)->Ashlesha (Sampat T2)');
+            assertContains(/Swati P3 2026-11-01\.\.2026-11-03\/P4 2026-11-03\.\.2026-11-06\(Mitra T8\)/, 'Sun Swati (Mitra T8)');
+            assertContains(/Vishakha P1 2026-11-06\.\.2026-11-09\/P2 2026-11-09\.\.2026-11-13\/P3 2026-11-13\.\.2026-11-16\(Parama Mitra T9\)/, 'Sun Vishakha (Parama Mitra T9)');
+            assertContains(/Anuradha P1 2026-11-19\.\.2026-11-23\/P2 2026-11-23\.\.2026-11-26\/P3 2026-11-26\.\.2026-11-29\/P4 2026-11-29\.\.2026-11-30\(Janma T1\)/, 'Sun Anuradha (Janma T1)');
+            assertContains(/Mercury \| Libra.*Vishakha P1 2026-11-01\.\.2026-11-03\(Parama Mitra T9\)/, 'Mercury Nov 1-3 Vishakha (Parama Mitra T9)');
+            assertContains(/Mercury \| Libra.*Vishakha P1 2026-11-25\.\.2026-11-27\/P2 2026-11-27\.\.2026-11-30\/P3 2026-11-30\(Parama Mitra T9\)/, 'Mercury Nov 25-30 Vishakha (Parama Mitra T9)');
+            assertContains(/Pushya P1-P4 2026-11-01T\d{2}:\d{2}Z\.\.2026-11-01T\d{2}:\d{2}Z\(Janma T1\)->Ashlesha P1-P4 2026-11-01T\d{2}:\d{2}Z\.\.2026-11-02T\d{2}:\d{2}Z\(Sampat T2\)/, 'Lunar Pushya (Janma T1)->Ashlesha (Sampat T2)');
             assertContains(/ADCHAMBER:natal Saturn@Cancer\(L8\/M9\)/, 'ADCHAMBER natal Saturn@Cancer');
             assertContains('L2/M3 Capricorn(T:Moon)', 'T:Moon in ADCHAMBER Ruled');
             assertContains('L3/M4 Aquarius(T:Rahu', 'T:Rahu in ADCHAMBER Ruled');
-            assertContains('Libra L11/M12(Swakshetra) d1-5;Virgo L10/M11(Neecha) d6-22;Libra L11/M12(Swakshetra) d23-30', 'MD Venus per-segment dignity');
-            assertContains(/STA Mercury R->D Libra L11\/M12 11-14 @\d{2}°\d{2}'/, 'STA compact event with degree');
-            assertContains('NB Venus Virgo L10/M11 11-06..11-13', 'NB compact event');
+            assertContains(/Libra L11\/M12\(Swakshetra\) 2026-11-01\.\.2026-11-05T\d{2}:\d{2}Z;Virgo L10\/M11\(Neecha\) 2026-11-05T\d{2}:\d{2}Z\.\.2026-11-22T\d{2}:\d{2}Z;Libra L11\/M12\(Swakshetra\) 2026-11-22T\d{2}:\d{2}Z\.\.2026-11-30/, 'MD Venus compact continuous per-segment dignity');
+            assertContains(/STA Mercury R->D Libra L11\/M12 2026-11-13T15:5\dZ \[IST 2026-11-13\] @\d{2}°\d{2}'/, 'STA Mercury compact exact 1-min event');
+            assertContains(/STA Venus R->D Virgo L10\/M11 2026-11-14T00:2\dZ \[IST 2026-11-14\] @\d{2}°\d{2}'/, 'STA Venus compact exact 1-min event');
+            assertContains(/PAR Moon<->Mars Scorpio<->Cancer L12<->L8 M1<->M9 2026-11-09T20:5\dZ\.\.2026-11-12T08:4\dZ/, 'PAR Moon<->Mars exact continuous UTC span');
+            assertContains(/NB Venus Virgo L10\/M11 2026-11-05T\d{2}:\d{2}Z\.\.2026-11-14T00:2\dZ/, 'NB Venus Vakra compact event synced to station');
           }
         }
       }
@@ -522,12 +544,16 @@ async function main() {
         }
       }
       const requiredTailTokens = [
+        'Output Contract:',
         '[OUTPUT STRUCTURE]',
+        'Format Rules:',
         de.expectedMatrixTitle,
         'Probability (%) | Rating (1-3) |',
+        '| :--- | :--- | :--- | :--- | :--- |',
         '## 5. Readout (Plain Real-World Scenarios Only - Zero Astrological Terms)',
         '### 1. Month Summary',
-        '### 2. Answer to Focus Question (or Key Practical Takeaways if FULL READING)',
+        '### 2. Answer to Focus Question',
+        '[MANDATORY SECTION:',
         `[FOCUS QUESTION]\n${de.expectedDefaultQuestion}`
       ];
       for (const tok of requiredTailTokens) {
@@ -564,6 +590,12 @@ async function main() {
       });
       if (!subOnly.content.startsWith(`[SUB-PROMPT: ${de.domain.toUpperCase()}]`)) {
         allFailures.push(`[Domain ${de.domain}] part=subprompt missing [SUB-PROMPT: ${de.domain.toUpperCase()}] header`);
+      }
+      if (de.domain === 'career') {
+        const d10Match = domRes.fullPrompt.match(/\[VARGA D10:[\s\S]*?(?=\n\[OUTPUT STRUCTURE\])/);
+        if (!d10Match || /\d+°\d+'/.test(d10Match[0])) {
+          allFailures.push('[Domain career] [VARGA D10] leaked un-reconciled planet degrees or failed to match');
+        }
       }
       console.log(
         `PASS Domain [${de.domain.toUpperCase()}]: ${domRes.meta.lineCount}L, ${domRes.meta.charCount}c (~${domRes.meta.estTokens}t) | Vargas: ${de.expectedVargas.join(', ')} | Readout Option B + KV Prefix OK`

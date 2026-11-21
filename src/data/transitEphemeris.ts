@@ -274,15 +274,16 @@ export function getGrahaTransitPosition(
   const trop = getPlanetTropicalLongitude(planetKey, jd);
   const sidereal = normalize360(trop - ayanamsha);
 
-  // Speed
-  const jdNext = jd + 0.25;
-  const tropNext = getPlanetTropicalLongitude(planetKey, jdNext);
-  const sidNext = normalize360(tropNext - calculateLahiriAyanamsha(jdNext));
-  let diff = sidNext - sidereal;
+  // Instantaneous daily speed via symmetric central difference (eliminates forward-step station phase lag)
+  const hDays = 0.01;
+  const sidPrev = normalize360(getPlanetTropicalLongitude(planetKey, jd - hDays) - calculateLahiriAyanamsha(jd - hDays));
+  const sidNext = normalize360(getPlanetTropicalLongitude(planetKey, jd + hDays) - calculateLahiriAyanamsha(jd + hDays));
+  let diff = sidNext - sidPrev;
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
+  const diffPerDay = diff / (2 * hDays);
 
-  const isRetrograde = planetKey === "Rahu" || planetKey === "Ketu" ? true : diff < 0;
+  const isRetrograde = planetKey === "Rahu" || planetKey === "Ketu" ? true : diffPerDay < 0;
 
   const signIndex = Math.floor(sidereal / 30.0) + 1;
   const degInSign = sidereal % 30.0;
@@ -323,10 +324,10 @@ export function getGrahaTransitPosition(
     } else {
       motionDescription = 'Vakra (Retrograde) — Non-linear, introspective transit motion.';
     }
-  } else if (planetKey === 'Jupiter' && (diff * 4) > 0.12) {
+  } else if (planetKey === 'Jupiter' && diffPerDay > 0.12) {
     motionType = 'Adisara';
     motionDescription = 'Adisara (Accelerated / Fast Ingress) — Guru ceases gentle advising and forcefully pushes native to execute; impatient forward momentum to get the job done.';
-  } else if (planetKey === 'Saturn' && (diff * 4) > 0.055) {
+  } else if (planetKey === 'Saturn' && diffPerDay > 0.055) {
     motionType = 'Adisara';
     motionDescription = 'Adisara (Accelerated Motion) — Rapid sign transit forcing urgent structural adjustments.';
   }

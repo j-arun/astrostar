@@ -1329,11 +1329,11 @@ function claudeApiPlugin(env: Record<string, string>): Plugin {
               ]
             };
 
-            // Fable requires adaptive thinking; effort controls its depth.
+            // Fable requires adaptive thinking; effort controls its depth (at least medium so strict output contracts hold).
             if (primaryModel === 'claude-fable-5-1') {
               payload.thinking = { type: 'adaptive' };
               payload.output_config = {
-                effort: thinkingMode === 'enabled' ? 'high' : thinkingMode === 'auto' ? 'medium' : 'low'
+                effort: thinkingMode === 'enabled' ? 'high' : 'medium'
               };
             } else if (thinkingMode === 'disabled') {
               // On Sonnet 5.5 and Claude 5 models, Anthropic requires "between_tools" instead of "disabled" to turn thinking off
@@ -3162,6 +3162,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
+      port: 3000,
+      allowedHosts: true,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Always ignore docs/, public/docs/, and runtime stored_*.json files so report/cache/log saves NEVER trigger a browser full-reload.
       hmr: process.env.DISABLE_HMR !== 'true',

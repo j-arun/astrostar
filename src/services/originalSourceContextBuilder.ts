@@ -418,6 +418,10 @@ export function buildMonthlyVedicContext(
 
   const baseContext: VedicHouseContext = {
     personId: person.person_id || '001ME',
+    personProfile: {
+      age: person.age,
+      dateOfBirth: person.date_of_birth
+    },
     originalSourceDomain: domain,
     focusQuestion,
     isComprehensiveMonthly: true,

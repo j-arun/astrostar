@@ -17,7 +17,7 @@ export const SIGN_PRIMARY_LORD: Record<number, string> = {
 
 export const DEBILITATION_SIGNS: Record<string, { signIdx: number; exaltSignIdx: number; exaltationLordOfDebSign: string }> = {
   Sun:     { signIdx: 7,  exaltSignIdx: 1,  exaltationLordOfDebSign: 'Saturn' },   // Libra debilitation (Saturn exalts in Libra)
-  Moon:    { signIdx: 8,  exaltSignIdx: 2,  exaltationLordOfDebSign: 'Ketu' },     // Scorpio debilitation (no classical planet exalts in Scorpio)
+  Moon:    { signIdx: 8,  exaltSignIdx: 2,  exaltationLordOfDebSign: '' },         // Scorpio debilitation (no classical planet exalts in Scorpio)
   Mars:    { signIdx: 4,  exaltSignIdx: 10, exaltationLordOfDebSign: 'Jupiter' },  // Cancer debilitation (Jupiter exalts in Cancer)
   Mercury: { signIdx: 12, exaltSignIdx: 6,  exaltationLordOfDebSign: 'Venus' },    // Pisces debilitation (Venus exalts in Pisces)
   Jupiter: { signIdx: 10, exaltSignIdx: 4,  exaltationLordOfDebSign: 'Mars' },     // Capricorn debilitation (Mars exalts in Capricorn)
@@ -58,6 +58,8 @@ export interface SameSignMotionTransition {
   stationDate: string;
   stationDegree?: string;
   stationTimeUtc?: string;
+  stationTimestampUtc?: string;
+  stationIstDate?: string;
   beforeRange: string;
   afterRange: string;
   summary: string;
@@ -78,6 +80,10 @@ export interface ParivartanaYogaEvent {
   lagnaHouseB: number;
   startDate: string;
   endDate: string;
+  startTimestampUtc?: string;
+  endTimestampUtc?: string;
+  startIstDate?: string;
+  endIstDate?: string;
   yogaClass: 'Maha Parivartana (Kendra/Trikona/Wealth)' | 'Kahala Parivartana' | 'Dainya / Karmic Parivartana';
   bhavaExchangeSummary: string;
   lordshipSummary: string;
@@ -93,6 +99,10 @@ export interface DebilitationNeechaBhangaEvent {
   houseFromMoon: number;
   startDate: string;
   endDate: string;
+  startTimestampUtc?: string;
+  endTimestampUtc?: string;
+  startIstDate?: string;
+  endIstDate?: string;
   motionState: 'Retrograde (Neecha-Vakra)' | 'Direct (Neecha-Direct)';
   neechaBhangaStatus: 'NEECHA BHANGA RAJA YOGA' | 'PARTIAL NEECHA BHANGA' | 'DEBILITATION (NEECHA)';
   cancellationReasons: string[];
@@ -110,6 +120,8 @@ export interface SignIngressEvent {
   toHouseFromLagna: number;
   toHouseFromMoon: number;
   ingressDate: string;
+  ingressTimestampUtc?: string;
+  ingressIstDate?: string;
   isPriorMonthBoundary: boolean;
   motionType: 'Normal' | 'Vakra' | 'Adisara';
   summary: string;
@@ -347,22 +359,44 @@ export function analyzeVedicWindowEvents(params: {
   }
 
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const HOUR_MS = 60 * 60 * 1000;
+  const MIN_MS = 60 * 1000;
+  const IST_OFFSET_MS = (5 * 60 + 30) * MIN_MS;
+  const toUtcIsoMin = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}Z`;
+  const toIstDate = (ms: number) => new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+
+  const formatKendraFrameText = (hLagna: number, hMoon: number): string | null => {
+    const kL = isKendra(hLagna);
+    const kM = isKendra(hMoon);
+    if (kL && kM) return `H${hLagna} from Lagna / H${hMoon} from Moon`;
+    if (kL) return `H${hLagna} from Lagna`;
+    if (kM) return `H${hMoon} from Moon`;
+    return null;
+  };
+
   const totalDays = Math.max(1, Math.round((dEnd.getTime() - dStart.getTime()) / DAY_MS) + 1);
+  const isShortWindow = totalDays <= 60;
   // 1-day precision up to 420 days (~14 months), 2-day up to 1500 days (~4 years), 3-day beyond
   const stepDays = totalDays > 1500 ? 3 : (totalDays > 420 ? 2 : 1);
-  // Automatically look back 3 days into prior month for monthly/short windows so cross-month boundary ingresses (e.g., Oct 29-31 -> Nov 1) are never lost
+  // Automatically look back 3 days into prior month for monthly/short windows so cross-month boundary ingresses (e.g., Oct 31 -> Nov 1) are never lost
   const effectiveLookbackDays = typeof priorTailDays === 'number'
     ? Math.max(0, priorTailDays)
     : (totalDays <= 45 ? 3 : 0);
   const dScanStart = new Date(dStart.getTime() - effectiveLookbackDays * DAY_MS);
   const scanStartStr = dScanStart.toISOString().slice(0, 10);
 
+  const dStartCanonStr = dStart.toISOString().slice(0, 10);
+  const dEndCanonStr = dEnd.toISOString().slice(0, 10);
+  const targetStartMs = Date.UTC(dStart.getUTCFullYear(), dStart.getUTCMonth(), dStart.getUTCDate(), 0, 0, 0);
+  const targetEndMs = Date.UTC(dEnd.getUTCFullYear(), dEnd.getUTCMonth(), dEnd.getUTCDate(), 23, 59, 0);
+  const scanStartUtcMs = Date.UTC(dScanStart.getUTCFullYear(), dScanStart.getUTCMonth(), dScanStart.getUTCDate(), 0, 0, 0);
+
   const taraGrahas = ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
   const sevenGrahas = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
   const allTrackedIngresses = ['Jupiter', 'Saturn', 'Mars', 'Sun', 'Mercury', 'Venus', 'Rahu', 'Ketu'];
-  const parivartanaGrahas = ['Sun', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn']; // Exclude 2.25-day Moon noise from multi-week yoga alerts unless single-month
+  const parivartanaGrahas = ['Sun', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn']; // Exclude 2.25-day Moon noise from multi-year alerts
 
-  // Map natal D1 planet positions for Neecha Bhanga & Transit-Natal Parivartana checks
+  // Map natal D1 planet positions for Neecha Bhanga checks
   const natalPlanetSigns: Record<string, number> = {};
   for (const np of flattenedNatalD1) {
     const pKey = resolvePlanetKeyFromName(np.body_name);
@@ -370,40 +404,56 @@ export function analyzeVedicWindowEvents(params: {
     if (pKey && sIdx) natalPlanetSigns[pKey] = sIdx;
   }
 
+  const getPlanetSnapshotAt = (g: string, dt: Date) => {
+    const ov = overrides[g];
+    if (ov && ov >= 1 && ov <= 12) {
+      return {
+        signIdx: ov,
+        isRetro: false,
+        motionType: 'Normal' as const,
+        houseLagna: getHouse(ov, natalLagnaIdx),
+        houseMoon: getHouse(ov, natalRashiIdx)
+      };
+    }
+    const pos = getGrahaTransitPosition(g, dt, natalLagnaIdx, natalRashiIdx);
+    return {
+      signIdx: pos.transit_rashi_index,
+      isRetro: pos.is_retrograde,
+      motionType: pos.motion_type || (pos.is_retrograde ? 'Vakra' as const : 'Normal' as const),
+      houseLagna: pos.relative_to_natal_lagna.house_number,
+      houseMoon: pos.relative_to_natal_rashi.house_number
+    };
+  };
+
   const getDailySnapshot = (dt: Date) => {
     const map: Record<string, { signIdx: number; isRetro: boolean; motionType: 'Normal' | 'Vakra' | 'Adisara'; houseLagna: number; houseMoon: number }> = {};
     for (const g of ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu']) {
-      const ov = overrides[g];
-      if (ov && ov >= 1 && ov <= 12) {
-        map[g] = {
-          signIdx: ov,
-          isRetro: false,
-          motionType: 'Normal',
-          houseLagna: getHouse(ov, natalLagnaIdx),
-          houseMoon: getHouse(ov, natalRashiIdx)
-        };
-      } else {
-        const pos = getGrahaTransitPosition(g, dt, natalLagnaIdx, natalRashiIdx);
-        map[g] = {
-          signIdx: pos.transit_rashi_index,
-          isRetro: pos.is_retrograde,
-          motionType: pos.motion_type || (pos.is_retrograde ? 'Vakra' : 'Normal'),
-          houseLagna: pos.relative_to_natal_lagna.house_number,
-          houseMoon: pos.relative_to_natal_rashi.house_number
-        };
-      }
+      map[g] = getPlanetSnapshotAt(g, dt);
     }
     return map;
   };
 
-  // Collect sampled days across [dScanStart .. dEnd] (always includes dStart and dEnd when stepDays > 1 or 1)
+  // Bisect any sign boundary crossing between tA and tB down to 1-minute precision
+  const bisectSignCrossing = (g: string, tA: number, tB: number): number => {
+    const sA = getGrahaTransitPosition(g, new Date(tA), natalLagnaIdx, natalRashiIdx).transit_rashi_index;
+    let lo = tA;
+    let hi = tB;
+    while (hi - lo > MIN_MS) {
+      const mid = Math.floor((lo + hi) / 2);
+      const sMid = getGrahaTransitPosition(g, new Date(mid), natalLagnaIdx, natalRashiIdx).transit_rashi_index;
+      if (sMid === sA) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  };
+
+  // Collect sampled days across [dScanStart .. dEnd] (noon UTC for baseline/multi-year aggregation)
   const sampleDates: Date[] = [];
   for (let ms = dScanStart.getTime(); ms <= dEnd.getTime(); ms += stepDays * DAY_MS) {
     sampleDates.push(new Date(ms));
   }
   const lastSampleStr = sampleDates[sampleDates.length - 1]?.toISOString().slice(0, 10);
-  const dEndStr = dEnd.toISOString().slice(0, 10);
-  if (lastSampleStr !== dEndStr) {
+  if (lastSampleStr !== dEndCanonStr) {
     sampleDates.push(new Date(dEnd));
   }
 
@@ -412,10 +462,9 @@ export function analyzeVedicWindowEvents(params: {
     dt,
     planets: getDailySnapshot(dt)
   }));
-  const dStartCanonStr = dStart.toISOString().slice(0, 10);
   const snapshots = allSnapshots.filter(s => s.dateStr >= dStartCanonStr);
 
-  // 1. Detect Same-Sign Retrograde <-> Direct Stations (include prior-tail pivot if within lookback)
+  // 1. Detect Same-Sign Retrograde <-> Direct Stations (derive exact stationDate + stationTimeUtc from 1-min turnaround extremum)
   const sameSignStations: SameSignMotionTransition[] = [];
   for (const g of taraGrahas) {
     interface PhaseSegment {
@@ -450,35 +499,52 @@ export function analyzeVedicWindowEvents(params: {
         const hLagna = getHouse(curr.signIdx, natalLagnaIdx);
         const hMoon = getHouse(curr.signIdx, natalRashiIdx);
         const gName = PLANET_DISPLAY[g] || g;
-        const isBoundary = curr.startDate < dStartCanonStr;
 
-        // Pinpoint exact station degree & timestamp via fine 30-min scan around the transition
+        let exactStationDate = curr.startDate;
         let stationDegree: string | undefined;
         let stationTimeUtc: string | undefined;
+        let stationTimestampUtc: string | undefined;
+        let stationIstDate: string | undefined;
+
         if (!overrides[g]) {
-          const tPrevMs = new Date(`${prev.endDate}T12:00:00Z`).getTime() - 12 * 3600 * 1000;
-          const tCurrMs = new Date(`${curr.startDate}T12:00:00Z`).getTime() + 12 * 3600 * 1000;
-          let bestPos = getGrahaTransitPosition(g, new Date(tPrevMs), natalLagnaIdx, natalRashiIdx);
-          let bestMs = tPrevMs;
-          const isMinTurn = turnType === 'Retrograde -> Direct';
-          const unwrapRef = bestPos.sidereal_longitude;
-          let bestDelta = 0;
-          const STEP_MS = 30 * 60 * 1000; // 30 minutes
-          for (let ms = tPrevMs + STEP_MS; ms <= tCurrMs; ms += STEP_MS) {
-            const p = getGrahaTransitPosition(g, new Date(ms), natalLagnaIdx, natalRashiIdx);
-            let delta = p.sidereal_longitude - unwrapRef;
-            if (delta > 180) delta -= 360;
-            if (delta < -180) delta += 360;
-            if ((isMinTurn && delta < bestDelta) || (!isMinTurn && delta > bestDelta)) {
-              bestDelta = delta;
-              bestPos = p;
-              bestMs = ms;
+          // Search +/- 36h around the noon transition at 1-hour step, then bisect the exact 1-minute isRetro flip
+          const tCenterStart = new Date(`${prev.endDate}T12:00:00Z`).getTime() - 24 * HOUR_MS;
+          const tCenterEnd = new Date(`${curr.startDate}T12:00:00Z`).getTime() + 24 * HOUR_MS;
+          const targetRetro = curr.isRetro;
+          let flipLo = tCenterStart;
+          let flipHi = tCenterEnd;
+          let prevR = getGrahaTransitPosition(g, new Date(tCenterStart), natalLagnaIdx, natalRashiIdx).is_retrograde;
+          for (let ms = tCenterStart + HOUR_MS; ms <= tCenterEnd; ms += HOUR_MS) {
+            const curR = getGrahaTransitPosition(g, new Date(ms), natalLagnaIdx, natalRashiIdx).is_retrograde;
+            if (curR !== prevR && curR === targetRetro) {
+              flipLo = ms - HOUR_MS;
+              flipHi = ms;
+              break;
             }
+            prevR = curR;
           }
+          const loRetro = getGrahaTransitPosition(g, new Date(flipLo), natalLagnaIdx, natalRashiIdx).is_retrograde;
+          while (flipHi - flipLo > MIN_MS) {
+            const mid = Math.floor((flipLo + flipHi) / 2);
+            const midRetro = getGrahaTransitPosition(g, new Date(mid), natalLagnaIdx, natalRashiIdx).is_retrograde;
+            if (midRetro === loRetro) flipLo = mid;
+            else flipHi = mid;
+          }
+          const bestMs = flipHi;
+          const bestPos = getGrahaTransitPosition(g, new Date(bestMs), natalLagnaIdx, natalRashiIdx);
+
           const dm = bestPos.degree_sputa.match(/(\d{1,2})\s*°\s*(\d{1,2})?/);
           stationDegree = dm ? `${dm[1].padStart(2, '0')}°${(dm[2] || '00').padStart(2, '0')}'` : bestPos.degree_sputa;
+          exactStationDate = new Date(bestMs).toISOString().slice(0, 10);
           stationTimeUtc = new Date(bestMs).toISOString().slice(11, 16);
+          stationTimestampUtc = toUtcIsoMin(bestMs);
+          stationIstDate = toIstDate(bestMs);
         }
+
+        const isBoundary = exactStationDate < dStartCanonStr;
+        const clampedBeforeStart = prev.startDate < dStartCanonStr ? dStartCanonStr : prev.startDate;
+        const beforeStr = `${clampedBeforeStart} to ${exactStationDate}`;
+        const afterStr = `${exactStationDate} to ${curr.endDate}`;
 
         sameSignStations.push({
           grahaKey: g,
@@ -488,57 +554,112 @@ export function analyzeVedicWindowEvents(params: {
           houseFromLagna: hLagna,
           houseFromMoon: hMoon,
           turnType,
-          stationDate: curr.startDate,
+          stationDate: exactStationDate,
           stationDegree,
           stationTimeUtc,
-          beforeRange: `${prev.startDate} to ${prev.endDate}`,
-          afterRange: `${curr.startDate} to ${curr.endDate}`,
-          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${curr.startDate}${stationDegree ? ` @ ${stationDegree}` : ''}${isBoundary ? ' [Prior Boundary Carry-Over]' : ''} (${prev.isRetro ? 'Retro' : 'Direct'} ${prev.startDate}→${prev.endDate}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${curr.startDate}→${curr.endDate})`,
+          stationTimestampUtc,
+          stationIstDate,
+          beforeRange: beforeStr,
+          afterRange: afterStr,
+          summary: `${gName} stations ${turnType === 'Retrograde -> Direct' ? 'DIRECT' : 'RETROGRADE'} inside ${signName} (H${hMoon} from Moon, H${hLagna} from Lagna) on ${stationTimestampUtc || exactStationDate}${stationDegree ? ` @ ${stationDegree}` : ''}${isBoundary ? ' [Prior Boundary Carry-Over]' : ''} (${prev.isRetro ? 'Retro' : 'Direct'} ${beforeStr}, then ${curr.isRetro ? 'Retro' : 'Direct'} ${afterStr})`,
           eventImpact: buildStationForecast(g, turnType, signName, hMoon)
         });
       }
     }
   }
+  sameSignStations.sort((a, b) => (a.stationTimestampUtc || a.stationDate).localeCompare(b.stationTimestampUtc || b.stationDate));
 
-  // 1B. Detect Sign Ingresses across [dScanStart .. dEnd] (captures Oct 29-31 boundary transitions like Jupiter Katakam -> Simham as well as in-month ingresses)
+  // 1B. Detect Sign Ingresses across [scanStartUtcMs .. targetEndMs] with 1-minute UTC bisection
   const boundaryIngresses: SignIngressEvent[] = [];
   for (const g of allTrackedIngresses) {
-    for (let sIdx = 1; sIdx < allSnapshots.length; sIdx++) {
-      const prevSnap = allSnapshots[sIdx - 1];
-      const currSnap = allSnapshots[sIdx];
-      const prevSt = prevSnap.planets[g];
-      const currSt = currSnap.planets[g];
-      if (!prevSt || !currSt || prevSt.signIdx === currSt.signIdx) continue;
+    if (isShortWindow && !overrides[g]) {
+      const STEP_ING = 6 * HOUR_MS;
+      let prevMs = scanStartUtcMs;
+      let prevPos = getGrahaTransitPosition(g, new Date(prevMs), natalLagnaIdx, natalRashiIdx);
+      for (let ms = scanStartUtcMs + STEP_ING; ms <= targetEndMs + STEP_ING; ms += STEP_ING) {
+        const probeMs = Math.min(ms, targetEndMs);
+        const currPos = getGrahaTransitPosition(g, new Date(probeMs), natalLagnaIdx, natalRashiIdx);
+        if (currPos.transit_rashi_index !== prevPos.transit_rashi_index) {
+          const crossMs = bisectSignCrossing(g, prevMs, probeMs);
+          if (crossMs >= scanStartUtcMs && crossMs <= targetEndMs) {
+            const crossPos = getGrahaTransitPosition(g, new Date(crossMs), natalLagnaIdx, natalRashiIdx);
+            const isPriorBoundary = crossMs < targetStartMs;
+            const fromSignName = getSignName(prevPos.transit_rashi_index);
+            const toSignName = getSignName(crossPos.transit_rashi_index);
+            const motionType: 'Normal' | 'Vakra' | 'Adisara' =
+              crossPos.motion_type === 'Adisara' || prevPos.motion_type === 'Adisara'
+                ? 'Adisara'
+                : crossPos.is_retrograde
+                ? 'Vakra'
+                : 'Normal';
+            const gName = PLANET_DISPLAY[g] || g;
+            const motionTag = motionType === 'Adisara' ? ' [ADISARA / Accelerated Ingress]' : motionType === 'Vakra' ? ' [Vakra Ingress]' : '';
+            const ingTs = toUtcIsoMin(crossMs);
+            const ingDate = ingTs.slice(0, 10);
+            const ingIst = toIstDate(crossMs);
+            const boundaryNote = isPriorBoundary ? ` (Prior-Month Boundary -> active at ${dStartCanonStr} start)` : '';
+            boundaryIngresses.push({
+              grahaKey: g,
+              grahaName: gName,
+              fromSignIndex: prevPos.transit_rashi_index,
+              fromSignName,
+              toSignIndex: crossPos.transit_rashi_index,
+              toSignName,
+              toHouseFromLagna: crossPos.relative_to_natal_lagna.house_number,
+              toHouseFromMoon: crossPos.relative_to_natal_rashi.house_number,
+              ingressDate: ingDate,
+              ingressTimestampUtc: ingTs,
+              ingressIstDate: ingIst,
+              isPriorMonthBoundary: isPriorBoundary,
+              motionType,
+              summary: `${gName} shifts ${fromSignName} -> ${toSignName} (H${crossPos.relative_to_natal_lagna.house_number} Lagna / H${crossPos.relative_to_natal_rashi.house_number} Moon) on ${ingTs}${motionTag}${boundaryNote}`,
+              eventImpact: `${g} changing Rashi from ${fromSignName.split(' ')[0]} into ${toSignName.split(' ')[0]} (Lagna H${crossPos.relative_to_natal_lagna.house_number} / Moon H${crossPos.relative_to_natal_rashi.house_number})${motionType === 'Adisara' ? ' under accelerated Adisara velocity triggers rapid sign-shift adjustments, urgent decisions, and immediate reallocation of that house portfolio' : ' initiates a fresh planetary chapter for those houses'}.`
+            });
+          }
+        }
+        prevMs = probeMs;
+        prevPos = currPos;
+        if (probeMs >= targetEndMs) break;
+      }
+    } else {
+      for (let sIdx = 1; sIdx < allSnapshots.length; sIdx++) {
+        const prevSnap = allSnapshots[sIdx - 1];
+        const currSnap = allSnapshots[sIdx];
+        const prevSt = prevSnap.planets[g];
+        const currSt = currSnap.planets[g];
+        if (!prevSt || !currSt || prevSt.signIdx === currSt.signIdx) continue;
 
-      const isPriorBoundary = currSnap.dateStr <= dStartCanonStr && prevSnap.dateStr < dStartCanonStr;
-      const fromSignName = getSignName(prevSt.signIdx);
-      const toSignName = getSignName(currSt.signIdx);
-      const motionType: 'Normal' | 'Vakra' | 'Adisara' =
-        currSt.motionType === 'Adisara' || prevSt.motionType === 'Adisara'
-          ? 'Adisara'
-          : currSt.isRetro
-          ? 'Vakra'
-          : 'Normal';
-      const gName = PLANET_DISPLAY[g] || g;
-      const motionTag = motionType === 'Adisara' ? ' [ADISARA / Accelerated Ingress]' : motionType === 'Vakra' ? ' [Vakra Ingress]' : '';
-      const boundaryNote = isPriorBoundary ? ` (Prior-Month Boundary → active at ${dStartCanonStr} start)` : '';
-      boundaryIngresses.push({
-        grahaKey: g,
-        grahaName: gName,
-        fromSignIndex: prevSt.signIdx,
-        fromSignName,
-        toSignIndex: currSt.signIdx,
-        toSignName,
-        toHouseFromLagna: currSt.houseLagna,
-        toHouseFromMoon: currSt.houseMoon,
-        ingressDate: currSnap.dateStr,
-        isPriorMonthBoundary: isPriorBoundary,
-        motionType,
-        summary: `${gName} shifts ${fromSignName} → ${toSignName} (H${currSt.houseLagna} Lagna / H${currSt.houseMoon} Moon) on ${currSnap.dateStr}${motionTag}${boundaryNote}`,
-        eventImpact: `${g} changing Rashi from ${fromSignName.split(' ')[0]} into ${toSignName.split(' ')[0]} (Lagna H${currSt.houseLagna} / Moon H${currSt.houseMoon})${motionType === 'Adisara' ? ' under accelerated Adisara velocity triggers rapid sign-shift adjustments, urgent decisions, and immediate reallocation of that house portfolio' : ' initiates a fresh planetary chapter for those houses'}.`
-      });
+        const isPriorBoundary = currSnap.dateStr <= dStartCanonStr && prevSnap.dateStr < dStartCanonStr;
+        const fromSignName = getSignName(prevSt.signIdx);
+        const toSignName = getSignName(currSt.signIdx);
+        const motionType: 'Normal' | 'Vakra' | 'Adisara' =
+          currSt.motionType === 'Adisara' || prevSt.motionType === 'Adisara'
+            ? 'Adisara'
+            : currSt.isRetro
+            ? 'Vakra'
+            : 'Normal';
+        const gName = PLANET_DISPLAY[g] || g;
+        const motionTag = motionType === 'Adisara' ? ' [ADISARA / Accelerated Ingress]' : motionType === 'Vakra' ? ' [Vakra Ingress]' : '';
+        const boundaryNote = isPriorBoundary ? ` (Prior-Month Boundary -> active at ${dStartCanonStr} start)` : '';
+        boundaryIngresses.push({
+          grahaKey: g,
+          grahaName: gName,
+          fromSignIndex: prevSt.signIdx,
+          fromSignName,
+          toSignIndex: currSt.signIdx,
+          toSignName,
+          toHouseFromLagna: currSt.houseLagna,
+          toHouseFromMoon: currSt.houseMoon,
+          ingressDate: currSnap.dateStr,
+          isPriorMonthBoundary: isPriorBoundary,
+          motionType,
+          summary: `${gName} shifts ${fromSignName} -> ${toSignName} (H${currSt.houseLagna} Lagna / H${currSt.houseMoon} Moon) on ${currSnap.dateStr}${motionTag}${boundaryNote}`,
+          eventImpact: `${g} changing Rashi from ${fromSignName.split(' ')[0]} into ${toSignName.split(' ')[0]} (Lagna H${currSt.houseLagna} / Moon H${currSt.houseMoon})${motionType === 'Adisara' ? ' under accelerated Adisara velocity triggers rapid sign-shift adjustments, urgent decisions, and immediate reallocation of that house portfolio' : ' initiates a fresh planetary chapter for those houses'}.`
+        });
+      }
     }
   }
+  boundaryIngresses.sort((a, b) => (a.ingressTimestampUtc || a.ingressDate).localeCompare(b.ingressTimestampUtc || b.ingressDate));
 
   // 1C. Detect Adisara (Accelerated Motion) Windows for Jupiter & Saturn across [dScanStart .. dEnd]
   const adisaraWindows: AdisaraMotionEvent[] = [];
@@ -551,7 +672,6 @@ export function analyzeVedicWindowEvents(params: {
 
     const flushAdisara = () => {
       if (!activeStart || !activeEnd) return;
-      // Keep if active in target window OR touched the 3-day prior boundary leading into target window
       if (activeEnd >= scanStartStr) {
         const gName = PLANET_DISPLAY[g] || g;
         const signArr = Array.from(activeSigns);
@@ -563,8 +683,8 @@ export function analyzeVedicWindowEvents(params: {
           endDate: activeEnd,
           houseFromLagna: latestHLagna,
           houseFromMoon: latestHMoon,
-          summary: `${gName} in ADISARA (Accelerated Motion) across ${signArr.join(' → ')} (H${latestHLagna} Lagna / H${latestHMoon} Moon) [${activeStart} → ${activeEnd}]`,
-          eventImpact: `${g} moving at Adisara velocity across ${signArr.map(s => s.split(' ')[0]).join(' → ')} compresses long-term fruition into urgent, decisive action involving H${latestHLagna} (Lagna) and H${latestHMoon} (Moon).`
+          summary: `${gName} in ADISARA (Accelerated Motion) across ${signArr.join(' -> ')} (H${latestHLagna} Lagna / H${latestHMoon} Moon) [${activeStart} -> ${activeEnd}]`,
+          eventImpact: `${g} moving at Adisara velocity across ${signArr.map(s => s.split(' ')[0]).join(' -> ')} compresses long-term fruition into urgent, decisive action involving H${latestHLagna} (Lagna) and H${latestHMoon} (Moon).`
         });
       }
       activeStart = '';
@@ -587,102 +707,310 @@ export function analyzeVedicWindowEvents(params: {
     flushAdisara();
   }
 
-  // 2. Detect Transit-Transit Parivartana Yogas (Sign & Bhava Mutual Exchanges)
-  const parivartanaMap = new Map<string, ParivartanaYogaEvent>();
-  const activeParivartanaKeysYesterday = new Set<string>();
-  const activeParivartanaPairsByDate: Array<Set<string>> = [];
+  // Helper to get transit snapshot at arbitrary timestamp (respecting overrides)
+  const getSnapForPair = (pairList: string[], dt: Date) => {
+    const out: Record<string, { signIdx: number; isRetro: boolean; houseLagna: number; houseMoon: number }> = {};
+    for (const g of pairList) {
+      out[g] = getPlanetSnapshotAt(g, dt);
+    }
+    return out;
+  };
 
-  for (let sIdx = 0; sIdx < snapshots.length; sIdx++) {
-    const snap = snapshots[sIdx];
-    const pSet = new Set<string>();
-    const activePairKeysToday = new Set<string>();
-    const pairList = totalDays <= 45 ? sevenGrahas : parivartanaGrahas;
+  // 2. Detect Transit-Transit Parivartana Yogas (1-minute exact bounds for <= 45 days; daily snapshot for multi-year)
+  const parivartanaYogas: ParivartanaYogaEvent[] = [];
+  const parivartanaPairIntervals: Array<{ gA: string; gB: string; startMs: number; endMs: number }> = [];
+  const activeParivartanaPairsByDate: Array<Set<string>> = snapshots.map(() => new Set<string>());
+
+  if (totalDays <= 45) {
+    // 1-hour scan across [targetStartMs .. targetEndMs], bisecting exact entry and exit to 1-min precision
+    const pairList = sevenGrahas;
+    const isPairActiveAt = (gA: string, gB: string, ms: number): { active: boolean; signA: number; signB: number } => {
+      const stA = getPlanetSnapshotAt(gA, new Date(ms));
+      const stB = getPlanetSnapshotAt(gB, new Date(ms));
+      if (stA.signIdx === stB.signIdx) return { active: false, signA: stA.signIdx, signB: stB.signIdx };
+      const ok = SIGN_PRIMARY_LORD[stA.signIdx] === gB && SIGN_PRIMARY_LORD[stB.signIdx] === gA;
+      return { active: ok, signA: stA.signIdx, signB: stB.signIdx };
+    };
+    const bisectPairEdge = (gA: string, gB: string, tA: number, tB: number, targetActive: boolean): number => {
+      let lo = tA;
+      let hi = tB;
+      while (hi - lo > MIN_MS) {
+        const mid = Math.floor((lo + hi) / 2);
+        const st = isPairActiveAt(gA, gB, mid);
+        if (st.active === targetActive) hi = mid;
+        else lo = mid;
+      }
+      return targetActive ? hi : lo;
+    };
 
     for (let i = 0; i < pairList.length; i++) {
       for (let j = i + 1; j < pairList.length; j++) {
         const gA = pairList[i];
         const gB = pairList[j];
-        const stA = snap.planets[gA];
-        const stB = snap.planets[gB];
-        if (!stA || !stB || stA.signIdx === stB.signIdx) continue;
+        let inSeg = false;
+        let segStartMs = targetStartMs;
+        let segSignA = 0;
+        let segSignB = 0;
+        let prevMs = targetStartMs;
+        let prevRes = isPairActiveAt(gA, gB, prevMs);
+        if (prevRes.active) {
+          inSeg = true;
+          segStartMs = prevMs;
+          segSignA = prevRes.signA;
+          segSignB = prevRes.signB;
+        }
 
-        const lordOfSignA = SIGN_PRIMARY_LORD[stA.signIdx];
-        const lordOfSignB = SIGN_PRIMARY_LORD[stB.signIdx];
-        if (lordOfSignA === gB && lordOfSignB === gA) {
-          pSet.add(gA);
-          pSet.add(gB);
-          const key = `${gA}-${gB}-${stA.signIdx}-${stB.signIdx}`;
-          activePairKeysToday.add(key);
+        for (let ms = targetStartMs + HOUR_MS; ms <= targetEndMs + HOUR_MS; ms += HOUR_MS) {
+          const probeMs = Math.min(ms, targetEndMs);
+          const currRes = isPairActiveAt(gA, gB, probeMs);
+          if (!inSeg && currRes.active) {
+            const exactStart = bisectPairEdge(gA, gB, prevMs, probeMs, true);
+            const exactState = isPairActiveAt(gA, gB, exactStart);
+            inSeg = true;
+            segStartMs = exactStart;
+            segSignA = exactState.signA;
+            segSignB = exactState.signB;
+          } else if (inSeg && (!currRes.active || currRes.signA !== segSignA || currRes.signB !== segSignB)) {
+            const exactEnd = bisectPairEdge(gA, gB, prevMs, probeMs, false);
+            pushParivartanaEvent(gA, gB, segSignA, segSignB, segStartMs, exactEnd);
+            inSeg = false;
+            if (currRes.active) {
+              const exactStart2 = bisectPairEdge(gA, gB, exactEnd + MIN_MS, probeMs, true);
+              inSeg = true;
+              segStartMs = exactStart2;
+              segSignA = currRes.signA;
+              segSignB = currRes.signB;
+            }
+          }
+          prevMs = probeMs;
+          prevRes = currRes;
+          if (probeMs >= targetEndMs) break;
+        }
+        if (inSeg) {
+          pushParivartanaEvent(gA, gB, segSignA, segSignB, segStartMs, targetEndMs);
+        }
+      }
+    }
 
-          const mHA = stA.houseMoon;
-          const mHB = stB.houseMoon;
-          const lHA = stA.houseLagna;
-          const lHB = stB.houseLagna;
+    function pushParivartanaEvent(gA: string, gB: string, sA: number, sB: number, sMs: number, eMs: number) {
+      const mHA = getHouse(sA, natalRashiIdx);
+      const mHB = getHouse(sB, natalRashiIdx);
+      const lHA = getHouse(sA, natalLagnaIdx);
+      const lHB = getHouse(sB, natalLagnaIdx);
+      const isDainya = [6, 8, 12].includes(mHA) || [6, 8, 12].includes(mHB);
+      const isMaha = !isDainya && isMahaHouse(mHA) && isMahaHouse(mHB);
+      const yogaClass: ParivartanaYogaEvent['yogaClass'] = isMaha
+        ? 'Maha Parivartana (Kendra/Trikona/Wealth)'
+        : isDainya
+        ? 'Dainya / Karmic Parivartana'
+        : 'Kahala Parivartana';
+      const sAName = getSignName(sA);
+      const sBName = getSignName(sB);
+      const sTs = toUtcIsoMin(sMs);
+      const eTs = toUtcIsoMin(eMs);
+      parivartanaPairIntervals.push({ gA, gB, startMs: sMs, endMs: eMs });
+      parivartanaYogas.push({
+        kind: 'Transit-Transit',
+        grahaA: gA,
+        grahaB: gB,
+        signAIndex: sA,
+        signAName: sAName,
+        signBIndex: sB,
+        signBName: sBName,
+        moonHouseA: mHA,
+        moonHouseB: mHB,
+        lagnaHouseA: lHA,
+        lagnaHouseB: lHB,
+        startDate: sTs.slice(0, 10),
+        endDate: eTs.slice(0, 10),
+        startTimestampUtc: sTs,
+        endTimestampUtc: eTs,
+        startIstDate: toIstDate(sMs),
+        endIstDate: toIstDate(eMs),
+        yogaClass,
+        bhavaExchangeSummary: `From Moon: ${gA} in H${mHA} (${sAName}) <-> ${gB} in H${mHB} (${sBName}) | From Lagna: H${lHA} <-> H${lHB}`,
+        lordshipSummary: `${gA} (Lord of ${sBName}, H${mHB} from Moon / H${lHB} from Lagna) sits in ${sAName} (H${mHA}), while ${gB} (Lord of ${sAName}, H${mHA} from Moon / H${lHA} from Lagna) sits in ${sBName} (H${mHB}).`,
+        predictedEvents: buildParivartanaForecast(gA, gB, mHA, mHB, lHA, lHB)
+      });
+    }
+  } else {
+    const parivartanaMap = new Map<string, ParivartanaYogaEvent>();
+    const activeParivartanaKeysYesterday = new Set<string>();
 
-          const existing = activeParivartanaKeysYesterday.has(key) ? parivartanaMap.get(`${key}@open`) : undefined;
-          if (existing) {
-            existing.endDate = snap.dateStr;
-          } else {
-            const isDainya = [6, 8, 12].includes(mHA) || [6, 8, 12].includes(mHB);
-            const isMaha = !isDainya && isMahaHouse(mHA) && isMahaHouse(mHB);
-            const yogaClass: ParivartanaYogaEvent['yogaClass'] = isMaha
-              ? 'Maha Parivartana (Kendra/Trikona/Wealth)'
-              : isDainya
-              ? 'Dainya / Karmic Parivartana'
-              : 'Kahala Parivartana';
+    for (let sIdx = 0; sIdx < snapshots.length; sIdx++) {
+      const snap = snapshots[sIdx];
+      const pSet = activeParivartanaPairsByDate[sIdx];
+      const activePairKeysToday = new Set<string>();
+      const pairList = parivartanaGrahas;
 
-            const sAName = getSignName(stA.signIdx);
-            const sBName = getSignName(stB.signIdx);
-            const evt: ParivartanaYogaEvent = {
-              kind: 'Transit-Transit',
-              grahaA: gA,
-              grahaB: gB,
-              signAIndex: stA.signIdx,
-              signAName: sAName,
-              signBIndex: stB.signIdx,
-              signBName: sBName,
-              moonHouseA: mHA,
-              moonHouseB: mHB,
-              lagnaHouseA: lHA,
-              lagnaHouseB: lHB,
-              startDate: snap.dateStr,
-              endDate: snap.dateStr,
-              yogaClass,
-              bhavaExchangeSummary: `From Moon: ${gA} in H${mHA} (${sAName}) ↔ ${gB} in H${mHB} (${sBName}) | From Lagna: H${lHA} ↔ H${lHB}`,
-              lordshipSummary: `${gA} (Lord of ${sBName}, H${mHB} from Moon / H${lHB} from Lagna) sits in ${sAName} (H${mHA}), while ${gB} (Lord of ${sAName}, H${mHA} from Moon / H${lHA} from Lagna) sits in ${sBName} (H${mHB}).`,
-              predictedEvents: buildParivartanaForecast(gA, gB, mHA, mHB, lHA, lHB)
-            };
-            parivartanaMap.set(`${key}@open`, evt);
+      for (let i = 0; i < pairList.length; i++) {
+        for (let j = i + 1; j < pairList.length; j++) {
+          const gA = pairList[i];
+          const gB = pairList[j];
+          const stA = snap.planets[gA];
+          const stB = snap.planets[gB];
+          if (!stA || !stB || stA.signIdx === stB.signIdx) continue;
+
+          if (SIGN_PRIMARY_LORD[stA.signIdx] === gB && SIGN_PRIMARY_LORD[stB.signIdx] === gA) {
+            pSet.add(gA);
+            pSet.add(gB);
+            const key = `${gA}-${gB}-${stA.signIdx}-${stB.signIdx}`;
+            activePairKeysToday.add(key);
+
+            const mHA = stA.houseMoon;
+            const mHB = stB.houseMoon;
+            const lHA = stA.houseLagna;
+            const lHB = stB.houseLagna;
+
+            const existing = activeParivartanaKeysYesterday.has(key) ? parivartanaMap.get(`${key}@open`) : undefined;
+            if (existing) {
+              existing.endDate = snap.dateStr;
+            } else {
+              const isDainya = [6, 8, 12].includes(mHA) || [6, 8, 12].includes(mHB);
+              const isMaha = !isDainya && isMahaHouse(mHA) && isMahaHouse(mHB);
+              const yogaClass: ParivartanaYogaEvent['yogaClass'] = isMaha
+                ? 'Maha Parivartana (Kendra/Trikona/Wealth)'
+                : isDainya
+                ? 'Dainya / Karmic Parivartana'
+                : 'Kahala Parivartana';
+
+              const sAName = getSignName(stA.signIdx);
+              const sBName = getSignName(stB.signIdx);
+              const evt: ParivartanaYogaEvent = {
+                kind: 'Transit-Transit',
+                grahaA: gA,
+                grahaB: gB,
+                signAIndex: stA.signIdx,
+                signAName: sAName,
+                signBIndex: stB.signIdx,
+                signBName: sBName,
+                moonHouseA: mHA,
+                moonHouseB: mHB,
+                lagnaHouseA: lHA,
+                lagnaHouseB: lHB,
+                startDate: snap.dateStr,
+                endDate: snap.dateStr,
+                yogaClass,
+                bhavaExchangeSummary: `From Moon: ${gA} in H${mHA} (${sAName}) <-> ${gB} in H${mHB} (${sBName}) | From Lagna: H${lHA} <-> H${lHB}`,
+                lordshipSummary: `${gA} (Lord of ${sBName}, H${mHB} from Moon / H${lHB} from Lagna) sits in ${sAName} (H${mHA}), while ${gB} (Lord of ${sAName}, H${mHA} from Moon / H${lHA} from Lagna) sits in ${sBName} (H${mHB}).`,
+                predictedEvents: buildParivartanaForecast(gA, gB, mHA, mHB, lHA, lHB)
+              };
+              parivartanaMap.set(`${key}@open`, evt);
+            }
           }
         }
       }
-    }
 
-    // Close any parivartana that ended before today
-    for (const prevKey of Array.from(activeParivartanaKeysYesterday)) {
-      if (!activePairKeysToday.has(prevKey)) {
-        const openEvt = parivartanaMap.get(`${prevKey}@open`);
-        if (openEvt) {
-          parivartanaMap.delete(`${prevKey}@open`);
-          parivartanaMap.set(`${prevKey}@${openEvt.startDate}`, openEvt);
+      for (const prevKey of Array.from(activeParivartanaKeysYesterday)) {
+        if (!activePairKeysToday.has(prevKey)) {
+          const openEvt = parivartanaMap.get(`${prevKey}@open`);
+          if (openEvt) {
+            parivartanaMap.delete(`${prevKey}@open`);
+            parivartanaMap.set(`${prevKey}@${openEvt.startDate}`, openEvt);
+          }
+          activeParivartanaKeysYesterday.delete(prevKey);
         }
-        activeParivartanaKeysYesterday.delete(prevKey);
+      }
+      for (const k of activePairKeysToday) {
+        activeParivartanaKeysYesterday.add(k);
       }
     }
-    for (const k of activePairKeysToday) {
-      activeParivartanaKeysYesterday.add(k);
+
+    for (const [, val] of parivartanaMap.entries()) {
+      parivartanaYogas.push(val);
     }
-    activeParivartanaPairsByDate.push(pSet);
   }
+  parivartanaYogas.sort((a, b) => (a.startTimestampUtc || a.startDate).localeCompare(b.startTimestampUtc || b.startDate));
 
-  // Finalize any still-open parivartanas
-  const parivartanaYogas: ParivartanaYogaEvent[] = [];
-  for (const [, val] of parivartanaMap.entries()) {
-    parivartanaYogas.push(val);
-  }
-  parivartanaYogas.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  // Helper to evaluate classical Neecha Bhanga factors cleanly at any timestamp/snapshot (without frame overclaiming)
+  const evaluateDebReasonsAt = (
+    g: string,
+    debMeta: { signIdx: number; exaltSignIdx: number; exaltationLordOfDebSign: string },
+    snapPlanets: Record<string, { signIdx: number; isRetro: boolean; houseLagna: number; houseMoon: number }>,
+    isActiveParivartana: boolean
+  ): string[] => {
+    const st = snapPlanets[g];
+    if (!st || st.signIdx !== debMeta.signIdx) return [];
+    const reasons: string[] = [];
+    const dispLord = SIGN_PRIMARY_LORD[debMeta.signIdx];
+    const exaltedInDebLord = debMeta.exaltationLordOfDebSign;
+    const ownExaltSignLord = SIGN_PRIMARY_LORD[debMeta.exaltSignIdx];
 
-  // 3. Detect Debilitation (Neecha) & Neecha Bhanga Windows (split by Retrograde vs Direct)
+    if (st.isRetro) {
+      reasons.push(`${g} is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength`);
+    }
+
+    // 1. Transit Dispositor in Kendra from Lagna and/or Moon
+    const dispTransit = snapPlanets[dispLord];
+    if (dispTransit) {
+      const kText = formatKendraFrameText(dispTransit.houseLagna, dispTransit.houseMoon);
+      if (kText) {
+        reasons.push(`Debilitation sign lord ${dispLord} transits Kendra (${kText})`);
+      }
+      if (dispTransit.signIdx === st.signIdx || Math.abs(dispTransit.signIdx - st.signIdx) === 6) {
+        reasons.push(`${g} receives ${dispTransit.signIdx === st.signIdx ? 'conjunction' : 'direct 7th aspect'} from dispositor ${dispLord}`);
+      }
+    }
+
+    // 2. Natal Dispositor in Kendra from Lagna and/or Moon (ONLY emit frames that are actual Kendras!)
+    const dispNatalSign = natalPlanetSigns[dispLord];
+    if (dispNatalSign) {
+      const dHL = getHouse(dispNatalSign, natalLagnaIdx);
+      const dHM = getHouse(dispNatalSign, natalRashiIdx);
+      const kText = formatKendraFrameText(dHL, dHM);
+      if (kText) {
+        reasons.push(`Natal ${dispLord} (dispositor of ${getSignName(debMeta.signIdx)}) sits in Kendra (${kText})`);
+      }
+    }
+
+    // 3. Planet exalted in this debilitation sign in Kendra (transit or natal)
+    if (exaltedInDebLord) {
+      const exTransit = snapPlanets[exaltedInDebLord];
+      if (exTransit) {
+        const kText = formatKendraFrameText(exTransit.houseLagna, exTransit.houseMoon);
+        if (kText) {
+          reasons.push(`Exaltation lord ${exaltedInDebLord} of ${getSignName(debMeta.signIdx)} transits Kendra (${kText})`);
+        }
+      }
+      const exNatalSign = natalPlanetSigns[exaltedInDebLord];
+      if (exNatalSign) {
+        const eHL = getHouse(exNatalSign, natalLagnaIdx);
+        const eHM = getHouse(exNatalSign, natalRashiIdx);
+        const kText = formatKendraFrameText(eHL, eHM);
+        if (kText) {
+          reasons.push(`Natal ${exaltedInDebLord} (planet exalted in ${getSignName(debMeta.signIdx)}) occupies Kendra (${kText})`);
+        }
+      }
+    }
+
+    // 4. Lord of g's own exaltation sign in Kendra (transit or natal)
+    if (ownExaltSignLord) {
+      const ownExTransit = snapPlanets[ownExaltSignLord];
+      if (ownExTransit) {
+        const kText = formatKendraFrameText(ownExTransit.houseLagna, ownExTransit.houseMoon);
+        if (kText) {
+          reasons.push(`Lord of ${g}'s exaltation sign (${ownExaltSignLord}) transits Kendra (${kText})`);
+        }
+      }
+      const ownExNatalSign = natalPlanetSigns[ownExaltSignLord];
+      if (ownExNatalSign) {
+        const oHL = getHouse(ownExNatalSign, natalLagnaIdx);
+        const oHM = getHouse(ownExNatalSign, natalRashiIdx);
+        const kText = formatKendraFrameText(oHL, oHM);
+        if (kText) {
+          reasons.push(`Natal lord of ${g}'s exaltation sign (${ownExaltSignLord}) occupies Kendra (${kText})`);
+        }
+      }
+    }
+
+    if (isActiveParivartana) {
+      reasons.push(`${g} participates in an active Parivartana mutual sign exchange`);
+    }
+
+    return Array.from(new Set(reasons));
+  };
+
+  // 3. Detect Debilitation (Neecha) & Neecha Bhanga Windows (split whenever Retrograde state OR active cancellation reasons change!)
   const debilitationEvents: DebilitationNeechaBhangaEvent[] = [];
   const debCheckGrahas = ['Sun', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
 
@@ -690,138 +1018,183 @@ export function analyzeVedicWindowEvents(params: {
     const debMeta = DEBILITATION_SIGNS[g];
     if (!debMeta) continue;
 
-    interface DebSegment {
-      startDate: string;
-      endDate: string;
-      isRetro: boolean;
-      reasons: Set<string>;
-    }
-    const segs: DebSegment[] = [];
+    if (isShortWindow && !overrides[g]) {
+      const relevantPlanets = Array.from(
+        new Set([g, SIGN_PRIMARY_LORD[debMeta.signIdx], debMeta.exaltationLordOfDebSign, SIGN_PRIMARY_LORD[debMeta.exaltSignIdx]].filter(Boolean))
+      );
+      const getDebStateAt = (ms: number) => {
+        const dt = new Date(ms);
+        const snapPlanets = getSnapForPair(relevantPlanets, dt);
+        const st = snapPlanets[g];
+        if (!st || st.signIdx !== debMeta.signIdx) {
+          return { active: false, isRetro: false, reasons: [] as string[], sig: '' };
+        }
+        const inPari = parivartanaPairIntervals.some(pi => (pi.gA === g || pi.gB === g) && ms >= pi.startMs && ms <= pi.endMs);
+        const reasons = evaluateDebReasonsAt(g, debMeta, snapPlanets, inPari);
+        const sig = `${st.isRetro ? 'R' : 'D'}|${[...reasons].sort().join('||')}`;
+        return { active: true, isRetro: st.isRetro, reasons, sig };
+      };
+      const bisectDebChange = (tA: number, tB: number, sigA: string): number => {
+        let lo = tA;
+        let hi = tB;
+        while (hi - lo > MIN_MS) {
+          const mid = Math.floor((lo + hi) / 2);
+          if (getDebStateAt(mid).sig === sigA) lo = mid;
+          else hi = mid;
+        }
+        return hi;
+      };
 
-    for (let sIdx = 0; sIdx < snapshots.length; sIdx++) {
-      const snap = snapshots[sIdx];
-      const st = snap.planets[g];
-      if (!st || st.signIdx !== debMeta.signIdx) continue;
+      const contSegs: Array<{ startMs: number; endMs: number; isRetro: boolean; reasons: string[]; sig: string }> = [];
+      let prevMs = targetStartMs;
+      let prevState = getDebStateAt(prevMs);
+      let openSegStart: number | null = prevState.active ? prevMs : null;
+      let openState = prevState;
 
-      // Evaluate classical Neecha Bhanga criteria on this date
-      const reasonsToday: string[] = [];
-      const dispLord = SIGN_PRIMARY_LORD[debMeta.signIdx];
-      const exaltLord = debMeta.exaltationLordOfDebSign;
-      const ownExaltLord = SIGN_PRIMARY_LORD[debMeta.exaltSignIdx];
-
-      if (st.isRetro) {
-        reasonsToday.push(`${g} is Retrograde (Neecha-Vakra) inside debilitation, reversing weakness into unconventional strength`);
+      for (let ms = targetStartMs + HOUR_MS; ms <= targetEndMs + HOUR_MS; ms += HOUR_MS) {
+        const probeMs = Math.min(ms, targetEndMs);
+        const currState = getDebStateAt(probeMs);
+        if (currState.sig !== openState.sig) {
+          const crossMs = bisectDebChange(prevMs, probeMs, openState.sig);
+          if (openState.active && openSegStart !== null) {
+            contSegs.push({
+              startMs: openSegStart,
+              endMs: Math.max(openSegStart, crossMs - MIN_MS),
+              isRetro: openState.isRetro,
+              reasons: openState.reasons,
+              sig: openState.sig
+            });
+          }
+          const newState = getDebStateAt(crossMs);
+          openSegStart = newState.active ? crossMs : null;
+          openState = newState;
+        }
+        prevMs = probeMs;
+        prevState = currState;
+        if (probeMs >= targetEndMs) break;
+      }
+      if (openState.active && openSegStart !== null) {
+        contSegs.push({
+          startMs: openSegStart,
+          endMs: targetEndMs,
+          isRetro: openState.isRetro,
+          reasons: openState.reasons,
+          sig: openState.sig
+        });
       }
 
-      // Check Transit Dispositor in Kendra from Moon or Lagna
-      const dispTransit = snap.planets[dispLord];
-      if (dispTransit && (isKendra(dispTransit.houseMoon) || isKendra(dispTransit.houseLagna))) {
-        reasonsToday.push(
-          `Debilitation sign lord ${dispLord} transits Kendra (${isKendra(dispTransit.houseMoon) ? `H${dispTransit.houseMoon} from Moon` : `H${dispTransit.houseLagna} from Lagna`})`
+      for (const seg of contSegs) {
+        const reasonList = seg.reasons;
+        const status: DebilitationNeechaBhangaEvent['neechaBhangaStatus'] =
+          reasonList.length >= 2
+            ? 'NEECHA BHANGA RAJA YOGA'
+            : reasonList.length === 1
+            ? 'PARTIAL NEECHA BHANGA'
+            : 'DEBILITATION (NEECHA)';
+        const signName = getSignName(debMeta.signIdx);
+        const hLagna = getHouse(debMeta.signIdx, natalLagnaIdx);
+        const hMoon = getHouse(debMeta.signIdx, natalRashiIdx);
+        const motionState: DebilitationNeechaBhangaEvent['motionState'] = seg.isRetro
+          ? 'Retrograde (Neecha-Vakra)'
+          : 'Direct (Neecha-Direct)';
+        const gName = PLANET_DISPLAY[g] || g;
+        const sTs = toUtcIsoMin(seg.startMs);
+        const eTs = toUtcIsoMin(seg.endMs);
+        debilitationEvents.push({
+          grahaKey: g,
+          grahaName: gName,
+          signIndex: debMeta.signIdx,
+          signName,
+          houseFromLagna: hLagna,
+          houseFromMoon: hMoon,
+          startDate: sTs.slice(0, 10),
+          endDate: eTs.slice(0, 10),
+          startTimestampUtc: sTs,
+          endTimestampUtc: eTs,
+          startIstDate: toIstDate(seg.startMs),
+          endIstDate: toIstDate(seg.endMs),
+          motionState,
+          neechaBhangaStatus: status,
+          cancellationReasons: reasonList,
+          summary: `${gName} Debilitated in ${signName} (H${hMoon} from Moon / H${hLagna} from Lagna) [${sTs} -> ${eTs}] — ${motionState} — Status: ${status}`,
+          predictedEvents: buildDebilitationForecast(g, motionState, status, hMoon)
+        });
+      }
+    } else {
+      interface DebSegment {
+        startDate: string;
+        endDate: string;
+        isRetro: boolean;
+        sig: string;
+        reasons: string[];
+      }
+      const segs: DebSegment[] = [];
+
+      for (let sIdx = 0; sIdx < snapshots.length; sIdx++) {
+        const snap = snapshots[sIdx];
+        const st = snap.planets[g];
+        if (!st || st.signIdx !== debMeta.signIdx) continue;
+
+        const reasonsToday = evaluateDebReasonsAt(
+          g,
+          debMeta,
+          snap.planets,
+          !!activeParivartanaPairsByDate[sIdx]?.has(g)
         );
-      }
+        const sig = `${st.isRetro ? 'R' : 'D'}|${[...reasonsToday].sort().join('||')}`;
+        const lastSeg = segs[segs.length - 1];
+        const prevDayMs = snap.dt.getTime() - stepDays * DAY_MS;
+        const isConsecutive = lastSeg && Math.abs(new Date(`${lastSeg.endDate}T12:00:00Z`).getTime() - prevDayMs) <= stepDays * DAY_MS + 1000;
 
-      // Check Natal Dispositor in Kendra from Moon or Lagna
-      const dispNatalSign = natalPlanetSigns[dispLord];
-      if (dispNatalSign) {
-        const dispNatalHMoon = getHouse(dispNatalSign, natalRashiIdx);
-        const dispNatalHLagna = getHouse(dispNatalSign, natalLagnaIdx);
-        if (isKendra(dispNatalHMoon) || isKendra(dispNatalHLagna)) {
-          reasonsToday.push(
-            `Natal ${dispLord} (dispositor of ${getSignName(debMeta.signIdx)}) sits in Kendra (H${dispNatalHLagna} Lagna / H${dispNatalHMoon} Moon)`
-          );
+        if (lastSeg && isConsecutive && lastSeg.sig === sig) {
+          lastSeg.endDate = snap.dateStr;
+        } else {
+          segs.push({
+            startDate: snap.dateStr,
+            endDate: snap.dateStr,
+            isRetro: st.isRetro,
+            sig,
+            reasons: reasonsToday
+          });
         }
       }
 
-      // Check Exaltation lord of that debilitation sign in Kendra (transit or natal)
-      const exTransit = snap.planets[exaltLord];
-      if (exTransit && (isKendra(exTransit.houseMoon) || isKendra(exTransit.houseLagna))) {
-        reasonsToday.push(
-          `Exaltation lord ${exaltLord} of ${getSignName(debMeta.signIdx)} transits Kendra (${isKendra(exTransit.houseMoon) ? `H${exTransit.houseMoon} from Moon` : `H${exTransit.houseLagna} from Lagna`})`
-        );
-      }
-      const exNatalSign = natalPlanetSigns[exaltLord];
-      if (exNatalSign) {
-        const exNHMoon = getHouse(exNatalSign, natalRashiIdx);
-        const exNHLagna = getHouse(exNatalSign, natalLagnaIdx);
-        if (isKendra(exNHMoon) || isKendra(exNHLagna)) {
-          reasonsToday.push(
-            `Natal ${exaltLord} (planet exalted in ${getSignName(debMeta.signIdx)}) occupies Kendra (H${exNHLagna} Lagna / H${exNHMoon} Moon)`
-          );
-        }
-      }
+      for (const seg of segs) {
+        const reasonList = seg.reasons;
+        const status: DebilitationNeechaBhangaEvent['neechaBhangaStatus'] =
+          reasonList.length >= 2
+            ? 'NEECHA BHANGA RAJA YOGA'
+            : reasonList.length === 1
+            ? 'PARTIAL NEECHA BHANGA'
+            : 'DEBILITATION (NEECHA)';
 
-      // Check Conjunction or 7th mutual aspect with Dispositor
-      if (dispTransit && (dispTransit.signIdx === st.signIdx || Math.abs(dispTransit.signIdx - st.signIdx) === 6)) {
-        reasonsToday.push(
-          `${g} receives ${dispTransit.signIdx === st.signIdx ? 'conjunction' : 'direct 7th aspect'} from dispositor ${dispLord}`
-        );
-      }
+        const signName = getSignName(debMeta.signIdx);
+        const hLagna = getHouse(debMeta.signIdx, natalLagnaIdx);
+        const hMoon = getHouse(debMeta.signIdx, natalRashiIdx);
+        const motionState: DebilitationNeechaBhangaEvent['motionState'] = seg.isRetro
+          ? 'Retrograde (Neecha-Vakra)'
+          : 'Direct (Neecha-Direct)';
+        const gName = PLANET_DISPLAY[g] || g;
 
-      // Check Own Exaltation Sign Lord in Kendra (e.g. for Venus debilitation in Virgo, Pisces lord Jupiter in Kendra; for Sun in Libra, Aries lord Mars in Kendra)
-      const ownExTransit = ownExaltLord ? snap.planets[ownExaltLord] : undefined;
-      if (ownExTransit && (isKendra(ownExTransit.houseMoon) || isKendra(ownExTransit.houseLagna))) {
-        reasonsToday.push(
-          `Lord of ${g}'s exaltation sign (${ownExaltLord}) transits Kendra (${isKendra(ownExTransit.houseMoon) ? `H${ownExTransit.houseMoon} from Moon` : `H${ownExTransit.houseLagna} from Lagna`})`
-        );
-      }
-
-      // Check if in active Parivartana
-      if (activeParivartanaPairsByDate[sIdx]?.has(g)) {
-        reasonsToday.push(`${g} participates in an active Parivartana mutual sign exchange`);
-      }
-
-      const lastSeg = segs[segs.length - 1];
-      const prevDayMs = snap.dt.getTime() - stepDays * DAY_MS;
-      const isConsecutive = lastSeg && Math.abs(new Date(`${lastSeg.endDate}T12:00:00Z`).getTime() - prevDayMs) <= stepDays * DAY_MS + 1000;
-
-      if (lastSeg && isConsecutive && lastSeg.isRetro === st.isRetro) {
-        lastSeg.endDate = snap.dateStr;
-        reasonsToday.forEach(r => lastSeg.reasons.add(r));
-      } else {
-        segs.push({
-          startDate: snap.dateStr,
-          endDate: snap.dateStr,
-          isRetro: st.isRetro,
-          reasons: new Set(reasonsToday)
+        debilitationEvents.push({
+          grahaKey: g,
+          grahaName: gName,
+          signIndex: debMeta.signIdx,
+          signName,
+          houseFromLagna: hLagna,
+          houseFromMoon: hMoon,
+          startDate: seg.startDate,
+          endDate: seg.endDate,
+          motionState,
+          neechaBhangaStatus: status,
+          cancellationReasons: reasonList,
+          summary: `${gName} Debilitated in ${signName} (H${hMoon} from Moon / H${hLagna} from Lagna) [${seg.startDate} -> ${seg.endDate}] — ${motionState} — Status: ${status}`,
+          predictedEvents: buildDebilitationForecast(g, motionState, status, hMoon)
         });
       }
     }
-
-    for (const seg of segs) {
-      const reasonList = Array.from(seg.reasons);
-      const status: DebilitationNeechaBhangaEvent['neechaBhangaStatus'] =
-        reasonList.length >= 2
-          ? 'NEECHA BHANGA RAJA YOGA'
-          : reasonList.length === 1
-          ? 'PARTIAL NEECHA BHANGA'
-          : 'DEBILITATION (NEECHA)';
-
-      const signName = getSignName(debMeta.signIdx);
-      const hLagna = getHouse(debMeta.signIdx, natalLagnaIdx);
-      const hMoon = getHouse(debMeta.signIdx, natalRashiIdx);
-      const motionState: DebilitationNeechaBhangaEvent['motionState'] = seg.isRetro
-        ? 'Retrograde (Neecha-Vakra)'
-        : 'Direct (Neecha-Direct)';
-      const gName = PLANET_DISPLAY[g] || g;
-
-      debilitationEvents.push({
-        grahaKey: g,
-        grahaName: gName,
-        signIndex: debMeta.signIdx,
-        signName,
-        houseFromLagna: hLagna,
-        houseFromMoon: hMoon,
-        startDate: seg.startDate,
-        endDate: seg.endDate,
-        motionState,
-        neechaBhangaStatus: status,
-        cancellationReasons: reasonList,
-        summary: `${gName} Debilitated in ${signName} (H${hMoon} from Moon / H${hLagna} from Lagna) [${seg.startDate} → ${seg.endDate}] — ${motionState} — Status: ${status}`,
-        predictedEvents: buildDebilitationForecast(g, motionState, status, hMoon)
-      });
-    }
   }
+  debilitationEvents.sort((a, b) => (a.startTimestampUtc || a.startDate).localeCompare(b.startTimestampUtc || b.startDate));
 
   // 4. Build Consolidated One-Liner & Possible Events List
   const oneLinerParts: string[] = [];

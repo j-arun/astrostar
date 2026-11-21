@@ -335,6 +335,10 @@ export interface VedicHouseContext {
     }>;
   };
   personId?: string;
+  personProfile?: {
+    age?: number;
+    dateOfBirth?: string;
+  };
   originalSourceDomain?: OriginalSourceDomain;
   focusQuestion?: string;
   shadbalaStrengths?: Array<{

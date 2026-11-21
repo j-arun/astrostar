@@ -349,3 +349,62 @@ export function getDashaIntervalsForDateRange(
   return results;
 }
 
+export interface SookshmaDashaInterval {
+  mahadasha: string;
+  antardasha: string;
+  pratyantardasha: string;
+  sookshmadasha: string;
+  startTimestampUtc: string;
+  endTimestampUtc: string;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Splits any overlapping Pratyantardasha (PD) intervals in a target date window into
+ * exact Vimshottari Sookshma Dasha (SD) sub-periods (SD_lord_years / 120 of PD duration).
+ */
+export function getSookshmaDashaIntervalsForDateRange(
+  startDateStr: string,
+  endDateStr: string,
+  profile?: any
+): SookshmaDashaInterval[] {
+  const pdIntervals = getDashaIntervalsForDateRange(startDateStr, endDateStr, profile);
+  if (pdIntervals.length === 0) return [];
+
+  const rangeStartMs = Date.parse(`${startDateStr}T00:00:00Z`);
+  const rangeEndMs = Date.parse(`${endDateStr}T23:59:59Z`);
+  if (isNaN(rangeStartMs) || isNaN(rangeEndMs)) return [];
+
+  const results: SookshmaDashaInterval[] = [];
+  for (const pd of pdIntervals) {
+    const pdStartMs = Date.parse(`${pd.startDate}T00:00:00Z`);
+    const pdEndMs = Date.parse(`${pd.endDate}T00:00:00Z`);
+    const pdDurMs = Math.max(24 * 3600 * 1000, pdEndMs - pdStartMs);
+    const pdIdx = LORDS.findIndex(l => l.name === pd.pratyantardasha);
+    const startIdx = pdIdx === -1 ? 0 : pdIdx;
+
+    let cursorMs = pdStartMs;
+    for (let k = 0; k < 9; k++) {
+      const sdLord = LORDS[(startIdx + k) % 9];
+      const sdDurMs = pdDurMs * (sdLord.years / 120.0);
+      const sdEndMs = k === 8 ? pdEndMs : cursorMs + sdDurMs;
+      if (sdEndMs >= rangeStartMs && cursorMs <= rangeEndMs) {
+        const clampedStart = Math.max(cursorMs, rangeStartMs);
+        const clampedEnd = Math.min(sdEndMs, rangeEndMs);
+        results.push({
+          mahadasha: pd.mahadasha,
+          antardasha: pd.antardasha,
+          pratyantardasha: pd.pratyantardasha,
+          sookshmadasha: sdLord.name,
+          startTimestampUtc: `${new Date(clampedStart).toISOString().slice(0, 16)}Z`,
+          endTimestampUtc: `${new Date(clampedEnd).toISOString().slice(0, 16)}Z`,
+          startDate: new Date(clampedStart).toISOString().slice(0, 10),
+          endDate: new Date(clampedEnd).toISOString().slice(0, 10)
+        });
+      }
+      cursorMs = sdEndMs;
+    }
+  }
+  return results;
+}

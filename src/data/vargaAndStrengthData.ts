@@ -416,43 +416,45 @@ export const D1_YOGAS_AND_DOSHAS_001ME: YogaDoshaData = {
     {
       name: 'Dharma Karmadhipati Raja Yoga',
       participants: ['Sun', 'Mercury'],
-      condition: 'L9 Sun (Leo) and L10 Mercury (Virgo) conjoined in H2 Capricorn',
+      condition: 'L9 Sun (Leo) and L10 Mercury (Virgo) conjoined in L2 Capricorn (attenuated by Mercury natal combustion)',
       domains: ['career', 'finance']
     },
     {
       name: 'Vipareetha Raja Yoga',
       participants: ['Mars', 'Moon'],
-      condition: 'L12 Mars in H6 Taurus; L8 Moon in H12 Scorpio (success after struggle)',
+      condition: 'L12 Mars in L6 Taurus; L8 Moon in L12 Scorpio (Debilitated with Natal Neecha Bhanga: success after struggle)',
       domains: ['career', 'finance']
+    },
+    {
+      name: 'Neecha Bhanga Raja Yoga (Moon)',
+      participants: ['Moon', 'Venus', 'Mars'],
+      condition: 'Natal Moon debilitated in Scorpio (L12/M1); cancelled by exaltation lord Venus in Kendra (L1 Lagna), dispositor Mars in Kendra (M7 from Moon / L6 Taurus), and L1 Jupiter 9th aspect',
+      domains: ['career', 'finance', 'love', 'family']
     }
   ],
   generalYogas: [
-    { name: 'Vosi Yoga', condition: 'Planet(s) in 12th from Sun (Venus in H1 Sagittarius)', domains: ['career', 'finance'] },
-    { name: 'Nipuna Yoga', condition: 'Sun+Mercury in H2 Capricorn (attenuated by Mercury natal combustion)', domains: ['career'] },
-    { name: 'Sunaphaa Yoga', condition: 'Venus in 2nd from Moon (self-earned wealth/authority)', domains: ['finance', 'career'] },
-    { name: 'Hamsa Yoga', condition: 'Jupiter in H4 Pisces Own Kendra (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family'] },
+    { name: 'Vosi Yoga', condition: 'Venus in 12th from Sun (L1 Sagittarius)', domains: ['career', 'finance'] },
+    { name: 'Nipuna Yoga', condition: 'Sun+Mercury conjoined in L2 Capricorn (attenuated by Mercury natal combustion)', domains: ['career'] },
+    { name: 'Sunaphaa Yoga', condition: 'Venus in 2nd from NB-strengthened Moon (M2 / L1 Sagittarius; self-earned authority)', domains: ['finance', 'career'] },
+    { name: 'Hamsa Yoga', condition: 'Jupiter in Own Kendra L4 Pisces (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family'] },
     { name: 'Daama Yoga', condition: '7 planets occupy 6 distinct signs (wealth, children, generosity)', domains: ['finance', 'family'] },
-    { name: 'Subha Yoga', condition: 'Venus in Lagna / benefics supporting Lagna', domains: ['love', 'family'] },
-    { name: 'Harihara Brahma Yoga', condition: 'Jupiter/Venus/Mercury in mutual Kendras from L1/L9/L10/L11', domains: ['career', 'finance', 'family'] },
-    { name: 'Saraswathi Yoga', condition: 'Mercury (H2), Jupiter (H4 Own), Venus (H1) in Kendra/2nd (learning, prosperity)', domains: ['career', 'finance', 'love'] },
-    { name: 'Parijatha Yoga', condition: 'Lagna dispositor chain in Kendra/Trikona (mid/late-life honors)', domains: ['career', 'finance'] },
-    { name: 'Sareera Soukhya Yoga', condition: 'L1 Jupiter (H4) and Venus (H1) in Kendras (vitality, comfort)', domains: ['love', 'family'] },
-    { name: 'Swaveeryaddhana Yoga', condition: 'Self-earned wealth via personal effort without primary ancestral reliance', domains: ['finance'] },
-    { name: 'Anthya Vayasi Dhana Yoga', condition: 'L2/L9/L11 dignity & benefic association (late-life wealth accumulation)', domains: ['finance'] },
-    { name: 'Matrumooladdhana Yoga', condition: 'Wealth/assets connected to mother/H4 Jupiter influence', domains: ['finance', 'family'] },
-    { name: 'Yuddha Praveena Yoga', condition: 'Tactical/strategic capability via 3rd lord Navamsa linkage', domains: ['career'] },
-    { name: 'Bandhu Pujya Yoga', condition: 'H4/L4 associated with Jupiter (respect from relatives/family)', domains: ['family'] },
-    { name: 'Nishkapata Yoga', condition: 'H4 Pisces occupied by benefic Jupiter in Own sign (pure-hearted domestic base)', domains: ['family', 'love'] },
-    { name: 'Maathru Sneha Yoga', condition: 'L1 & L4 both ruled by Jupiter (cordial maternal bond)', domains: ['family'] },
-    { name: 'Vaahana Yoga', condition: 'L1 Jupiter in H4 (material comforts & conveyances)', domains: ['family', 'finance'] },
-    { name: 'Bhaagya Yoga', condition: 'Strong benefic in H1 aspecting H9 Leo (fortune & enjoyments)', domains: ['finance', 'love', 'career'] }
+    { name: 'Subha Yoga', condition: 'Natural benefic Venus occupies L1 Sagittarius', domains: ['love', 'family'] },
+    { name: 'Saraswathi Yoga', condition: 'Mercury (L2), Jupiter (L4 Own), Venus (L1) in Kendra/2nd (learning, prosperity)', domains: ['career', 'finance', 'love'] },
+    { name: 'Parijatha Yoga', condition: 'L1 dispositor Jupiter in Own Kendra L4 Pisces (mid/late-life honors)', domains: ['career', 'finance'] },
+    { name: 'Sareera Soukhya Yoga', condition: 'L1 Jupiter (L4) and Venus (L1) in Kendras (vitality, comfort)', domains: ['love', 'family'] },
+    { name: 'Swaveeryaddhana Yoga', condition: 'L2 Saturn (L8 Cancer) in 5th trine from L1 Jupiter (L4 Pisces)', domains: ['finance'] },
+    { name: 'Matrumooladdhana Yoga', condition: 'L4 Jupiter (L4 Pisces) casts 5th aspect onto L2 Saturn (L8 Cancer)', domains: ['finance', 'family'] },
+    { name: 'Bandhu Pujya Yoga', condition: 'L4 Pisces occupied by Own-sign Jupiter (respect from relatives/family)', domains: ['family'] },
+    { name: 'Nishkapata Yoga', condition: 'L4 Pisces occupied by benefic Jupiter in Own sign (pure-hearted domestic base)', domains: ['family', 'love'] },
+    { name: 'Maathru Sneha Yoga', condition: 'L1 Sagittarius & L4 Pisces both ruled by Jupiter (cordial maternal bond)', domains: ['family'] },
+    { name: 'Vaahana Yoga', condition: 'L1 Jupiter in L4 Pisces (material comforts & conveyances)', domains: ['family', 'finance'] }
   ],
   doshas: [
     {
       name: 'Pitru Dosha',
       status: 'Present',
       reasons: [
-        'Sun (Pitri Karaka & L9) plus H9 Leo & L9 afflicted by malefics (Saturn/Rahu/Ketu/Mars influences)',
+        'Sun (Pitri Karaka & L9 in L2 Capricorn) aspected by Saturn (7th from L8 Cancer); L9 Leo aspected by Mars (4th from L6 Taurus) and Ketu (5th from L5 Aries)',
         'Indicates ancestral lineage obligations & potential friction with father/paternal continuity'
       ],
       domains: ['family', 'career']
@@ -895,6 +897,390 @@ export const VARGA_CHARTS_001ME: Record<string, VargaChartDef> = {
   }
 };
 
+const SIGN_IDX_EN_LOWER = [
+  'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo',
+  'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'
+];
+
+const SIGN_LORD_BY_IDX: Record<number, string> = {
+  1: 'Mars', 2: 'Venus', 3: 'Mercury', 4: 'Moon',
+  5: 'Sun', 6: 'Mercury', 7: 'Venus', 8: 'Mars',
+  9: 'Jupiter', 10: 'Saturn', 11: 'Saturn', 12: 'Jupiter'
+};
+
+const EXALT_SIGN_BY_PLANET: Record<string, number> = {
+  Sun: 1, Moon: 2, Mars: 10, Mercury: 6, Jupiter: 4, Venus: 12, Saturn: 7
+};
+
+const DEBIL_SIGN_BY_PLANET: Record<string, number> = {
+  Sun: 7, Moon: 8, Mars: 4, Mercury: 12, Jupiter: 10, Venus: 6, Saturn: 1
+};
+
+const OWN_SIGNS_BY_PLANET: Record<string, number[]> = {
+  Sun: [5], Moon: [4], Mars: [1, 8], Mercury: [3, 6], Jupiter: [9, 12], Venus: [2, 7], Saturn: [10, 11]
+};
+
+function normBodyName(raw?: string): string {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('lagna')) return 'Lagna';
+  if (s.includes('sun') || s.includes('surya')) return 'Sun';
+  if (s.includes('moon') || s.includes('chandra')) return 'Moon';
+  if (s.includes('mars') || s.includes('sevvai')) return 'Mars';
+  if (s.includes('mercury') || s.includes('budha')) return 'Mercury';
+  if (s.includes('jupiter') || s.includes('guru')) return 'Jupiter';
+  if (s.includes('venus') || s.includes('sukra')) return 'Venus';
+  if (s.includes('saturn') || s.includes('sani')) return 'Saturn';
+  if (s.includes('rahu')) return 'Rahu';
+  if (s.includes('ketu')) return 'Ketu';
+  if (s.includes('mandi') || s.includes('gulika')) return 'Mandi';
+  return raw || '';
+}
+
+function normSignIdx(raw?: string): number {
+  const s = (raw || '').toLowerCase();
+  for (let i = 0; i < SIGN_IDX_EN_LOWER.length; i++) {
+    if (s.includes(SIGN_IDX_EN_LOWER[i])) return i + 1;
+  }
+  const tamil = ['mesham', 'rishab', 'mithun', 'katak', 'simh', 'kanni', 'thul', 'vrisch', 'dhanu', 'makar', 'kumb', 'meen'];
+  for (let i = 0; i < tamil.length; i++) {
+    if (s.includes(tamil[i])) return i + 1;
+  }
+  return 0;
+}
+
+function getD1AspectTargets(planet: string, fromSignIdx: number): number[] {
+  if (!fromSignIdx) return [];
+  const offsets = [7];
+  if (planet === 'Jupiter' || planet === 'Rahu' || planet === 'Ketu') offsets.push(5, 9);
+  else if (planet === 'Saturn') offsets.push(3, 10);
+  else if (planet === 'Mars') offsets.push(4, 8);
+  return offsets.map(off => ((fromSignIdx - 1 + (off - 1)) % 12) + 1);
+}
+
+function isKendraDist(dist: number): boolean {
+  return dist === 1 || dist === 4 || dist === 7 || dist === 10;
+}
+
+/**
+ * Evaluates classical Parashara Neecha Bhanga factors purely from Natal D1 positions.
+ */
+export function evaluateNatalNeechaBhanga(
+  planet: string,
+  flattenedD1: Array<{ body_name: string; rashi_name: string; is_retrograde?: boolean }>,
+  natalLagnaIdx: number,
+  natalMoonIdx: number
+): { isDebilitated: boolean; hasNeechaBhanga: boolean; reasons: string[] } {
+  const debSign = DEBIL_SIGN_BY_PLANET[planet];
+  if (!debSign) return { isDebilitated: false, hasNeechaBhanga: false, reasons: [] };
+
+  const pMap = new Map<string, { signIdx: number; isRetro: boolean }>();
+  for (const row of flattenedD1 || []) {
+    const b = normBodyName(row.body_name);
+    const s = normSignIdx(row.rashi_name);
+    if (b && s) pMap.set(b, { signIdx: s, isRetro: !!row.is_retrograde });
+  }
+  const pInfo = pMap.get(planet);
+  if (!pInfo || pInfo.signIdx !== debSign) {
+    return { isDebilitated: false, hasNeechaBhanga: false, reasons: [] };
+  }
+
+  const reasons: string[] = [];
+  const disp = SIGN_LORD_BY_IDX[debSign];
+  const dispInfo = pMap.get(disp);
+  if (dispInfo) {
+    const dL = ((dispInfo.signIdx - natalLagnaIdx + 12) % 12) + 1;
+    const dM = ((dispInfo.signIdx - natalMoonIdx + 12) % 12) + 1;
+    if (isKendraDist(dL) && isKendraDist(dM)) {
+      reasons.push(`disp ${disp} in L${dL}/M${dM} Kendra[L/M]`);
+    } else if (isKendraDist(dL)) {
+      reasons.push(`disp ${disp} in L${dL} Kendra[Lagna]`);
+    } else if (isKendraDist(dM)) {
+      reasons.push(`disp ${disp} in M${dM} Kendra[Moon]`);
+    }
+    if (dispInfo.signIdx === debSign || getD1AspectTargets(disp, dispInfo.signIdx).includes(debSign)) {
+      reasons.push(`${disp} touches/aspects own ${SIGN_IDX_EN_LOWER[debSign - 1]}`);
+    }
+  }
+
+  const exaltSign = EXALT_SIGN_BY_PLANET[planet];
+  const exaltSignLord = exaltSign ? SIGN_LORD_BY_IDX[exaltSign] : '';
+  const exInfo = exaltSignLord ? pMap.get(exaltSignLord) : undefined;
+  if (exInfo) {
+    const eL = ((exInfo.signIdx - natalLagnaIdx + 12) % 12) + 1;
+    const eM = ((exInfo.signIdx - natalMoonIdx + 12) % 12) + 1;
+    if (isKendraDist(eL) && isKendraDist(eM)) {
+      reasons.push(`exalt-sign-lord ${exaltSignLord} in L${eL}/M${eM} Kendra[L/M]`);
+    } else if (isKendraDist(eL)) {
+      reasons.push(`exalt-sign-lord ${exaltSignLord} in L${eL} Kendra[Lagna]`);
+    } else if (isKendraDist(eM)) {
+      reasons.push(`exalt-sign-lord ${exaltSignLord} in M${eM} Kendra[Moon]`);
+    }
+  }
+
+  if (pInfo.isRetro) {
+    reasons.push(`${planet} Retrograde (Neecha-Vakra)`);
+  }
+
+  return {
+    isDebilitated: true,
+    hasNeechaBhanga: reasons.length > 0,
+    reasons
+  };
+}
+
+/**
+ * Deterministically validates every D1 Yoga and Dosha claim against actual D1 signs,
+ * houses, conjunctions, and Parashari aspects before allowing prompt emission.
+ */
+export function validateD1YogasAndDoshasAgainstD1(
+  data: YogaDoshaData,
+  flattenedD1: Array<{ body_name: string; rashi_name: string; is_retrograde?: boolean }> | undefined,
+  natalLagnaIdx: number,
+  natalMoonIdx: number
+): YogaDoshaData {
+  if (!flattenedD1 || flattenedD1.length < 7) return data;
+
+  const pSign = new Map<string, number>();
+  for (const row of flattenedD1) {
+    const b = normBodyName(row.body_name);
+    const s = normSignIdx(row.rashi_name);
+    if (b && s) pSign.set(b, s);
+  }
+
+  const houseSign = (h: number) => ((natalLagnaIdx + h - 2) % 12) + 1;
+  const houseLord = (h: number) => SIGN_LORD_BY_IDX[houseSign(h)];
+  const hFrom = (s: number, base: number) => ((s - base + 12) % 12) + 1;
+  const doesAspect = (p: string, targetS: number): boolean => {
+    const s = pSign.get(p);
+    if (!s) return false;
+    return s === targetS || getD1AspectTargets(p, s).includes(targetS);
+  };
+
+  const verifyYogaByName = (name: string): boolean => {
+    const n = name.toLowerCase();
+    const sSun = pSign.get('Sun') || 0;
+    const sMoon = pSign.get('Moon') || 0;
+    const sMars = pSign.get('Mars') || 0;
+    const sMerc = pSign.get('Mercury') || 0;
+    const sJup = pSign.get('Jupiter') || 0;
+    const sVen = pSign.get('Venus') || 0;
+    const sSat = pSign.get('Saturn') || 0;
+
+    if (n.includes('dharma karmadhipati')) {
+      const l9 = pSign.get(houseLord(9));
+      const l10 = pSign.get(houseLord(10));
+      return !!l9 && !!l10 && (l9 === l10 || doesAspect(houseLord(9), l10) || doesAspect(houseLord(10), l9));
+    }
+    if (n.includes('vipareetha')) {
+      const dusthanaLords = [6, 8, 12].map(h => ({ p: houseLord(h), s: pSign.get(houseLord(h)) || 0 }));
+      return dusthanaLords.some(dl => [6, 8, 12].includes(hFrom(dl.s, natalLagnaIdx)));
+    }
+    if (n.includes('neecha bhanga') && n.includes('moon')) {
+      return evaluateNatalNeechaBhanga('Moon', flattenedD1, natalLagnaIdx, natalMoonIdx).hasNeechaBhanga;
+    }
+    if (n.includes('vosi')) {
+      return [sMoon, sMars, sMerc, sJup, sVen, sSat].some(s => s && s !== sMoon && hFrom(s, sSun) === 12);
+    }
+    if (n.includes('nipuna')) {
+      return !!sSun && !!sMerc && sSun === sMerc;
+    }
+    if (n.includes('sunaphaa')) {
+      return [sMars, sMerc, sJup, sVen, sSat].some(s => s && hFrom(s, sMoon) === 2);
+    }
+    if (n.includes('hamsa')) {
+      return !!sJup && isKendraDist(hFrom(sJup, natalLagnaIdx)) && ([4, 9, 12].includes(sJup));
+    }
+    if (n.includes('daama')) {
+      const distinct = new Set([sSun, sMoon, sMars, sMerc, sJup, sVen, sSat].filter(Boolean));
+      return distinct.size === 6;
+    }
+    if (n.includes('subha')) {
+      const l1Occ = [sJup, sVen, sMerc].some(s => s === houseSign(1));
+      const l12Occ = [sJup, sVen, sMerc].some(s => s === houseSign(12));
+      const l2Occ = [sJup, sVen, sMerc].some(s => s === houseSign(2));
+      return l1Occ || (l12Occ && l2Occ);
+    }
+    if (n.includes('harihara brahma')) {
+      const l1Lord = houseLord(1);
+      const l1Sign = pSign.get(l1Lord) || 0;
+      const benefics = [sJup, sVen, sMerc].filter(Boolean);
+      const v1 = [4, 10, 11].every(h => benefics.some(s => hFrom(s, l1Sign) === h));
+      const l9S = pSign.get(houseLord(9)) || 0;
+      const l10S = pSign.get(houseLord(10)) || 0;
+      const l11S = pSign.get(houseLord(11)) || 0;
+      const v2 = !!sJup && !!sVen && !!sMerc &&
+        isKendraDist(hFrom(sJup, l9S)) &&
+        isKendraDist(hFrom(sVen, l11S)) &&
+        (isKendraDist(hFrom(sMerc, l1Sign)) || isKendraDist(hFrom(sMerc, l10S)));
+      return v1 || v2;
+    }
+    if (n.includes('bhaagya')) {
+      const h9Sign = houseSign(9);
+      const cand = ['Jupiter', 'Venus', 'Mercury', 'Moon'];
+      return cand.some(p => {
+        const s = pSign.get(p) || 0;
+        const h = hFrom(s, natalLagnaIdx);
+        return (h === 1 || h === 3 || h === 5) && doesAspect(p, h9Sign);
+      });
+    }
+    if (n.includes('saraswathi')) {
+      const allowed = new Set([1, 2, 4, 5, 7, 9, 10]);
+      const jupOk = [4, 9, 12, 1, 8, 2, 7].includes(sJup); // own/exalt/friend
+      return jupOk &&
+        allowed.has(hFrom(sMerc, natalLagnaIdx)) &&
+        allowed.has(hFrom(sJup, natalLagnaIdx)) &&
+        allowed.has(hFrom(sVen, natalLagnaIdx));
+    }
+    if (n.includes('parijatha')) {
+      const l1L = houseLord(1);
+      const l1S = pSign.get(l1L) || 0;
+      const disp1 = SIGN_LORD_BY_IDX[l1S];
+      const d1S = pSign.get(disp1) || 0;
+      const disp2 = SIGN_LORD_BY_IDX[d1S];
+      const d2S = pSign.get(disp2) || 0;
+      const kt = new Set([1, 4, 5, 7, 9, 10]);
+      return kt.has(hFrom(d1S, natalLagnaIdx)) && kt.has(hFrom(d2S, natalLagnaIdx));
+    }
+    if (n.includes('sareera soukhya')) {
+      const l1S = pSign.get(houseLord(1)) || 0;
+      return isKendraDist(hFrom(l1S, natalLagnaIdx)) || isKendraDist(hFrom(sJup, natalLagnaIdx)) || isKendraDist(hFrom(sVen, natalLagnaIdx));
+    }
+    if (n.includes('swaveeryaddhana')) {
+      const l1S = pSign.get(houseLord(1)) || 0;
+      const l2S = pSign.get(houseLord(2)) || 0;
+      const dist = hFrom(l2S, l1S);
+      return [1, 4, 5, 7, 9, 10].includes(dist);
+    }
+    if (n.includes('matrumooladdhana')) {
+      const l2Lord = houseLord(2);
+      const l4Lord = houseLord(4);
+      const l2S = pSign.get(l2Lord) || 0;
+      const l4S = pSign.get(l4Lord) || 0;
+      return l2S === houseSign(4) || l2S === l4S || doesAspect(l4Lord, l2S) || doesAspect(l2Lord, l4S);
+    }
+    if (n.includes('bandhu pujya')) {
+      const h4S = houseSign(4);
+      const l4S = pSign.get(houseLord(4)) || 0;
+      return doesAspect('Jupiter', h4S) || doesAspect('Jupiter', l4S);
+    }
+    if (n.includes('nishkapata')) {
+      const h4S = houseSign(4);
+      return [sJup, sVen, sMerc].some(s => s === h4S);
+    }
+    if (n.includes('maathru sneha')) {
+      return houseLord(1) === houseLord(4);
+    }
+    if (n.includes('vaahana')) {
+      const l1S = pSign.get(houseLord(1)) || 0;
+      return [4, 9, 11].includes(hFrom(l1S, natalLagnaIdx));
+    }
+    return true;
+  };
+
+  // Validate Pitru Dosha dynamically so only true malefic afflictor aspects/conjunctions appear
+  const verifiedDoshas = data.doshas
+    .map(d => {
+      if (!d.name.toLowerCase().includes('pitru')) return d;
+      const sSun = pSign.get('Sun') || 0;
+      const h9S = houseSign(9);
+      const l9L = houseLord(9);
+      const l9S = pSign.get(l9L) || 0;
+      const malefics = ['Saturn', 'Mars', 'Rahu', 'Ketu'];
+      const sunHits: string[] = [];
+      const h9Hits: string[] = [];
+      for (const m of malefics) {
+        const ms = pSign.get(m);
+        if (!ms) continue;
+        if (ms === sSun || getD1AspectTargets(m, ms).includes(sSun)) sunHits.push(m);
+        if (ms === h9S || getD1AspectTargets(m, ms).includes(h9S)) h9Hits.push(m);
+      }
+      if (sunHits.length === 0 && h9Hits.length === 0) return null;
+      const sunPart = sunHits.length > 0 ? `Sun (${l9L === 'Sun' ? 'L9 & ' : ''}Pitri Karaka in L${hFrom(sSun, natalLagnaIdx)}) touched by ${sunHits.join(', ')}` : '';
+      const h9Part = h9Hits.length > 0 ? `L9 ${SIGN_IDX_EN_LOWER[h9S - 1].replace(/^./, c => c.toUpperCase())} touched by ${h9Hits.join(', ')}` : '';
+      const combined = [sunPart, h9Part].filter(Boolean).join('; ');
+      return {
+        ...d,
+        reasons: [combined, ...(l9S !== sSun ? [] : [])]
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  return {
+    rajaYogas: data.rajaYogas.filter(y => verifyYogaByName(y.name)),
+    generalYogas: data.generalYogas.filter(y => verifyYogaByName(y.name)),
+    doshas: verifiedDoshas
+  };
+}
+
+/**
+ * Returns classical Varga dignity tag and key domain-house summary without un-reconciled D1 degrees.
+ */
+export function buildVargaDomainSummary(
+  chart: VargaChartDef,
+  focusDomainHouses: number[]
+): {
+  lagnaSign: string;
+  planetRows: string[];
+  domainSummaryLine: string;
+} {
+  const lagnaIdx = normSignIdx(chart.lagnaSign) || 1;
+  const planetEntries: Array<{ planet: string; sign: string; signIdx: number; house: number; dignity: string }> = [];
+
+  for (const h of chart.houses) {
+    const sIdx = normSignIdx(h.sign) || (((lagnaIdx + h.house - 2) % 12) + 1);
+    for (const rawP of h.planets) {
+      const pName = normBodyName(rawP);
+      if (!pName || pName === 'Mandi') continue;
+      let dig = '';
+      if (pName !== 'Rahu' && pName !== 'Ketu') {
+        if (EXALT_SIGN_BY_PLANET[pName] === sIdx) dig = 'Exalted';
+        else if (DEBIL_SIGN_BY_PLANET[pName] === sIdx) dig = 'Debilitated';
+        else if ((OWN_SIGNS_BY_PLANET[pName] || []).includes(sIdx)) dig = 'Own';
+      }
+      planetEntries.push({
+        planet: pName,
+        sign: h.sign,
+        signIdx: sIdx,
+        house: h.house,
+        dignity: dig
+      });
+    }
+  }
+
+  const keyHighlights: string[] = [];
+  for (const hNum of focusDomainHouses.slice(0, 3)) {
+    const hDef = chart.houses.find(x => x.house === hNum);
+    if (!hDef) continue;
+    const hSignIdx = normSignIdx(hDef.sign) || (((lagnaIdx + hNum - 2) % 12) + 1);
+    const hLord = SIGN_LORD_BY_IDX[hSignIdx];
+    const lordRow = planetEntries.find(p => p.planet === hLord);
+    const occNames = hDef.planets.map(normBodyName).filter(Boolean);
+    const occStr = occNames.length > 0 ? ` occ:${occNames.join(',')}` : '';
+    const lordStr = lordRow
+      ? `lord ${hLord}@H${lordRow.house} ${lordRow.sign}${lordRow.dignity ? `(${lordRow.dignity})` : ''}`
+      : `lord ${hLord}`;
+    keyHighlights.push(`H${hNum} ${hDef.sign}(${lordStr}${occStr})`);
+  }
+
+  const planetRows = chart.houses.map(h => {
+    const pList = h.planets
+      .map(raw => {
+        const pn = normBodyName(raw);
+        if (!pn) return '';
+        const pe = planetEntries.find(x => x.planet === pn && x.house === h.house);
+        return pe?.dignity ? `${pn}(${pe.dignity})` : pn;
+      })
+      .filter(Boolean);
+    return `H${h.house} ${h.sign}: ${pList.length > 0 ? pList.join(', ') : '-'}`;
+  });
+
+  return {
+    lagnaSign: chart.lagnaSign,
+    planetRows,
+    domainSummaryLine: `Lagna: ${chart.lagnaSign} | Key Houses: ${keyHighlights.join(' | ')}`
+  };
+}
+
 export function isChartSignature001ME(
   natalLagnaIdx: number,
   natalMoonIdx: number,
@@ -924,13 +1310,27 @@ export function apply001MEEnrichments(
 ): VedicHouseContext {
   const is001 = (context.personId === '001ME' || !context.personId)
     && isChartSignature001ME(natalLagnaIdx, natalMoonIdx, context.flattenedNatalD1);
-  if (!is001) return context;
+  if (!is001) {
+    return {
+      ...context,
+      yogasAndDoshas: context.yogasAndDoshas
+        ? validateD1YogasAndDoshasAgainstD1(context.yogasAndDoshas, context.flattenedNatalD1, natalLagnaIdx, natalMoonIdx)
+        : context.yogasAndDoshas
+    };
+  }
+
+  const verifiedYogas = validateD1YogasAndDoshasAgainstD1(
+    context.yogasAndDoshas || D1_YOGAS_AND_DOSHAS_001ME,
+    context.flattenedNatalD1,
+    natalLagnaIdx,
+    natalMoonIdx
+  );
 
   return {
     ...context,
     personId: context.personId || '001ME',
     shadbalaStrengths: context.shadbalaStrengths || SHADBALA_STRENGTHS_001ME,
-    yogasAndDoshas: context.yogasAndDoshas || D1_YOGAS_AND_DOSHAS_001ME,
+    yogasAndDoshas: verifiedYogas,
     vargaCharts: context.vargaCharts || VARGA_CHARTS_001ME,
     ashtakavargaPayload: {
       targetHousePoints: context.ashtakavargaPayload?.targetHousePoints ?? 0,
@@ -943,3 +1343,4 @@ export function apply001MEEnrichments(
     }
   };
 }
+

@@ -2,7 +2,6 @@
  * Astro Engine Multi-LLM Provider Adapters (Milestone M4)
  * Implements QwenLocalAdapter, GeminiStudioAdapter, and ClaudeAdapter
  */
-import { GoogleGenAI } from '@google/genai';
 import { GEMINI_PRIMARY_MODEL, getPreferredGeminiModel } from './geminiModels';
 import {
   LLMProviderId,

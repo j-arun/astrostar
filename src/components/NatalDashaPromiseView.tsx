@@ -253,6 +253,7 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
   const [focusQuestion, setFocusQuestion] = useState<string>('');
   const [viewDisplayMode, setViewDisplayMode] = useState<DualViewFilter>('both');
   const [activeReportLevel, setActiveReportLevel] = useState<ReportLevelKey>('ad');
+  const [activeProviderTab, setActiveProviderTab] = useState<DualProviderId>('gemini_pro');
   const [reportsBySlot, setReportsBySlot] = useState<
     Record<string, Partial<Record<DualProviderId, NatalDashaAiSynthesisResult>>>
   >({});
@@ -528,6 +529,9 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
 
     const promptResult = buildPromptForLevel(levelKey, qToAsk);
     setActiveReportLevel(levelKey);
+    if (providers.length === 1) {
+      setActiveProviderTab(providers[0]);
+    }
     setExtraProviderResult(null);
 
     if (!options?.skipScroll) {
@@ -824,10 +828,11 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
             <button
               onClick={() => {
                 setActiveReportLevel(levelKey);
+                setActiveProviderTab('gemini_pro');
                 scrollToDeliveredReports();
               }}
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 font-semibold hover:bg-emerald-500/25 cursor-pointer"
-              title="Jump to Gemini report below"
+              title="Jump to Gemini report tab below"
             >
               <CheckCircle2 className="w-3 h-3" />
               <span>Gemini Ready</span>
@@ -837,10 +842,11 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
             <button
               onClick={() => {
                 setActiveReportLevel(levelKey);
+                setActiveProviderTab('claude_fable');
                 scrollToDeliveredReports();
               }}
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/35 font-semibold hover:bg-purple-500/25 cursor-pointer"
-              title="Jump to Claude Fable 5.1 report below"
+              title="Jump to Claude Fable 5.1 report tab below"
             >
               <CheckCircle2 className="w-3 h-3" />
               <span>Fable Ready</span>
@@ -1811,61 +1817,152 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
             </div>
           )}
 
-          {/* Dual Side-by-Side Reports: Google Gemini Pro & Claude Fable 5.1 */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {(['gemini_pro', 'claude_fable'] as DualProviderId[]).map(providerId => {
-              const slotKey = makeSlotKey(activeReportLevel);
-              const report = reportsBySlot[slotKey]?.[providerId];
-              const isLoading = Boolean(loadingBySlot[slotKey]?.[providerId]);
-              const isGemini = providerId === 'gemini_pro';
-              const displayName = isGemini ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)';
-              const modelLabel = report?.modelUsed || LLM_PROVIDERS[providerId].model;
-              const isPromptShown = Boolean(expandedPromptByProvider[providerId]);
+          {/* Full-Width Provider Tabs: Google Gemini Pro | Claude Fable 5.1 (Phabble) */}
+          {(() => {
+            const slotKey = makeSlotKey(activeReportLevel);
+            const activeSlotReports = reportsBySlot[slotKey] || {};
+            const activeSlotLoading = loadingBySlot[slotKey] || {};
 
-              return (
+            const providerId = activeProviderTab;
+            const report = activeSlotReports[providerId];
+            const isLoading = Boolean(activeSlotLoading[providerId]);
+            const isGemini = providerId === 'gemini_pro';
+            const displayName = isGemini ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)';
+            const modelLabel = report?.modelUsed || LLM_PROVIDERS[providerId].model;
+            const isPromptShown = Boolean(expandedPromptByProvider[providerId]);
+
+            const companionProvider: DualProviderId = isGemini ? 'claude_fable' : 'gemini_pro';
+            const hasCompanionReport = Boolean(activeSlotReports[companionProvider]?.success);
+
+            const followUpTurns = followUpsBySlot[slotKey]?.[providerId] || [];
+            const isFollowUpLoading = Boolean(followUpLoadingBySlot[slotKey]?.[providerId]);
+            const isCompanionFollowUpLoading = Boolean(followUpLoadingBySlot[slotKey]?.[companionProvider]);
+            const draftKey = `${slotKey}|${providerId}`;
+            const draftVal = followUpDrafts[draftKey] || '';
+
+            return (
+              <div className="space-y-3">
+                {/* Provider Tab Selector Strip */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {(['gemini_pro', 'claude_fable'] as DualProviderId[]).map(tabProvider => {
+                    const tabReport = activeSlotReports[tabProvider];
+                    const tabLoading = Boolean(activeSlotLoading[tabProvider]);
+                    const tabFollowUps = followUpsBySlot[slotKey]?.[tabProvider] || [];
+                    const isTabGemini = tabProvider === 'gemini_pro';
+                    const isTabSelected = activeProviderTab === tabProvider;
+                    const tabName = isTabGemini ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)';
+
+                    return (
+                      <button
+                        key={tabProvider}
+                        onClick={() => setActiveProviderTab(tabProvider)}
+                        className={`text-left px-4 py-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                          isTabSelected
+                            ? isTabGemini
+                              ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40 shadow-lg'
+                              : 'bg-purple-500/15 border-purple-400 ring-1 ring-purple-400/40 shadow-lg'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-sm font-extrabold truncate ${
+                                isTabGemini ? 'text-amber-300' : 'text-purple-300'
+                              }`}
+                            >
+                              {tabName}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 shrink-0">
+                              {tabReport?.modelUsed || LLM_PROVIDERS[tabProvider].model}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                            {tabLoading
+                              ? 'Generating full natal report...'
+                              : tabReport?.success
+                              ? `Delivered in ${(tabReport.executionTimeMs / 1000).toFixed(2)}s${
+                                  tabFollowUps.length > 0 ? ` • ${tabFollowUps.length} follow-up${tabFollowUps.length > 1 ? 's' : ''}` : ''
+                                }`
+                              : tabReport
+                              ? 'Error — view details'
+                              : 'Ready to generate'}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {tabLoading ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Running</span>
+                            </span>
+                          ) : tabReport?.success ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Ready</span>
+                            </span>
+                          ) : tabReport ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/40">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Issue</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 rounded-full bg-slate-900 text-slate-400 text-[10px] font-semibold border border-slate-800">
+                              Not Run
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Full-Width Active Provider Report Card */}
                 <div
-                  key={providerId}
-                  className={`bg-slate-950 border rounded-xl p-4 flex flex-col justify-between gap-3 ${
-                    isGemini ? 'border-amber-500/35' : 'border-purple-500/35'
+                  className={`bg-slate-950 border rounded-xl p-4 sm:p-5 space-y-4 ${
+                    isGemini ? 'border-amber-500/40' : 'border-purple-500/40'
                   }`}
                 >
                   {/* Provider Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-extrabold ${isGemini ? 'text-amber-300' : 'text-purple-300'}`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-base font-extrabold ${isGemini ? 'text-amber-300' : 'text-purple-300'}`}>
                           {displayName}
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300">
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
                           {modelLabel}
                         </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono text-amber-200">
+                          {activeLevelPrompt.scopeLabel}
+                        </span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                      <div className="text-[11px] text-slate-400 mt-1 font-mono">
                         {report
-                          ? `${(report.executionTimeMs / 1000).toFixed(2)}s${
+                          ? `Execution: ${(report.executionTimeMs / 1000).toFixed(2)}s${
                               report.tokenTelemetry
-                                ? ` • ${report.tokenTelemetry.inputTokens.toLocaleString()} in / ${report.tokenTelemetry.outputTokens.toLocaleString()} out`
+                                ? ` • Tokens: ${report.tokenTelemetry.inputTokens.toLocaleString()} in / ${report.tokenTelemetry.outputTokens.toLocaleString()} out`
                                 : ''
                             }`
-                          : activeLevelPrompt.scopeLabel}
+                          : 'Click Generate / Regenerate to run this level with full natal charts'}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       {report?.success && (
                         <>
                           <button
                             onClick={() =>
                               handleCopyText(`${slotKey}-${providerId}`, report.answerMarkdown)
                             }
-                            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-200 flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-200 flex items-center gap-1.5 cursor-pointer"
                           >
                             {copiedKey === `${slotKey}-${providerId}` ? (
-                              <Check className="w-3 h-3 text-emerald-400" />
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
                             ) : (
-                              <Copy className="w-3 h-3" />
+                              <Copy className="w-3.5 h-3.5" />
                             )}
-                            <span>{copiedKey === `${slotKey}-${providerId}` ? 'Copied' : 'Copy'}</span>
+                            <span>{copiedKey === `${slotKey}-${providerId}` ? 'Copied' : 'Copy Report'}</span>
                           </button>
                           <button
                             onClick={() =>
@@ -1874,9 +1971,9 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                                 [providerId]: !prev[providerId]
                               }))
                             }
-                            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Eye className="w-3 h-3 text-amber-400" />
+                            <Eye className="w-3.5 h-3.5 text-amber-400" />
                             <span>{isPromptShown ? 'Hide Prompt' : 'Prompt Sent'}</span>
                           </button>
                         </>
@@ -1884,156 +1981,205 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                       <button
                         onClick={() => handleAskDashaLevel(activeReportLevel, [providerId], { skipScroll: true })}
                         disabled={isLoading || Boolean(batchProgress?.active)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow ${
                           isGemini
                             ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                             : 'bg-purple-500 hover:bg-purple-400 text-white'
                         }`}
                       >
-                        {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                        <span>{report ? 'Regenerate' : 'Generate'}</span>
+                        {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        <span>{isLoading ? 'Regenerating...' : report ? 'Regenerate Prediction' : 'Generate Prediction'}</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Provider Body */}
+                  {/* Full-Width Prediction Body */}
                   {isLoading ? (
-                    <div className="py-10 flex flex-col items-center justify-center text-center gap-2 text-xs text-slate-300">
-                      <Loader2 className={`w-6 h-6 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
-                      <div className="font-bold">Synthesizing {activeLevelPrompt.scopeLabel}</div>
-                      <div className="text-slate-400">
-                        Sending full natal charts (D1, D9, Vargas D2–D60, SAV, Shadbala, Jaimini) to {displayName}...
+                    <div className="py-12 flex flex-col items-center justify-center text-center gap-2.5 text-xs text-slate-300">
+                      <Loader2 className={`w-7 h-7 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
+                      <div className="text-sm font-bold">Synthesizing {activeLevelPrompt.scopeLabel}</div>
+                      <div className="text-slate-400 max-w-xl">
+                        Sending full natal charts (D1, D9, Vargas D2–D60, SAV/BAV, Shadbala, Yogas, Jaimini) to {displayName}...
                       </div>
                     </div>
                   ) : report ? (
                     report.success ? (
-                      <div className="space-y-4">
+                      <div className="space-y-6">
                         {isPromptShown && (
-                          <pre className="max-h-56 overflow-auto p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 whitespace-pre-wrap">
+                          <pre className="max-h-72 overflow-auto p-3 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
                             {`${report.systemInstruction}\n\n${report.promptSent}`}
                           </pre>
                         )}
-                        <div className="max-h-[680px] overflow-y-auto pr-1">
+
+                        <div className="w-full">
                           {renderSimpleMarkdown(report.answerMarkdown)}
                         </div>
 
-                        {/* Per-Prediction Follow-Up Conversation Thread & Input */}
-                        {(() => {
-                          const followUpTurns = followUpsBySlot[slotKey]?.[providerId] || [];
-                          const isFollowUpLoading = Boolean(followUpLoadingBySlot[slotKey]?.[providerId]);
-                          const draftKey = `${slotKey}|${providerId}`;
-                          const draftVal = followUpDrafts[draftKey] || '';
-
-                          return (
-                            <div className="border-t border-slate-800 pt-3 space-y-2.5">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                                  <MessageSquare className={`w-3.5 h-3.5 ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
-                                  <span>
-                                    Follow-Up on This {isGemini ? 'Gemini' : 'Fable'} Prediction
-                                    {followUpTurns.length > 0 ? ` (${followUpTurns.length})` : ''}
-                                  </span>
+                        {/* At the End of the Tab: Follow-Up Questions & Relative Impact */}
+                        <div className="border-t border-slate-800 pt-5 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-extrabold text-emerald-300 flex items-center gap-2">
+                                <MessageSquare className="w-4 h-4" />
+                                <span>
+                                  Ask Follow-Up on This {isGemini ? 'Gemini Pro' : 'Claude Fable 5.1'} Prediction (Relative Impact &amp; Clarifications)
                                 </span>
-                                <button
-                                  onClick={() => handleInspectFollowUpPrompt(activeReportLevel, providerId, draftVal)}
-                                  className="text-[10px] font-semibold text-slate-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
-                                  title="Inspect prompt sent with prior prediction for follow-up"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>Follow-Up Prompt</span>
-                                </button>
                               </div>
-
-                              {followUpTurns.length > 0 && (
-                                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-                                  {followUpTurns.map((turn, tIdx) => (
-                                    <div
-                                      key={turn.id}
-                                      className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2"
-                                    >
-                                      <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-1.5">
-                                        <div className="text-xs font-bold text-amber-200">
-                                          Q{tIdx + 1}: {turn.question}
-                                        </div>
-                                        <span className="text-[10px] font-mono text-slate-500 shrink-0">
-                                          {turn.createdAt}
-                                        </span>
-                                      </div>
-
-                                      {turn.result.success ? (
-                                        <div className="space-y-1.5">
-                                          <div>{renderSimpleMarkdown(turn.result.answerMarkdown)}</div>
-                                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-800/60">
-                                            <span>
-                                              {turn.result.modelUsed} &bull; {(turn.result.executionTimeMs / 1000).toFixed(2)}s
-                                              {turn.result.tokenTelemetry
-                                                ? ` • ${turn.result.tokenTelemetry.inputTokens.toLocaleString()} in / ${turn.result.tokenTelemetry.outputTokens.toLocaleString()} out`
-                                                : ''}
-                                            </span>
-                                            <button
-                                              onClick={() => handleCopyText(`fu-${turn.id}`, turn.result.answerMarkdown)}
-                                              className="text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                                            >
-                                              {copiedKey === `fu-${turn.id}` ? (
-                                                <Check className="w-3 h-3 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="w-3 h-3" />
-                                              )}
-                                              <span>{copiedKey === `fu-${turn.id}` ? 'Copied' : 'Copy'}</span>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-2">
-                                          Follow-up failed: {turn.result.error}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {isFollowUpLoading && (
-                                <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-2">
-                                  <Loader2 className={`w-3.5 h-3.5 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
-                                  <span>Analyzing relative impact on {isGemini ? 'Gemini' : 'Fable'} prediction...</span>
-                                </div>
-                              )}
-
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={draftVal}
-                                  onChange={(e) =>
-                                    setFollowUpDrafts(prev => ({ ...prev, [draftKey]: e.target.value }))
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !isFollowUpLoading && draftVal.trim()) {
-                                      handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey);
-                                    }
-                                  }}
-                                  placeholder={`Ask ${isGemini ? 'Gemini' : 'Fable'} a follow-up on this prediction (e.g., relative impact)...`}
-                                  className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                                />
-                                <button
-                                  onClick={() => handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey)}
-                                  disabled={isFollowUpLoading || !draftVal.trim()}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 ${
-                                    isGemini
-                                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300'
-                                      : 'bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300'
-                                  }`}
-                                >
-                                  <Send className="w-3 h-3" />
-                                  <span>Ask</span>
-                                </button>
-                              </div>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                Answers are anchored to this delivered prediction + all natal charts so you can evaluate relative impact across aspects and houses.
+                              </p>
                             </div>
-                          );
-                        })()}
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {hasCompanionReport && (
+                                <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={compareWithCompanion}
+                                    onChange={(e) => setCompareWithCompanion(e.target.checked)}
+                                    className="accent-amber-500 cursor-pointer"
+                                  />
+                                  <span>Include {isGemini ? 'Fable' : 'Gemini'} prediction context</span>
+                                </label>
+                              )}
+                              <button
+                                onClick={() => handleInspectFollowUpPrompt(activeReportLevel, providerId, draftVal)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+                                title="Inspect prompt sent with prior prediction for follow-up"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Inspect Follow-Up Prompt</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Delivered Follow-Up Answers Shown Right Here */}
+                          {followUpTurns.length > 0 && (
+                            <div className="space-y-3">
+                              {followUpTurns.map((turn, tIdx) => (
+                                <div
+                                  key={turn.id}
+                                  className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2.5"
+                                >
+                                  <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
+                                    <div className="text-xs sm:text-sm font-bold text-amber-200">
+                                      Follow-Up Q{tIdx + 1}: {turn.question}
+                                    </div>
+                                    <span className="text-[11px] font-mono text-slate-500 shrink-0">
+                                      {turn.createdAt}
+                                    </span>
+                                  </div>
+
+                                  {turn.result.success ? (
+                                    <div className="space-y-2">
+                                      <div>{renderSimpleMarkdown(turn.result.answerMarkdown)}</div>
+                                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-800/60">
+                                        <span>
+                                          {turn.result.modelUsed} &bull; {(turn.result.executionTimeMs / 1000).toFixed(2)}s
+                                          {turn.result.tokenTelemetry
+                                            ? ` • ${turn.result.tokenTelemetry.inputTokens.toLocaleString()} in / ${turn.result.tokenTelemetry.outputTokens.toLocaleString()} out`
+                                            : ''}
+                                        </span>
+                                        <button
+                                          onClick={() => handleCopyText(`fu-${turn.id}`, turn.result.answerMarkdown)}
+                                          className="text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                                        >
+                                          {copiedKey === `fu-${turn.id}` ? (
+                                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5" />
+                                          )}
+                                          <span>{copiedKey === `fu-${turn.id}` ? 'Copied' : 'Copy'}</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-2.5">
+                                      Follow-up failed: {turn.result.error}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {isFollowUpLoading && (
+                            <div className="flex items-center gap-2 text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+                              <Loader2 className={`w-4 h-4 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
+                              <span>Analyzing relative impact on {displayName} prediction...</span>
+                            </div>
+                          )}
+
+                          {/* Follow-Up Question Input */}
+                          <div className="flex flex-col lg:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={draftVal}
+                              onChange={(e) =>
+                                setFollowUpDrafts(prev => ({ ...prev, [draftKey]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !isFollowUpLoading && draftVal.trim()) {
+                                  handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey);
+                                }
+                              }}
+                              placeholder={`Ask ${displayName} a follow-up on this prediction to understand relative impact...`}
+                              className="flex-1 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                            />
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey)}
+                                disabled={isFollowUpLoading || !draftVal.trim()}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow ${
+                                  isGemini
+                                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                                    : 'bg-purple-500 hover:bg-purple-400 text-white'
+                                }`}
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>Ask {isGemini ? 'Gemini' : 'Fable'} Follow-Up</span>
+                              </button>
+
+                              {hasCompanionReport && (
+                                <button
+                                  onClick={() =>
+                                    handleAskFollowUp(
+                                      activeReportLevel,
+                                      ['gemini_pro', 'claude_fable'],
+                                      draftVal,
+                                      draftKey
+                                    )
+                                  }
+                                  disabled={isFollowUpLoading || isCompanionFollowUpLoading || !draftVal.trim()}
+                                  className="px-3.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>Ask Both</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Relative Impact Quick Prompts */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+                              Relative Impact Prompts:
+                            </span>
+                            {relativeImpactFollowUpQuestions.map((q, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => handleAskFollowUp(activeReportLevel, [providerId], q)}
+                                disabled={isFollowUpLoading}
+                                className="text-left px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-emerald-300 transition cursor-pointer disabled:opacity-50"
+                              >
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <div className="flex items-start gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">
+                      <div className="flex items-start gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3.5">
                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <div className="space-y-1">
                           <div className="font-bold">{displayName} Request Issue</div>
@@ -2042,130 +2188,15 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                       </div>
                     )
                   ) : (
-                    <div className="py-8 text-center space-y-2">
-                      <div className="text-xs text-slate-400">
-                        No {displayName} report generated yet for <strong className="text-slate-200">{activeLevelPrompt.scopeLabel}</strong>.
+                    <div className="py-12 text-center space-y-3">
+                      <div className="text-sm text-slate-300 font-semibold">
+                        No {displayName} report generated yet for <span className="text-amber-300">{activeLevelPrompt.scopeLabel}</span>.
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Click <strong className={isGemini ? 'text-amber-300' : 'text-purple-300'}>Generate</strong> above or click <strong className="text-slate-300">Ask {isGemini ? 'Gemini' : 'Fable'}</strong> on any MD, AD, or PD card.
-                      </div>
+                      <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                        Click <strong className={isGemini ? 'text-amber-300' : 'text-purple-300'}>Generate Prediction</strong> above or click <strong className="text-slate-200">Ask {isGemini ? 'Gemini' : 'Fable'}</strong> on any MD, AD, or PD card. Once delivered, the full-width report and follow-up Q&amp;A appear here.
+                      </p>
                     </div>
                   )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Shared Follow-Up Bar for Delivered Predictions (Understand Relative Impact Across Both) */}
-          {(() => {
-            const activeSlotKey = makeSlotKey(activeReportLevel);
-            const activeSlotReports = reportsBySlot[activeSlotKey] || {};
-            const hasGeminiReport = Boolean(activeSlotReports.gemini_pro?.success);
-            const hasFableReport = Boolean(activeSlotReports.claude_fable?.success);
-            if (!hasGeminiReport && !hasFableReport) return null;
-
-            const activeFollowUpLoading = followUpLoadingBySlot[activeSlotKey] || {};
-            const isAnyFollowUpLoading = Boolean(activeFollowUpLoading.gemini_pro || activeFollowUpLoading.claude_fable);
-            const sharedDraftKey = `${activeSlotKey}|shared`;
-            const sharedDraft = followUpDrafts[sharedDraftKey] || '';
-
-            return (
-              <div className="bg-slate-950/90 border border-emerald-500/35 rounded-xl p-4 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs sm:text-sm font-extrabold text-emerald-300 flex items-center gap-1.5">
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Follow-Up on Delivered Prediction(s) — Relative Impact &amp; Deep Dive</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Sends full natal charts + {activeLevelPrompt.scopeLabel} + the prediction(s) already delivered above so Gemini and/or Fable can weigh relative impact.
-                    </p>
-                  </div>
-
-                  {hasGeminiReport && hasFableReport && (
-                    <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1">
-                      <input
-                        type="checkbox"
-                        checked={compareWithCompanion}
-                        onChange={(e) => setCompareWithCompanion(e.target.checked)}
-                        className="accent-amber-500 cursor-pointer"
-                      />
-                      <span>Cross-reference companion model prediction</span>
-                    </label>
-                  )}
-                </div>
-
-                <div className="flex flex-col lg:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={sharedDraft}
-                    onChange={(e) => setFollowUpDrafts(prev => ({ ...prev, [sharedDraftKey]: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !isAnyFollowUpLoading && sharedDraft.trim()) {
-                        const targets: DualProviderId[] = [];
-                        if (hasGeminiReport) targets.push('gemini_pro');
-                        if (hasFableReport) targets.push('claude_fable');
-                        handleAskFollowUp(activeReportLevel, targets, sharedDraft, sharedDraftKey);
-                      }
-                    }}
-                    placeholder="Ask a follow-up relevant to the delivered prediction(s) (e.g., which aspect has the highest impact vs risk?)..."
-                    className="flex-1 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none"
-                  />
-
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    {hasGeminiReport && (
-                      <button
-                        onClick={() => handleAskFollowUp(activeReportLevel, ['gemini_pro'], sharedDraft, sharedDraftKey)}
-                        disabled={Boolean(activeFollowUpLoading.gemini_pro) || !sharedDraft.trim()}
-                        className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-amber-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Follow-Up &rarr; Gemini</span>
-                      </button>
-                    )}
-                    {hasFableReport && (
-                      <button
-                        onClick={() => handleAskFollowUp(activeReportLevel, ['claude_fable'], sharedDraft, sharedDraftKey)}
-                        disabled={Boolean(activeFollowUpLoading.claude_fable) || !sharedDraft.trim()}
-                        className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/45 text-purple-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Follow-Up &rarr; Fable</span>
-                      </button>
-                    )}
-                    {hasGeminiReport && hasFableReport && (
-                      <button
-                        onClick={() => handleAskFollowUp(activeReportLevel, ['gemini_pro', 'claude_fable'], sharedDraft, sharedDraftKey)}
-                        disabled={isAnyFollowUpLoading || !sharedDraft.trim()}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Ask Both</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quick Relative-Impact Chips */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">
-                    Relative Impact Quick Prompts:
-                  </span>
-                  {relativeImpactFollowUpQuestions.map((q, idx) => {
-                    const targets: DualProviderId[] = [];
-                    if (hasGeminiReport) targets.push('gemini_pro');
-                    if (hasFableReport) targets.push('claude_fable');
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleAskFollowUp(activeReportLevel, targets, q)}
-                        disabled={isAnyFollowUpLoading}
-                        className="text-left px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-emerald-300 transition cursor-pointer disabled:opacity-50"
-                      >
-                        {q}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             );

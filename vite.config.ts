@@ -1054,7 +1054,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
         req.on('end', async () => {
           res.setHeader('Content-Type', 'application/json');
           try {
-            const { prompt, systemInstruction, apiKey: bodyApiKey, model: requestedModel, isTestPing } = JSON.parse(body || '{}');
+            const { prompt, systemInstruction, apiKey: bodyApiKey, model: requestedModel, isTestPing, responseMimeType } = JSON.parse(body || '{}');
 
             // Header x-goog-api-key / x-api-key sent by client UI, JSON body, or server environment variables
             const customHeaderKey = (req.headers['x-goog-api-key'] || req.headers['x-api-key']) as string | undefined;
@@ -1174,7 +1174,7 @@ function geminiApiPlugin(env: Record<string, string>): Plugin {
                     config: {
                       ...(systemInstruction ? { systemInstruction } : {}),
                       temperature: 0.2,
-                      responseMimeType: 'application/json'
+                      responseMimeType: responseMimeType || 'application/json'
                     }
                   });
                   usedModel = candModel;

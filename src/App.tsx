@@ -173,6 +173,7 @@ export default function App() {
 
   // Active Native Profile (Directly loaded from authoritative store, no stale caching)
   const [activePersonId, setActivePersonId] = useState<string>('001ME');
+  const [monthlySubViewMode, setMonthlySubViewMode] = useState<'grid' | 'natal_dasha' | 'report'>('grid');
 
   const [availablePersonIds, setAvailablePersonIds] = useState<string[]>(() => {
     return Object.keys(storedPersonsData);
@@ -936,7 +937,9 @@ export default function App() {
           <MonthlyTransitView
             key={`${activePersonId}-grid`}
             personId={activePersonId}
-            initialViewMode="grid"
+            initialViewMode={monthlySubViewMode}
+            onViewModeChange={setMonthlySubViewMode}
+            onSelectPerson={handleSelectPerson}
             onNavigateToPredictionStudio={(ctx, prov) => {
               setIncomingPredictionContext(ctx);
               const targetProv = prov || ctx.preferredLlmProvider || 'gemini_pro';

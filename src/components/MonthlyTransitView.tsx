@@ -30,7 +30,8 @@ import {
   AlertCircle,
   Key,
   Cpu,
-  Activity
+  Activity,
+  BookOpen
 } from 'lucide-react';
 import { testGeminiConnection } from '../services/apiHealthService';
 import { getPreferredGeminiModel } from '../services/llm/geminiModels';
@@ -51,6 +52,7 @@ import { AudioVoiceInspector } from './AudioVoiceInspector';
 import { EventManufacturingEngine } from './EventManufacturingEngine';
 import { LocalBatchSchedulerModal } from './LocalBatchSchedulerModal';
 import { OriginalSourcePromptModal } from './OriginalSourcePromptModal';
+import { NatalDashaPromiseView } from './NatalDashaPromiseView';
 import { OriginalSourceDomain, LLMProviderId, LLM_PROVIDERS, VedicHouseContext, EventManufacturingSupersetPayload } from '../services/llm/types';
 import { apply001MEEnrichments } from '../data/vargaAndStrengthData';
 import { toCleanEnglishSign, toCleanEnglishPlanet } from '../services/llm/adapters';
@@ -195,24 +197,33 @@ export function calculateGrahaDrishti(
 
 export interface MonthlyTransitViewProps {
   personId?: string;
-  initialViewMode?: 'grid' | 'report';
+  initialViewMode?: 'grid' | 'natal_dasha' | 'report';
+  onViewModeChange?: (mode: 'grid' | 'natal_dasha' | 'report') => void;
+  onSelectPerson?: (newPersonId: string) => void;
   onNavigateToPredictionStudio?: (context: VedicHouseContext, provider?: LLMProviderId) => void;
 }
 
 export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
   personId = '001ME',
   initialViewMode = 'grid',
+  onViewModeChange,
+  onSelectPerson,
   onNavigateToPredictionStudio
 }) => {
   // Current real-world date reference
   const realNow = useMemo(() => new Date(), []);
 
-  // View Mode: 'grid' (4x4 matrix) or 'report' (dedicated fitting in-app report)
-  const [viewMode, setViewMode] = useState<'grid' | 'report'>(initialViewMode);
+  // View Mode: 'grid' (4x4 matrix), 'natal_dasha' (Natal Promise + Dasha-Bhukti), or 'report' (dedicated fitting in-app report)
+  const [viewMode, setViewModeState] = useState<'grid' | 'natal_dasha' | 'report'>(initialViewMode);
+
+  const setViewMode = (nextMode: 'grid' | 'natal_dasha' | 'report') => {
+    setViewModeState(nextMode);
+    if (onViewModeChange) onViewModeChange(nextMode);
+  };
 
   useEffect(() => {
     if (initialViewMode) {
-      setViewMode(initialViewMode);
+      setViewModeState(initialViewMode);
     }
   }, [initialViewMode]);
 
@@ -1334,6 +1345,18 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
               <span>4x4 Grid</span>
             </button>
             <button
+              onClick={() => setViewMode('natal_dasha')}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'natal_dasha'
+                  ? 'bg-amber-500 text-slate-950 shadow font-extrabold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Natal Dasha–Bhukti Promise Studio (All 6 Aspects, Zero Transits)"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Natal Dasha Promise</span>
+            </button>
+            <button
               onClick={() => handleOpenMonthlyReport()}
               className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 viewMode === 'report'
@@ -1354,6 +1377,7 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
       {/* ========================================================================= */}
       {/* SECTION 1: TIMELINE CONTROLLER & BI-DIRECTIONAL DATE SCRUBBER */}
       {/* ========================================================================= */}
+      {viewMode !== 'natal_dasha' && (
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all">
         <div
           onClick={() => setExpandTimelineControls(!expandTimelineControls)}
@@ -1924,9 +1948,16 @@ export const MonthlyTransitView: React.FC<MonthlyTransitViewProps> = ({
           </div>
         )}
       </div>
+      )}
 
-      {/* DEDICATED INLINE REPORT VIEW VS 4x4 MATRIX GRID */}
-      {viewMode === 'report' ? (
+      {/* DEDICATED NATAL DASHA PROMISE STUDIO VS INLINE REPORT VIEW VS 4x4 MATRIX GRID */}
+      {viewMode === 'natal_dasha' ? (
+        <NatalDashaPromiseView
+          personId={personId}
+          onSelectPerson={onSelectPerson}
+          defaultProvider={selectedLlmProvider}
+        />
+      ) : viewMode === 'report' ? (
         <div className="space-y-4 animate-fadeIn">
           {/* In-App Fitting Header Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">

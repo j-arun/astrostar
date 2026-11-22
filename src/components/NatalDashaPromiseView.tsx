@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Play,
   Scale,
+  Send,
   ShieldAlert,
   Sparkles,
   Square,
@@ -47,6 +48,7 @@ import {
   NatalDashaAiSynthesisResult,
   NatalDashaLevelScope,
   NatalDashaPromptResult,
+  buildNatalDashaFollowUpPrompt,
   buildNatalDashaMasterPrompt,
   runNatalDashaAISynthesis
 } from '../services/natalDashaPromptBuilder';
@@ -54,6 +56,13 @@ import {
 type ReportLevelKey = 'md' | 'ad' | `pd-${number}`;
 type DualProviderId = 'gemini_pro' | 'claude_fable';
 type DualViewFilter = 'both' | 'scores_only' | 'reports_only';
+
+interface FollowUpTurn {
+  id: string;
+  question: string;
+  result: NatalDashaAiSynthesisResult;
+  createdAt: string;
+}
 
 export interface NatalDashaPromiseViewProps {
   personId: string;
@@ -250,6 +259,14 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
   const [loadingBySlot, setLoadingBySlot] = useState<
     Record<string, Partial<Record<DualProviderId, boolean>>>
   >({});
+  const [followUpsBySlot, setFollowUpsBySlot] = useState<
+    Record<string, Partial<Record<DualProviderId, FollowUpTurn[]>>>
+  >({});
+  const [followUpLoadingBySlot, setFollowUpLoadingBySlot] = useState<
+    Record<string, Partial<Record<DualProviderId, boolean>>>
+  >({});
+  const [followUpDrafts, setFollowUpDrafts] = useState<Record<string, string>>({});
+  const [compareWithCompanion, setCompareWithCompanion] = useState<boolean>(true);
   const [extraProviderResult, setExtraProviderResult] = useState<NatalDashaAiSynthesisResult | null>(null);
   const [extraProvider, setExtraProvider] = useState<LLMProviderId>(() => {
     try {
@@ -466,6 +483,22 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
     `Which health vulnerabilities or recovery markers appear here?`
   ];
 
+  const relativeImpactFollowUpQuestions = [
+    'Rank all 6 life aspects (Career, Finance, Love, Family, Health, Litigations) by relative impact magnitude in your prediction.',
+    'Compare the net upside vs downside friction in your prediction — which force dominates and by what margin?',
+    'Which specific D1, D9, or Divisional Varga placement is driving the strongest relative impact here?',
+    'How does the impact of this window compare relative to adjacent Dasha sub-periods?'
+  ];
+
+  const resolveScopeParams = (levelKey: ReportLevelKey): { scope: NatalDashaLevelScope; pdIndex?: number } => {
+    if (levelKey === 'md') return { scope: 'md' };
+    if (levelKey === 'ad') return { scope: 'ad' };
+    if (levelKey.startsWith('pd-')) {
+      return { scope: 'pd', pdIndex: Number(levelKey.slice(3)) || 1 };
+    }
+    return { scope: 'ad' };
+  };
+
   const scrollToDeliveredReports = () => {
     if (viewDisplayMode === 'scores_only') {
       setViewDisplayMode('both');
@@ -532,6 +565,121 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
         }));
       })
     );
+  };
+
+  const buildFollowUpPromptForProvider = (
+    levelKey: ReportLevelKey,
+    providerId: DualProviderId,
+    questionText: string
+  ): NatalDashaPromptResult | null => {
+    const slotKey = makeSlotKey(levelKey);
+    const slotReports = reportsBySlot[slotKey] || {};
+    const targetReport = slotReports[providerId];
+    if (!targetReport?.success) return null;
+
+    const otherProvider: DualProviderId = providerId === 'gemini_pro' ? 'claude_fable' : 'gemini_pro';
+    const otherReport = slotReports[otherProvider];
+    const priorFollowUps = (followUpsBySlot[slotKey]?.[providerId] || [])
+      .filter(t => t.result.success)
+      .map(t => ({ question: t.question, answerMarkdown: t.result.answerMarkdown }));
+
+    const { scope, pdIndex } = resolveScopeParams(levelKey);
+
+    return buildNatalDashaFollowUpPrompt({
+      evaluation,
+      rawPlacements: rawPlacementsResolved,
+      followUpQuestion: questionText,
+      aspectFilter,
+      scope,
+      pdIndex,
+      followUpContext: {
+        targetProviderLabel: providerId === 'gemini_pro' ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)',
+        priorPredictionMarkdown: targetReport.answerMarkdown,
+        alternatePrediction:
+          compareWithCompanion && otherReport?.success
+            ? {
+                providerLabel: otherProvider === 'gemini_pro' ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)',
+                markdown: otherReport.answerMarkdown
+              }
+            : undefined,
+        priorFollowUps
+      }
+    });
+  };
+
+  const handleAskFollowUp = async (
+    levelKey: ReportLevelKey,
+    providers: DualProviderId[],
+    questionText: string,
+    draftKeyToClear?: string
+  ) => {
+    const cleanQ = questionText.trim();
+    if (!cleanQ) return;
+
+    const slotKey = makeSlotKey(levelKey);
+    const eligibleProviders = providers.filter(p => Boolean(reportsBySlot[slotKey]?.[p]?.success));
+    if (eligibleProviders.length === 0) return;
+
+    if (draftKeyToClear) {
+      setFollowUpDrafts(prev => ({ ...prev, [draftKeyToClear]: '' }));
+    }
+
+    setFollowUpLoadingBySlot(prev => ({
+      ...prev,
+      [slotKey]: {
+        ...(prev[slotKey] || {}),
+        ...Object.fromEntries(eligibleProviders.map(p => [p, true]))
+      }
+    }));
+
+    await Promise.all(
+      eligibleProviders.map(async providerId => {
+        const followUpPrompt = buildFollowUpPromptForProvider(levelKey, providerId, cleanQ);
+        if (!followUpPrompt) {
+          setFollowUpLoadingBySlot(prev => ({
+            ...prev,
+            [slotKey]: { ...(prev[slotKey] || {}), [providerId]: false }
+          }));
+          return;
+        }
+
+        const res = await runNatalDashaAISynthesis({
+          providerId,
+          prompt: followUpPrompt.prompt,
+          systemInstruction: followUpPrompt.systemInstruction
+        });
+
+        const turn: FollowUpTurn = {
+          id: `${Date.now()}-${providerId}-${Math.random().toString(36).slice(2, 6)}`,
+          question: cleanQ,
+          result: res,
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setFollowUpsBySlot(prev => ({
+          ...prev,
+          [slotKey]: {
+            ...(prev[slotKey] || {}),
+            [providerId]: [...(prev[slotKey]?.[providerId] || []), turn]
+          }
+        }));
+        setFollowUpLoadingBySlot(prev => ({
+          ...prev,
+          [slotKey]: { ...(prev[slotKey] || {}), [providerId]: false }
+        }));
+      })
+    );
+  };
+
+  const handleInspectFollowUpPrompt = (
+    levelKey: ReportLevelKey,
+    providerId: DualProviderId,
+    questionText: string
+  ) => {
+    const q = questionText.trim() || relativeImpactFollowUpQuestions[0];
+    const promptResult = buildFollowUpPromptForProvider(levelKey, providerId, q);
+    if (!promptResult) return;
+    setInspectedPrompt({ levelKey, promptResult });
   };
 
   const handleRunAllLevelsBatch = async () => {
@@ -621,7 +769,9 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
 
     let count = 0;
     for (const lvl of levels) {
-      const slot = reportsBySlot[makeSlotKey(lvl.key)];
+      const slotKey = makeSlotKey(lvl.key);
+      const slot = reportsBySlot[slotKey];
+      const followUps = followUpsBySlot[slotKey];
       if (!slot) continue;
       if (slot.gemini_pro?.success || slot.claude_fable?.success) {
         blocks.push(`---\n## ${lvl.title}\n`);
@@ -629,10 +779,20 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
       if (slot.gemini_pro?.success) {
         count++;
         blocks.push(`### Google Gemini Pro (${slot.gemini_pro.modelUsed})\n\n${slot.gemini_pro.answerMarkdown}\n`);
+        for (const t of followUps?.gemini_pro || []) {
+          if (t.result.success) {
+            blocks.push(`#### Follow-Up Question (Gemini): ${t.question}\n\n${t.result.answerMarkdown}\n`);
+          }
+        }
       }
       if (slot.claude_fable?.success) {
         count++;
         blocks.push(`### Claude Fable 5.1 (${slot.claude_fable.modelUsed})\n\n${slot.claude_fable.answerMarkdown}\n`);
+        for (const t of followUps?.claude_fable || []) {
+          if (t.result.success) {
+            blocks.push(`#### Follow-Up Question (Fable): ${t.question}\n\n${t.result.answerMarkdown}\n`);
+          }
+        }
       }
     }
 
@@ -1747,7 +1907,7 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                     </div>
                   ) : report ? (
                     report.success ? (
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {isPromptShown && (
                           <pre className="max-h-56 overflow-auto p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 whitespace-pre-wrap">
                             {`${report.systemInstruction}\n\n${report.promptSent}`}
@@ -1756,6 +1916,121 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                         <div className="max-h-[680px] overflow-y-auto pr-1">
                           {renderSimpleMarkdown(report.answerMarkdown)}
                         </div>
+
+                        {/* Per-Prediction Follow-Up Conversation Thread & Input */}
+                        {(() => {
+                          const followUpTurns = followUpsBySlot[slotKey]?.[providerId] || [];
+                          const isFollowUpLoading = Boolean(followUpLoadingBySlot[slotKey]?.[providerId]);
+                          const draftKey = `${slotKey}|${providerId}`;
+                          const draftVal = followUpDrafts[draftKey] || '';
+
+                          return (
+                            <div className="border-t border-slate-800 pt-3 space-y-2.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                  <MessageSquare className={`w-3.5 h-3.5 ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
+                                  <span>
+                                    Follow-Up on This {isGemini ? 'Gemini' : 'Fable'} Prediction
+                                    {followUpTurns.length > 0 ? ` (${followUpTurns.length})` : ''}
+                                  </span>
+                                </span>
+                                <button
+                                  onClick={() => handleInspectFollowUpPrompt(activeReportLevel, providerId, draftVal)}
+                                  className="text-[10px] font-semibold text-slate-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+                                  title="Inspect prompt sent with prior prediction for follow-up"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Follow-Up Prompt</span>
+                                </button>
+                              </div>
+
+                              {followUpTurns.length > 0 && (
+                                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                                  {followUpTurns.map((turn, tIdx) => (
+                                    <div
+                                      key={turn.id}
+                                      className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2"
+                                    >
+                                      <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-1.5">
+                                        <div className="text-xs font-bold text-amber-200">
+                                          Q{tIdx + 1}: {turn.question}
+                                        </div>
+                                        <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                                          {turn.createdAt}
+                                        </span>
+                                      </div>
+
+                                      {turn.result.success ? (
+                                        <div className="space-y-1.5">
+                                          <div>{renderSimpleMarkdown(turn.result.answerMarkdown)}</div>
+                                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-800/60">
+                                            <span>
+                                              {turn.result.modelUsed} &bull; {(turn.result.executionTimeMs / 1000).toFixed(2)}s
+                                              {turn.result.tokenTelemetry
+                                                ? ` • ${turn.result.tokenTelemetry.inputTokens.toLocaleString()} in / ${turn.result.tokenTelemetry.outputTokens.toLocaleString()} out`
+                                                : ''}
+                                            </span>
+                                            <button
+                                              onClick={() => handleCopyText(`fu-${turn.id}`, turn.result.answerMarkdown)}
+                                              className="text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                                            >
+                                              {copiedKey === `fu-${turn.id}` ? (
+                                                <Check className="w-3 h-3 text-emerald-400" />
+                                              ) : (
+                                                <Copy className="w-3 h-3" />
+                                              )}
+                                              <span>{copiedKey === `fu-${turn.id}` ? 'Copied' : 'Copy'}</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-2">
+                                          Follow-up failed: {turn.result.error}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {isFollowUpLoading && (
+                                <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/70 border border-slate-800 rounded-lg px-3 py-2">
+                                  <Loader2 className={`w-3.5 h-3.5 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
+                                  <span>Analyzing relative impact on {isGemini ? 'Gemini' : 'Fable'} prediction...</span>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={draftVal}
+                                  onChange={(e) =>
+                                    setFollowUpDrafts(prev => ({ ...prev, [draftKey]: e.target.value }))
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !isFollowUpLoading && draftVal.trim()) {
+                                      handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey);
+                                    }
+                                  }}
+                                  placeholder={`Ask ${isGemini ? 'Gemini' : 'Fable'} a follow-up on this prediction (e.g., relative impact)...`}
+                                  className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                                />
+                                <button
+                                  onClick={() => handleAskFollowUp(activeReportLevel, [providerId], draftVal, draftKey)}
+                                  disabled={isFollowUpLoading || !draftVal.trim()}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 ${
+                                    isGemini
+                                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300'
+                                      : 'bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300'
+                                  }`}
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>Ask</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="flex items-start gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">
@@ -1780,6 +2055,121 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
               );
             })}
           </div>
+
+          {/* Shared Follow-Up Bar for Delivered Predictions (Understand Relative Impact Across Both) */}
+          {(() => {
+            const activeSlotKey = makeSlotKey(activeReportLevel);
+            const activeSlotReports = reportsBySlot[activeSlotKey] || {};
+            const hasGeminiReport = Boolean(activeSlotReports.gemini_pro?.success);
+            const hasFableReport = Boolean(activeSlotReports.claude_fable?.success);
+            if (!hasGeminiReport && !hasFableReport) return null;
+
+            const activeFollowUpLoading = followUpLoadingBySlot[activeSlotKey] || {};
+            const isAnyFollowUpLoading = Boolean(activeFollowUpLoading.gemini_pro || activeFollowUpLoading.claude_fable);
+            const sharedDraftKey = `${activeSlotKey}|shared`;
+            const sharedDraft = followUpDrafts[sharedDraftKey] || '';
+
+            return (
+              <div className="bg-slate-950/90 border border-emerald-500/35 rounded-xl p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs sm:text-sm font-extrabold text-emerald-300 flex items-center gap-1.5">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Follow-Up on Delivered Prediction(s) — Relative Impact &amp; Deep Dive</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Sends full natal charts + {activeLevelPrompt.scopeLabel} + the prediction(s) already delivered above so Gemini and/or Fable can weigh relative impact.
+                    </p>
+                  </div>
+
+                  {hasGeminiReport && hasFableReport && (
+                    <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer select-none bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1">
+                      <input
+                        type="checkbox"
+                        checked={compareWithCompanion}
+                        onChange={(e) => setCompareWithCompanion(e.target.checked)}
+                        className="accent-amber-500 cursor-pointer"
+                      />
+                      <span>Cross-reference companion model prediction</span>
+                    </label>
+                  )}
+                </div>
+
+                <div className="flex flex-col lg:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={sharedDraft}
+                    onChange={(e) => setFollowUpDrafts(prev => ({ ...prev, [sharedDraftKey]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isAnyFollowUpLoading && sharedDraft.trim()) {
+                        const targets: DualProviderId[] = [];
+                        if (hasGeminiReport) targets.push('gemini_pro');
+                        if (hasFableReport) targets.push('claude_fable');
+                        handleAskFollowUp(activeReportLevel, targets, sharedDraft, sharedDraftKey);
+                      }
+                    }}
+                    placeholder="Ask a follow-up relevant to the delivered prediction(s) (e.g., which aspect has the highest impact vs risk?)..."
+                    className="flex-1 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {hasGeminiReport && (
+                      <button
+                        onClick={() => handleAskFollowUp(activeReportLevel, ['gemini_pro'], sharedDraft, sharedDraftKey)}
+                        disabled={Boolean(activeFollowUpLoading.gemini_pro) || !sharedDraft.trim()}
+                        className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-amber-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Follow-Up &rarr; Gemini</span>
+                      </button>
+                    )}
+                    {hasFableReport && (
+                      <button
+                        onClick={() => handleAskFollowUp(activeReportLevel, ['claude_fable'], sharedDraft, sharedDraftKey)}
+                        disabled={Boolean(activeFollowUpLoading.claude_fable) || !sharedDraft.trim()}
+                        className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/45 text-purple-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Follow-Up &rarr; Fable</span>
+                      </button>
+                    )}
+                    {hasGeminiReport && hasFableReport && (
+                      <button
+                        onClick={() => handleAskFollowUp(activeReportLevel, ['gemini_pro', 'claude_fable'], sharedDraft, sharedDraftKey)}
+                        disabled={isAnyFollowUpLoading || !sharedDraft.trim()}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Ask Both</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Relative-Impact Chips */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+                    Relative Impact Quick Prompts:
+                  </span>
+                  {relativeImpactFollowUpQuestions.map((q, idx) => {
+                    const targets: DualProviderId[] = [];
+                    if (hasGeminiReport) targets.push('gemini_pro');
+                    if (hasFableReport) targets.push('claude_fable');
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleAskFollowUp(activeReportLevel, targets, q)}
+                        disabled={isAnyFollowUpLoading}
+                        className="text-left px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-emerald-300 transition cursor-pointer disabled:opacity-50"
+                      >
+                        {q}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Optional Other Model Bar (Sonnet / Haiku / Local Ollama Qwen) */}
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 space-y-2.5">

@@ -404,7 +404,7 @@ export function buildNatalDashaMasterPrompt(params: {
     ].join('\n');
   }
 
-  const sections: Array<{ tag: string; label: string; body: string }> = [
+  const baseSections: Array<{ tag: string; label: string; body: string }> = [
     { tag: '[RULES]', label: 'Natal + Dasha-Bhukti Reasoning Rules (Zero Transits)', body: rulesText },
     { tag: '[CONVENTIONS]', label: 'House & Calibration Conventions', body: conventionsText },
     { tag: '[PERSON]', label: 'Native Identity & Birth Balance', body: personBlock },
@@ -421,7 +421,11 @@ export function buildNatalDashaMasterPrompt(params: {
     { tag: '[JAIMINI]', label: 'Jaimini 7-Karaka, Karakamsa & Arudhas', body: jaiminiLine },
     { tag: '[KARAKAS]', label: '6-Aspect House, Varga & Karaka Routing', body: karakaLine },
     { tag: '[VARGAS D2..D60]', label: `All Divisional Charts (${vargaBlocks.length} Charts)`, body: vargaBlocks.join('\n') },
-    { tag: '[DASHA BHUKTI NATAL PROMISE]', label: scopeLabel, body: dashaBlock },
+    { tag: '[DASHA BHUKTI NATAL PROMISE]', label: scopeLabel, body: dashaBlock }
+  ];
+
+  const sections: Array<{ tag: string; label: string; body: string }> = [
+    ...baseSections,
     { tag: '[OUTPUT STRUCTURE]', label: 'Required Output Structure', body: outputStructure },
     { tag: '[FOCUS QUESTION]', label: 'User Dasha Question', body: effectiveQuestion }
   ];
@@ -444,6 +448,123 @@ export function buildNatalDashaMasterPrompt(params: {
     charCount: prompt.length,
     approxTokens: Math.round(prompt.length / 4),
     zeroTransitsVerified: !prompt.includes('[LUNAR]') && !prompt.includes('[TRIGGER WINDOWS]') && !prompt.includes('GOCHARA')
+  };
+}
+
+export interface NatalDashaFollowUpContext {
+  targetProviderLabel: string;
+  priorPredictionMarkdown: string;
+  alternatePrediction?: {
+    providerLabel: string;
+    markdown: string;
+  };
+  priorFollowUps?: Array<{
+    question: string;
+    answerMarkdown: string;
+  }>;
+}
+
+export function buildNatalDashaFollowUpPrompt(params: {
+  evaluation: NatalDashaPromiseEvaluation;
+  rawPlacements: NatalPlacementRow[];
+  followUpQuestion: string;
+  aspectFilter?: NatalAspectId | 'all';
+  scope?: NatalDashaLevelScope;
+  pdIndex?: number;
+  followUpContext: NatalDashaFollowUpContext;
+}): NatalDashaPromptResult {
+  const {
+    evaluation,
+    rawPlacements,
+    followUpQuestion,
+    aspectFilter = 'all',
+    scope = 'ad',
+    pdIndex,
+    followUpContext
+  } = params;
+
+  const baseResult = buildNatalDashaMasterPrompt({
+    evaluation,
+    rawPlacements,
+    focusQuestion: followUpQuestion,
+    aspectFilter,
+    scope,
+    pdIndex
+  });
+
+  // Preserve all natal + dasha sections up to [DASHA BHUKTI NATAL PROMISE], replacing [OUTPUT STRUCTURE] & [FOCUS QUESTION]
+  const outputMarker = '\n\n[OUTPUT STRUCTURE]\n';
+  const markerIdx = baseResult.prompt.indexOf(outputMarker);
+  const coreNatalAndDashaPrompt = markerIdx >= 0 ? baseResult.prompt.slice(0, markerIdx) : baseResult.prompt;
+
+  const extraBlocks: Array<{ tag: string; label: string; body: string }> = [
+    {
+      tag: `[PRIOR DELIVERED PREDICTION — ${followUpContext.targetProviderLabel.toUpperCase()}]`,
+      label: `Prior ${followUpContext.targetProviderLabel} Prediction`,
+      body: followUpContext.priorPredictionMarkdown.trim()
+    }
+  ];
+
+  if (followUpContext.alternatePrediction?.markdown?.trim()) {
+    extraBlocks.push({
+      tag: `[COMPANION PREDICTION — ${followUpContext.alternatePrediction.providerLabel.toUpperCase()}]`,
+      label: `Companion ${followUpContext.alternatePrediction.providerLabel} Prediction`,
+      body: followUpContext.alternatePrediction.markdown.trim()
+    });
+  }
+
+  if (followUpContext.priorFollowUps && followUpContext.priorFollowUps.length > 0) {
+    const historyBody = followUpContext.priorFollowUps
+      .map((turn, idx) => `Follow-Up #${idx + 1} Q: ${turn.question}\nFollow-Up #${idx + 1} A:\n${turn.answerMarkdown.trim()}`)
+      .join('\n\n---\n\n');
+    extraBlocks.push({
+      tag: '[PRIOR FOLLOW-UP CONVERSATION]',
+      label: `Prior Follow-Up Turns (${followUpContext.priorFollowUps.length})`,
+      body: historyBody
+    });
+  }
+
+  const followUpOutputStructure = [
+    'Respond in clean, well-structured Markdown prose & comparison tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
+    '### 1. Direct Answer & Relative Impact Verdict',
+    'Directly answer the follow-up question in the context of the Prior Delivered Prediction above. Explicitly quantify or rank relative impact (e.g., High / Moderate / Minor / Negligible, and Net Gain vs Friction %) across the relevant aspects or placements.',
+    '### 2. Why the Chart Weights This Way (Natal & Dasha Evidence)',
+    'Trace exact D1 (L#/M#), D9 (H#), Shadbala/SAV, Yoga/Dosha, and Divisional Varga (D2..D30) drivers explaining why one factor outweighs another in this period.',
+    '### 3. Practical Relative Comparison & Takeaways',
+    'Summarize what matters most vs least during this Dasha window (and note briefly that Gochara transits govern final external trigger timing).'
+  ].join('\n');
+
+  extraBlocks.push(
+    { tag: '[OUTPUT STRUCTURE]', label: 'Follow-Up Impact Structure', body: followUpOutputStructure },
+    { tag: '[FOLLOW-UP QUESTION]', label: 'User Follow-Up Question', body: followUpQuestion.trim() }
+  );
+
+  const fullPrompt = [
+    coreNatalAndDashaPrompt,
+    ...extraBlocks.map(b => `${b.tag}\n${b.body}`)
+  ].join('\n\n');
+
+  const baseCoreSummary = baseResult.sectionSummary.filter(
+    s => s.tag !== '[OUTPUT STRUCTURE]' && s.tag !== '[FOCUS QUESTION]'
+  );
+
+  const sectionSummary = [
+    ...baseCoreSummary,
+    ...extraBlocks.map(b => ({
+      tag: b.tag,
+      label: b.label,
+      lines: b.body.split('\n').length
+    }))
+  ];
+
+  return {
+    ...baseResult,
+    prompt: fullPrompt,
+    sectionSummary,
+    charCount: fullPrompt.length,
+    approxTokens: Math.round(fullPrompt.length / 4),
+    zeroTransitsVerified:
+      !fullPrompt.includes('[LUNAR]') && !fullPrompt.includes('[TRIGGER WINDOWS]') && !fullPrompt.includes('GOCHARA')
   };
 }
 

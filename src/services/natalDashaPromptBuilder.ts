@@ -26,9 +26,14 @@ import {
   cleanNatalSignName
 } from './natalDashaPromiseEngine';
 
+export type NatalDashaLevelScope = 'md' | 'ad' | 'pd' | 'all_levels';
+
 export interface NatalDashaPromptResult {
   prompt: string;
   systemInstruction: string;
+  scope: NatalDashaLevelScope;
+  scopeLabel: string;
+  pdIndex?: number;
   sectionSummary: Array<{ tag: string; label: string; lines: number }>;
   charCount: number;
   approxTokens: number;
@@ -41,6 +46,8 @@ export interface NatalDashaAiSynthesisResult {
   providerUsed: LLMProviderId;
   modelUsed: string;
   executionTimeMs: number;
+  promptSent: string;
+  systemInstruction: string;
   tokenTelemetry?: {
     inputTokens: number;
     outputTokens: number;
@@ -65,21 +72,55 @@ export function buildNatalDashaMasterPrompt(params: {
   rawPlacements: NatalPlacementRow[];
   focusQuestion?: string;
   aspectFilter?: NatalAspectId | 'all';
+  scope?: NatalDashaLevelScope;
+  pdIndex?: number;
 }): NatalDashaPromptResult {
-  const { evaluation, rawPlacements, focusQuestion, aspectFilter = 'all' } = params;
+  const {
+    evaluation,
+    rawPlacements,
+    focusQuestion,
+    aspectFilter = 'all',
+    scope = 'all_levels',
+    pdIndex
+  } = params;
+
+  const focusedPd =
+    scope === 'pd'
+      ? evaluation.pdWalkthrough.find(item => item.pdOption.index === (pdIndex ?? 1)) || evaluation.pdWalkthrough[0]
+      : undefined;
+
+  const mdLord = evaluation.selectedMd.cleanMdLord;
+  const adLord = evaluation.selectedAd.cleanAdLord;
+  const pdLord = focusedPd?.pdSummary.planet || '';
+
+  const scopeLabel =
+    scope === 'md'
+      ? `${mdLord} Mahadasha (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate})`
+      : scope === 'ad'
+      ? `${mdLord} MD > ${adLord} Antardasha (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate})`
+      : scope === 'pd' && focusedPd
+      ? `PD #${focusedPd.pdOption.index}: ${pdLord} inside ${mdLord}–${adLord} (${focusedPd.pdOption.startDate} to ${focusedPd.pdOption.endDate})`
+      : `${mdLord} MD > ${adLord} AD + All 9 PDs`;
+
   const cleanQuestion = (focusQuestion || '').replace(/[\r\n]+/g, ' ').trim();
   const effectiveQuestion = cleanQuestion
     ? cleanQuestion
+    : scope === 'md'
+    ? `Write a complete Mahadasha Natal Promise Report for ${mdLord} Mahadasha (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate}) across Career, Finance, Love, Family, Health, and Litigations, plus how its Antardasha sub-cycles unfold (purely natal, zero transits).`
+    : scope === 'ad'
+    ? `Write a complete Antardasha Natal Promise Report for ${mdLord} MD > ${adLord} AD (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate}) across Career, Finance, Love, Family, Health, and Litigations, summarizing the arc across its 9 Pratyantardashas (purely natal, zero transits).`
+    : scope === 'pd' && focusedPd
+    ? `Write a focused Pratyantardasha Natal Promise Report for PD #${focusedPd.pdOption.index} (${pdLord}, ${focusedPd.pdOption.startDate} to ${focusedPd.pdOption.endDate}, ${focusedPd.pdOption.totalDays} days) operating inside ${mdLord} MD > ${adLord} AD across Career, Finance, Love, Family, Health, and Litigations (purely natal, zero transits).`
     : aspectFilter === 'all'
-    ? `Give a complete Natal + Dasha-Bhukti promise reading for ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD and all 9 Pratyantardashas across Career, Finance, Love, Family, Health, and Litigations (purely natal, zero transits).`
-    : `Evaluate ${NATAL_ASPECT_SPECS[aspectFilter].label} across ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD and walk sequentially through all 9 Pratyantardashas using natal charts & Dasha-Bhukti only.`;
+    ? `Give a complete Natal + Dasha-Bhukti promise reading for ${mdLord} MD > ${adLord} AD and all 9 Pratyantardashas across Career, Finance, Love, Family, Health, and Litigations (purely natal, zero transits).`
+    : `Evaluate ${NATAL_ASPECT_SPECS[aspectFilter].label} across ${mdLord} MD > ${adLord} AD and walk sequentially through all 9 Pratyantardashas using natal charts & Dasha-Bhukti only.`;
 
   const lagnaIdx = evaluation.lagnaIdx;
   const moonIdx = evaluation.moonIdx;
   const is001 = evaluation.personId === '001ME' || isChartSignature001ME(lagnaIdx, moonIdx, rawPlacements);
 
   const systemInstruction =
-    'You are a Classical Parashara & Jaimini Vedic Astrologer. Evaluate ONLY the natal chart promise (D1, D9, Divisional Vargas D2..D30/D60, SAV/BAV, Shadbala, Yogas/Doshas, Jaimini) and the selected Mahadasha, Antardasha, and all 9 Pratyantardashas. Do NOT invent or assume Gochara transits—state clearly that external delivery timing/intensity depends on planetary transits elsewhere.';
+    'You are a Classical Parashara & Jaimini Vedic Astrologer. Evaluate ONLY the natal chart promise (D1, D9, Divisional Vargas D2..D30/D60, SAV/BAV, Shadbala, Yogas/Doshas, Jaimini) and the selected Mahadasha, Antardasha, and Pratyantardashas. Do NOT invent or assume Gochara transits—state clearly that external delivery timing/intensity depends on planetary transits elsewhere.';
 
   // 1. [RULES] (Transit-Free Natal Dasha Promise Laws)
   const rulesText = [
@@ -87,7 +128,7 @@ export function buildNatalDashaMasterPrompt(params: {
     'R1:HOUSE_NOTATION: D1 uses L#(house from D1 Lagna) and M#(house from Natal Moon) together; H# is strictly for D9 Navamsa and Divisional Charts (D2..D30).',
     'R2:DASHA_DELIVERY_CHAIN: Mahadasha (MD) sets macro karma & primary agenda; Antardasha (AD) channels MD through MD-AD Sambandha (1/5/9 harmony, 4/7/10 Kendra drive, 3/11 Upachaya, 6/8 Shadashtaka testing, 2/12 Dwirdwadasha cost) and dispositor/aspect ties; each of the 9 Pratyantardashas (PD) fires sequentially along that MD-AD corridor.',
     'R3:ASPECT_ROUTING: Route each of the 6 life aspects through both D1 Bhava/Karaka and confirming Vargas — Career(L10/L6/L11 + D10), Finance(L2/L11/L5/L9/L4 + D2/D11/D4), Love/Marriage(L7/L5/L11/L12 + D9/D7/D30), Family(L4/L2/L5/L9 + D4/D12/D7/D16), Health(L1/L6/L8/L12 + D6/D8/D27/D30), Litigations/Disputes(L6/L8/L12/L9/L7 + D6/D8/D30/D4).',
-    'R4:FOCUS_QUESTION_DIRECTNESS: When a specific Focus Question is asked (e.g. marriage timing, litigation risk, career change within the chosen MD/AD), answer Yes/Likely/Conditional/Unlikely directly up front with exact D1+D9+Varga proof and cite which specific PD windows carry peak promise.'
+    'R4:FOCUS_QUESTION_DIRECTNESS: When a specific Focus Question is asked (e.g. marriage timing, litigation risk, career change within the chosen MD/AD/PD), answer Yes/Likely/Conditional/Unlikely directly up front with exact D1+D9+Varga proof.'
   ].join('\n');
 
   // 2. [CONVENTIONS]
@@ -224,7 +265,7 @@ export function buildNatalDashaMasterPrompt(params: {
     vargaBlocks.push(`[VARGA ${vc.code} ${vc.name.toUpperCase()}]\nLagna: ${vc.lagnaSign} ${vc.lagnaDeg} | ${occupiedRows}`);
   }
 
-  // 14. [DASHA BHUKTI NATAL PROMISE] — ZERO TRANSITS
+  // 14. [DASHA BHUKTI NATAL PROMISE] — ZERO TRANSITS (Scoped by MD / AD / PD / All)
   const md = evaluation.mdSummary;
   const ad = evaluation.adSummary;
   const baselineLines = NATAL_ASPECT_ORDER.map(id => {
@@ -232,41 +273,136 @@ export function buildNatalDashaMasterPrompt(params: {
     return `- ${b.label}: ${b.score}% [${b.band}] — ${b.verdict} | ${b.focusHousesSummary}`;
   }).join('\n');
 
+  const mdAspectLines = NATAL_ASPECT_ORDER.map(id => {
+    const m = evaluation.mdAspects[id];
+    return `- ${m.label}: ${m.score}% (${m.tone}) — ${m.verdict} | ${m.rationale}`;
+  }).join('\n');
+
   const adAspectLines = NATAL_ASPECT_ORDER.map(id => {
     const a = evaluation.adAspects[id];
     return `- ${a.label}: ${a.score}% (${a.tone}) — ${a.verdict} | ${a.rationale}`;
   }).join('\n');
 
-  const pdWalkLines = evaluation.pdWalkthrough.map(item => {
-    const p = item.pdSummary;
-    const aspShort = NATAL_ASPECT_ORDER.map(id => `${NATAL_ASPECT_SPECS[id].shortLabel}:${item.aspectEvaluations[id].score}%`).join(' ');
-    const noteStr = item.pdOption.savedNote ? ` | RecordedNote:"${item.pdOption.savedNote}"` : '';
-    return `#${item.pdOption.index} ${item.pdOption.startDate}..${item.pdOption.endDate} (${item.pdOption.totalDays}d) PD:${p.planet} [L${p.hLagna}/M${p.hMoon}, ${p.dignity || 'Neutral'}, owns L${p.ownedHousesL.join('/L') || 'Node'}] | LinkAD:${item.linkToAd.patternLabel} | LinkMD:${item.linkToMd.patternLabel} | Vargas:${item.vargaHighlights.join(', ')} | Aspects:[${aspShort}]${noteStr}`;
-  }).join('\n');
+  const mdAdRoadmapLines = evaluation.selectedMd.antardashas
+    .map(
+      subAd =>
+        `#${subAd.index} ${mdLord}-${subAd.cleanAdLord} AD (${subAd.startDate}..${subAd.endDate}, ${subAd.totalDays}d)`
+    )
+    .join('\n');
 
-  const dashaBlock = [
-    `Selected MD: ${evaluation.selectedMd.cleanMdLord} (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate}) — Seat L${md.hLagna}/M${md.hMoon} ${md.signName}, Nat:${md.functionalNature}, Dignity:${md.dignity}${md.hasNeechaBhanga ? '+NB' : ''}, D9 H${md.d9House}, Owns L${md.ownedHousesL.join('/L') || 'Node'}`,
-    `Selected AD: ${evaluation.selectedAd.cleanAdLord} (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate}) — Seat L${ad.hLagna}/M${ad.hMoon} ${ad.signName}, Nat:${ad.functionalNature}, Dignity:${ad.dignity}${ad.hasNeechaBhanga ? '+NB' : ''}, D9 H${ad.d9House}, Owns L${ad.ownedHousesL.join('/L') || 'Node'}`,
-    `MD-AD Sambandha: ${evaluation.mdAdSambandha.summary}`,
-    `Natal Baseline (6 Aspects):\n${baselineLines}`,
-    `MD-AD Summary (6 Aspects):\n${adAspectLines}`,
-    `All 9 Sequential PDs inside ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD:\n${pdWalkLines}`
-  ].join('\n\n');
+  const pdWalkLines = evaluation.pdWalkthrough
+    .map(item => {
+      const p = item.pdSummary;
+      const aspShort = NATAL_ASPECT_ORDER.map(id => `${NATAL_ASPECT_SPECS[id].shortLabel}:${item.aspectEvaluations[id].score}%`).join(' ');
+      const noteStr = item.pdOption.savedNote ? ` | RecordedNote:"${item.pdOption.savedNote}"` : '';
+      return `#${item.pdOption.index} ${item.pdOption.startDate}..${item.pdOption.endDate} (${item.pdOption.totalDays}d) PD:${p.planet} [L${p.hLagna}/M${p.hMoon}, ${p.dignity || 'Neutral'}, owns L${p.ownedHousesL.join('/L') || 'Node'}] | LinkAD:${item.linkToAd.patternLabel} | LinkMD:${item.linkToMd.patternLabel} | Vargas:${item.vargaHighlights.join(', ')} | Aspects:[${aspShort}]${noteStr}`;
+    })
+    .join('\n');
 
-  // 15. [OUTPUT STRUCTURE] & [FOCUS QUESTION]
-  const outputStructure = [
-    'Respond in clean, well-structured Markdown prose & tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
-    '### 1. Direct Answer to Focus Question',
-    'Answer the user question directly first with explicit D1 (L#/M#), D9 (H#), relevant Divisional Varga (D2..D30), Yoga/Dosha, and MD/AD/PD proof (name exact PD date windows).',
-    '### 2. Natal Chart Baseline Promise (All 6 Aspects)',
-    'Summarize inherent natal promise for Career, Finance, Love, Family, Health, and Litigations.',
-    `### 3. ${evaluation.selectedMd.cleanMdLord} Mahadasha & ${evaluation.selectedAd.cleanAdLord} Antardasha Synthesis`,
-    'Explain MD agenda, MD-AD Sambandha, and deliver clear verdicts across all 6 aspects for this AD window.',
-    '### 4. Sequential Pratyantardasha (PD 1–9) Natal Walkthrough',
-    'Walk chronologically through ALL 9 PDs with exact date ranges, stating how each PD shifts Career, Finance, Love, Family, Health, and Litigations.',
-    '### 5. Transit (Gochara) Delivery Disclaimer',
-    'Close with a brief 2-line reminder that this reading reflects structural Natal + Dasha-Bhukti promise only, and exact external timing/amplitude is governed by Gochara transits.'
-  ].join('\n');
+  let dashaScopeHeader = '';
+  let dashaBlock = '';
+  let outputStructure = '';
+
+  if (scope === 'md') {
+    dashaScopeHeader = `SCOPE: MAHADASHA LEVEL ONLY — ${mdLord} Mahadasha (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate})`;
+    dashaBlock = [
+      dashaScopeHeader,
+      `Selected MD: ${mdLord} (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate}, ${evaluation.selectedMd.totalDays} days) — Seat L${md.hLagna}/M${md.hMoon} ${md.signName}, Nat:${md.functionalNature}, Dignity:${md.dignity}${md.hasNeechaBhanga ? '+NB' : ''}${md.isCombust ? '+Comb' : ''}${md.isRetro ? ' [R]' : ''}, D9 H${md.d9House} ${md.d9Sign}, SAV:${md.savAtSeat}, Owns L${md.ownedHousesL.join('/L') || 'Node'}`,
+      `Natal Baseline (6 Aspects):\n${baselineLines}`,
+      `${mdLord} Mahadasha Deterministic Baseline (6 Aspects):\n${mdAspectLines}`,
+      `Antardasha Roadmap Inside ${mdLord} Mahadasha:\n${mdAdRoadmapLines}`
+    ].join('\n\n');
+
+    outputStructure = [
+      'Respond in clean, well-structured Markdown prose & tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
+      `### 1. Executive Verdict for ${mdLord} Mahadasha (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate})`,
+      'Answer any Focus Question directly up front (Yes/Likely/Conditional/Unlikely) and summarize the core karmic agenda of this Mahadasha using D1 (L#/M#), D9 (H#), Shadbala, SAV, Yogas/Doshas, and Vargas.',
+      '### 2. Six-Aspect Mahadasha Promise Report (Career, Finance, Love, Family, Health, Litigations)',
+      'Dedicate a clear verdict + astrological proof (citing specific D1/D9/Varga seats and lordships) for EACH of the 6 life aspects during this Mahadasha.',
+      `### 3. Key Antardasha Phases Inside ${mdLord} MD`,
+      'Highlight which Antardashas within this Mahadasha act as peak delivery windows vs testing/frictional corridors based on natal Sambandha.',
+      '### 4. Transit (Gochara) Delivery Disclaimer',
+      'Close with a brief 2-line reminder that this reading reflects structural Natal + Mahadasha promise only, and exact external timing/amplitude is governed by Gochara transits.'
+    ].join('\n');
+  } else if (scope === 'ad') {
+    dashaScopeHeader = `SCOPE: ANTARDASHA LEVEL — ${mdLord} MD > ${adLord} AD (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate})`;
+    dashaBlock = [
+      dashaScopeHeader,
+      `Parent MD: ${mdLord} (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate}) — Seat L${md.hLagna}/M${md.hMoon} ${md.signName}, Nat:${md.functionalNature}, Dignity:${md.dignity}${md.hasNeechaBhanga ? '+NB' : ''}, D9 H${md.d9House}, Owns L${md.ownedHousesL.join('/L') || 'Node'}`,
+      `Selected AD: ${adLord} (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate}, ${evaluation.selectedAd.totalDays} days) — Seat L${ad.hLagna}/M${ad.hMoon} ${ad.signName}, Nat:${ad.functionalNature}, Dignity:${ad.dignity}${ad.hasNeechaBhanga ? '+NB' : ''}, D9 H${ad.d9House}, SAV:${ad.savAtSeat}, Owns L${ad.ownedHousesL.join('/L') || 'Node'}`,
+      `MD-AD Sambandha: ${evaluation.mdAdSambandha.summary} (${evaluation.mdAdSambandha.patternLabel}, ${evaluation.mdAdSambandha.friendshipLabel})`,
+      `Natal Baseline (6 Aspects):\n${baselineLines}`,
+      `MD–AD Deterministic Scores (6 Aspects):\n${adAspectLines}`,
+      `All 9 Sequential PDs inside ${mdLord} MD > ${adLord} AD:\n${pdWalkLines}`
+    ].join('\n\n');
+
+    outputStructure = [
+      'Respond in clean, well-structured Markdown prose & tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
+      `### 1. Executive Verdict for ${mdLord}–${adLord} Antardasha (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate})`,
+      'Answer any Focus Question directly up front and explain how the Antardasha lord channels the Mahadasha through their D1/D9 Sambandha.',
+      '### 2. Six-Aspect Antardasha Promise Breakdown',
+      'Provide clear verdicts and natal D1+D9+Varga reasoning for Career, Finance, Love, Family, Health, and Litigations.',
+      `### 3. How the 9 Pratyantardashas Unfold Inside ${mdLord}–${adLord}`,
+      'Summarize the chronological arc across all 9 PDs (peak opening/harvest PDs vs sensitive/caution PDs with exact dates).',
+      '### 4. Transit (Gochara) Delivery Disclaimer',
+      'Close with a brief 2-line reminder that this reading reflects structural Natal + Antardasha promise only, and exact external timing/amplitude is governed by Gochara transits.'
+    ].join('\n');
+  } else if (scope === 'pd' && focusedPd) {
+    const p = focusedPd.pdSummary;
+    const pdAspectLines = NATAL_ASPECT_ORDER.map(id => {
+      const ev = focusedPd.aspectEvaluations[id];
+      return `- ${NATAL_ASPECT_SPECS[id].label}: ${ev.score}% (${ev.tone}) — ${ev.verdict} | ${ev.rationale}`;
+    }).join('\n');
+
+    dashaScopeHeader = `SCOPE: PRATYANTARDASHA LEVEL — PD #${focusedPd.pdOption.index}: ${p.planet} (${focusedPd.pdOption.startDate} to ${focusedPd.pdOption.endDate}, ${focusedPd.pdOption.totalDays} days) inside ${mdLord} MD > ${adLord} AD`;
+    dashaBlock = [
+      dashaScopeHeader,
+      `Parent Corridor: ${mdLord} MD (${evaluation.selectedMd.startDate}..${evaluation.selectedMd.endDate}) > ${adLord} AD (${evaluation.selectedAd.startDate}..${evaluation.selectedAd.endDate}) | MD-AD Sambandha: ${evaluation.mdAdSambandha.patternLabel}`,
+      `Focused PD #${focusedPd.pdOption.index}: ${p.planet} (${focusedPd.pdOption.startDate} to ${focusedPd.pdOption.endDate}, ${focusedPd.pdOption.totalDays} days) — Seat L${p.hLagna}/M${p.hMoon} ${p.signName}, Nat:${p.functionalNature}, Dignity:${p.dignity || 'Neutral'}${p.hasNeechaBhanga ? '+NB' : ''}${p.isCombust ? '+Comb' : ''}${p.isRetro ? ' [R]' : ''}, D9 H${p.d9House} ${p.d9Sign}, SAV:${p.savAtSeat}, Owns L${p.ownedHousesL.join('/L') || 'Node'}`,
+      `PD Ties: Link to AD(${adLord}): ${focusedPd.linkToAd.patternLabel} (${focusedPd.linkToAd.friendshipLabel}) | Link to MD(${mdLord}): ${focusedPd.linkToMd.patternLabel} (${focusedPd.linkToMd.friendshipLabel})`,
+      `PD Divisional Varga Highlights: ${focusedPd.vargaHighlights.join(' | ')}`,
+      focusedPd.pdOption.savedNote
+        ? `Recorded Human Observation on This PD (Rating ${focusedPd.pdOption.savedRating ?? 'N/A'}/10): "${focusedPd.pdOption.savedNote}"`
+        : 'Recorded Human Observation: None saved',
+      `Natal Baseline (6 Aspects):\n${baselineLines}`,
+      `Focused PD #${focusedPd.pdOption.index} (${p.planet}) 6-Aspect Deterministic Scores:\n${pdAspectLines}`
+    ].join('\n\n');
+
+    outputStructure = [
+      'Respond in clean, well-structured Markdown prose & tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
+      `### 1. Focused Verdict for PD #${focusedPd.pdOption.index}: ${p.planet} (${focusedPd.pdOption.startDate} to ${focusedPd.pdOption.endDate})`,
+      `Directly state what ${p.planet} Pratyantardasha activates inside the ${mdLord}–${adLord} corridor (and answer any Focus Question directly up front), citing D1 (L#/M#), D9 (H#), PD–AD & PD–MD Sambandha, and Divisional Vargas.`,
+      '### 2. Six-Aspect PD Window Report (Career, Finance, Love, Family, Health, Litigations)',
+      'Deliver sharp, concrete natal-dasha expectations for EACH of the 6 aspects during these specific days.',
+      '### 3. Practical Focus & Caution Markers for This PD Window',
+      'List 2–3 key opportunities and 1–2 natal friction points to watch in this PD window (reminding that final external timing depends on Gochara transits).'
+    ].join('\n');
+  } else {
+    dashaScopeHeader = `SCOPE: FULL CORRIDOR — ${mdLord} MD > ${adLord} AD + ALL 9 PDs`;
+    dashaBlock = [
+      dashaScopeHeader,
+      `Selected MD: ${mdLord} (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate}) — Seat L${md.hLagna}/M${md.hMoon} ${md.signName}, Nat:${md.functionalNature}, Dignity:${md.dignity}${md.hasNeechaBhanga ? '+NB' : ''}, D9 H${md.d9House}, Owns L${md.ownedHousesL.join('/L') || 'Node'}`,
+      `Selected AD: ${adLord} (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate}) — Seat L${ad.hLagna}/M${ad.hMoon} ${ad.signName}, Nat:${ad.functionalNature}, Dignity:${ad.dignity}${ad.hasNeechaBhanga ? '+NB' : ''}, D9 H${ad.d9House}, Owns L${ad.ownedHousesL.join('/L') || 'Node'}`,
+      `MD-AD Sambandha: ${evaluation.mdAdSambandha.summary}`,
+      `Natal Baseline (6 Aspects):\n${baselineLines}`,
+      `MD-AD Summary (6 Aspects):\n${adAspectLines}`,
+      `All 9 Sequential PDs inside ${mdLord} MD > ${adLord} AD:\n${pdWalkLines}`
+    ].join('\n\n');
+
+    outputStructure = [
+      'Respond in clean, well-structured Markdown prose & tables (NO JSON fences). Strictly DO NOT mention or invent any Gochara transits.',
+      '### 1. Direct Answer to Focus Question',
+      'Answer the user question directly first with explicit D1 (L#/M#), D9 (H#), relevant Divisional Varga (D2..D30), Yoga/Dosha, and MD/AD/PD proof (name exact PD date windows).',
+      '### 2. Natal Chart Baseline Promise (All 6 Aspects)',
+      'Summarize inherent natal promise for Career, Finance, Love, Family, Health, and Litigations.',
+      `### 3. ${mdLord} Mahadasha & ${adLord} Antardasha Synthesis`,
+      'Explain MD agenda, MD-AD Sambandha, and deliver clear verdicts across all 6 aspects for this AD window.',
+      '### 4. Sequential Pratyantardasha (PD 1–9) Natal Walkthrough',
+      'Walk chronologically through ALL 9 PDs with exact date ranges, stating how each PD shifts Career, Finance, Love, Family, Health, and Litigations.',
+      '### 5. Transit (Gochara) Delivery Disclaimer',
+      'Close with a brief 2-line reminder that this reading reflects structural Natal + Dasha-Bhukti promise only, and exact external timing/amplitude is governed by Gochara transits.'
+    ].join('\n');
+  }
 
   const sections: Array<{ tag: string; label: string; body: string }> = [
     { tag: '[RULES]', label: 'Natal + Dasha-Bhukti Reasoning Rules (Zero Transits)', body: rulesText },
@@ -285,7 +421,7 @@ export function buildNatalDashaMasterPrompt(params: {
     { tag: '[JAIMINI]', label: 'Jaimini 7-Karaka, Karakamsa & Arudhas', body: jaiminiLine },
     { tag: '[KARAKAS]', label: '6-Aspect House, Varga & Karaka Routing', body: karakaLine },
     { tag: '[VARGAS D2..D60]', label: `All Divisional Charts (${vargaBlocks.length} Charts)`, body: vargaBlocks.join('\n') },
-    { tag: '[DASHA BHUKTI NATAL PROMISE]', label: 'Selected MD, AD & All 9 PDs Walkthrough Data', body: dashaBlock },
+    { tag: '[DASHA BHUKTI NATAL PROMISE]', label: scopeLabel, body: dashaBlock },
     { tag: '[OUTPUT STRUCTURE]', label: 'Required Output Structure', body: outputStructure },
     { tag: '[FOCUS QUESTION]', label: 'User Dasha Question', body: effectiveQuestion }
   ];
@@ -301,6 +437,9 @@ export function buildNatalDashaMasterPrompt(params: {
   return {
     prompt,
     systemInstruction,
+    scope,
+    scopeLabel,
+    pdIndex: focusedPd?.pdOption.index,
     sectionSummary,
     charCount: prompt.length,
     approxTokens: Math.round(prompt.length / 4),
@@ -362,6 +501,8 @@ export async function runNatalDashaAISynthesis(params: {
           providerUsed: providerId,
           modelUsed: model,
           executionTimeMs: elapsed,
+          promptSent: prompt,
+          systemInstruction,
           error: err
         };
       }
@@ -391,6 +532,8 @@ export async function runNatalDashaAISynthesis(params: {
         providerUsed: providerId,
         modelUsed: json.model || model,
         executionTimeMs: elapsed,
+        promptSent: prompt,
+        systemInstruction,
         tokenTelemetry: telemetry
       };
     }
@@ -421,12 +564,23 @@ export async function runNatalDashaAISynthesis(params: {
       const elapsed = Date.now() - startMs;
       if (!res.ok || !json.text) {
         const err = json.error || `Claude HTTP ${res.status}`;
+        await persistLLMPromptLog({
+          engine: 'NatalDashaPromise',
+          model_name: model,
+          fired_at: new Date().toISOString(),
+          prompt_text: prompt,
+          response_text: err,
+          time_taken_ms: elapsed,
+          status: 'ERROR'
+        }).catch(() => {});
         return {
           success: false,
           answerMarkdown: '',
           providerUsed: providerId,
           modelUsed: model,
           executionTimeMs: elapsed,
+          promptSent: prompt,
+          systemInstruction,
           error: err
         };
       }
@@ -455,6 +609,8 @@ export async function runNatalDashaAISynthesis(params: {
         providerUsed: providerId,
         modelUsed: json.model || model,
         executionTimeMs: elapsed,
+        promptSent: prompt,
+        systemInstruction,
         tokenTelemetry: telemetry
       };
     }
@@ -488,6 +644,8 @@ export async function runNatalDashaAISynthesis(params: {
         providerUsed: providerId,
         modelUsed: localModel,
         executionTimeMs: elapsed,
+        promptSent: prompt,
+        systemInstruction,
         error: json.error || `Ollama proxy HTTP ${res.status}`
       };
     }
@@ -507,7 +665,9 @@ export async function runNatalDashaAISynthesis(params: {
       answerMarkdown: text,
       providerUsed: providerId,
       modelUsed: json.model || localModel,
-      executionTimeMs: elapsed
+      executionTimeMs: elapsed,
+      promptSent: prompt,
+      systemInstruction
     };
   } catch (err: any) {
     return {
@@ -516,6 +676,8 @@ export async function runNatalDashaAISynthesis(params: {
       providerUsed: providerId,
       modelUsed: provMeta.model,
       executionTimeMs: Date.now() - startMs,
+      promptSent: prompt,
+      systemInstruction,
       error: err?.message || 'Unexpected network error during Natal Dasha synthesis.'
     };
   }

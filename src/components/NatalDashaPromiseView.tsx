@@ -1,24 +1,30 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertCircle,
+  ArrowDown,
   BookOpen,
   Briefcase,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   Coins,
   Copy,
+  Download,
   Eye,
   Heart,
   Home,
   Layers,
+  Loader2,
   MessageSquare,
+  Play,
   Scale,
   ShieldAlert,
   Sparkles,
-  User,
-  Clock
+  Square,
+  User
 } from 'lucide-react';
 import {
   DashaEvaluationRecord,
@@ -39,9 +45,15 @@ import {
 } from '../services/natalDashaPromiseEngine';
 import {
   NatalDashaAiSynthesisResult,
+  NatalDashaLevelScope,
+  NatalDashaPromptResult,
   buildNatalDashaMasterPrompt,
   runNatalDashaAISynthesis
 } from '../services/natalDashaPromptBuilder';
+
+type ReportLevelKey = 'md' | 'ad' | `pd-${number}`;
+type DualProviderId = 'gemini_pro' | 'claude_fable';
+type DualViewFilter = 'both' | 'scores_only' | 'reports_only';
 
 export interface NatalDashaPromiseViewProps {
   personId: string;
@@ -230,7 +242,16 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
   const [activeVargaTab, setActiveVargaTab] = useState<string>('D10');
 
   const [focusQuestion, setFocusQuestion] = useState<string>('');
-  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>(() => {
+  const [viewDisplayMode, setViewDisplayMode] = useState<DualViewFilter>('both');
+  const [activeReportLevel, setActiveReportLevel] = useState<ReportLevelKey>('ad');
+  const [reportsBySlot, setReportsBySlot] = useState<
+    Record<string, Partial<Record<DualProviderId, NatalDashaAiSynthesisResult>>>
+  >({});
+  const [loadingBySlot, setLoadingBySlot] = useState<
+    Record<string, Partial<Record<DualProviderId, boolean>>>
+  >({});
+  const [extraProviderResult, setExtraProviderResult] = useState<NatalDashaAiSynthesisResult | null>(null);
+  const [extraProvider, setExtraProvider] = useState<LLMProviderId>(() => {
     try {
       const saved = localStorage.getItem('astro_llm_provider') as LLMProviderId | null;
       return saved && LLM_PROVIDERS[saved] ? saved : defaultProvider;
@@ -238,10 +259,25 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
       return defaultProvider;
     }
   });
-  const [showPromptInspector, setShowPromptInspector] = useState<boolean>(false);
-  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
-  const [isSynthesizingAi, setIsSynthesizingAi] = useState<boolean>(false);
-  const [aiResult, setAiResult] = useState<NatalDashaAiSynthesisResult | null>(null);
+  const [isRunningExtraProvider, setIsRunningExtraProvider] = useState<boolean>(false);
+
+  const [inspectedPrompt, setInspectedPrompt] = useState<{
+    levelKey: ReportLevelKey;
+    promptResult: NatalDashaPromptResult;
+  } | null>(null);
+  const [expandedPromptByProvider, setExpandedPromptByProvider] = useState<
+    Partial<Record<DualProviderId, boolean>>
+  >({});
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const [batchProgress, setBatchProgress] = useState<{
+    active: boolean;
+    currentLabel: string;
+    completed: number;
+    total: number;
+  } | null>(null);
+  const batchCancelRef = useRef<boolean>(false);
+  const reportsSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Sync incoming personId prop
   useEffect(() => {
@@ -272,8 +308,9 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
     const pid = selectedPersonId || '001ME';
     setIsLoadingPerson(true);
     setPersonLoadError(null);
-    setAiResult(null);
+    setExtraProviderResult(null);
     setFocusedPdIndex(null);
+    setInspectedPrompt(null);
 
     const loadPersonViaRest = async () => {
       const t0 = performance.now();
@@ -378,15 +415,45 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
     });
   }, [bundle, selectedPersonId, selectedMdIndex, selectedAdIndex]);
 
-  // Build Transit-Free Heartbeat Master Prompt
-  const masterPrompt = useMemo(() => {
+  const rawPlacementsResolved = useMemo(() => {
+    return bundle?.placements || ((storedPersonsData as Record<string, any>)[selectedPersonId]?.placements ?? []);
+  }, [bundle, selectedPersonId]);
+
+  const makeSlotKey = (levelKey: ReportLevelKey): string => {
+    const mdIdx = evaluation.selectedMd.index;
+    const adIdx = evaluation.selectedAd.index;
+    if (levelKey === 'md') {
+      return `${evaluation.personId}|md-${mdIdx}`;
+    }
+    return `${evaluation.personId}|md-${mdIdx}|ad-${adIdx}|${levelKey}`;
+  };
+
+  const buildPromptForLevel = (levelKey: ReportLevelKey, overrideQuestion?: string): NatalDashaPromptResult => {
+    let scope: NatalDashaLevelScope = 'ad';
+    let pdIndex: number | undefined;
+    if (levelKey === 'md') {
+      scope = 'md';
+    } else if (levelKey === 'ad') {
+      scope = 'ad';
+    } else if (levelKey.startsWith('pd-')) {
+      scope = 'pd';
+      pdIndex = Number(levelKey.slice(3)) || 1;
+    }
+
     return buildNatalDashaMasterPrompt({
       evaluation,
-      rawPlacements: bundle?.placements || ((storedPersonsData as Record<string, any>)[selectedPersonId]?.placements ?? []),
-      focusQuestion,
-      aspectFilter
+      rawPlacements: rawPlacementsResolved,
+      focusQuestion: overrideQuestion !== undefined ? overrideQuestion : focusQuestion,
+      aspectFilter,
+      scope,
+      pdIndex
     });
-  }, [evaluation, bundle, selectedPersonId, focusQuestion, aspectFilter]);
+  };
+
+  // Active prompt for the currently selected tab in Delivered Reports section
+  const activeLevelPrompt = useMemo(() => {
+    return buildPromptForLevel(activeReportLevel);
+  }, [evaluation, rawPlacementsResolved, focusQuestion, aspectFilter, activeReportLevel]);
 
   const visibleAspectIds = aspectFilter === 'all' ? NATAL_ASPECT_ORDER : [aspectFilter];
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -395,42 +462,271 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
     `Do I get married or form a lasting partnership during ${evaluation.selectedMd.cleanMdLord} MD (${evaluation.selectedAd.cleanAdLord} AD)?`,
     `Will I face litigation, court disputes, or legal setbacks in ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD?`,
     `What career rise, job shift, or authority changes are promised in ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD?`,
-    `What wealth accumulation, property, or debt outcomes unfold across all 9 PDs of ${evaluation.selectedMd.cleanMdLord}-${evaluation.selectedAd.cleanAdLord}?`,
-    `Which PD windows inside ${evaluation.selectedMd.cleanMdLord}-${evaluation.selectedAd.cleanAdLord} need health vigilance?`
+    `What wealth accumulation, property, or debt outcomes unfold during this period?`,
+    `Which health vulnerabilities or recovery markers appear here?`
   ];
 
-  const handleRunAiQuestion = async (overrideQuestion?: string) => {
-    const qToAsk = overrideQuestion !== undefined ? overrideQuestion : focusQuestion;
-    if (overrideQuestion !== undefined) {
-      setFocusQuestion(overrideQuestion);
+  const scrollToDeliveredReports = () => {
+    if (viewDisplayMode === 'scores_only') {
+      setViewDisplayMode('both');
     }
-
-    const promptToSend = overrideQuestion !== undefined
-      ? buildNatalDashaMasterPrompt({
-          evaluation,
-          rawPlacements: bundle?.placements || [],
-          focusQuestion: qToAsk,
-          aspectFilter
-        })
-      : masterPrompt;
-
-    setIsSynthesizingAi(true);
-    setAiResult(null);
-
-    const res = await runNatalDashaAISynthesis({
-      providerId: selectedProvider,
-      prompt: promptToSend.prompt,
-      systemInstruction: promptToSend.systemInstruction
-    });
-
-    setAiResult(res);
-    setIsSynthesizingAi(false);
+    setTimeout(() => {
+      reportsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
   };
 
-  const handleCopyPrompt = () => {
-    navigator.clipboard?.writeText(`${masterPrompt.systemInstruction}\n\n${masterPrompt.prompt}`);
-    setCopiedPrompt(true);
-    setTimeout(() => setCopiedPrompt(false), 1800);
+  const handleInspectLevelPrompt = (levelKey: ReportLevelKey) => {
+    const promptResult = buildPromptForLevel(levelKey);
+    setActiveReportLevel(levelKey);
+    setInspectedPrompt({ levelKey, promptResult });
+    scrollToDeliveredReports();
+  };
+
+  const handleAskDashaLevel = async (
+    levelKey: ReportLevelKey,
+    providers: DualProviderId[],
+    options?: { overrideQuestion?: string; skipScroll?: boolean }
+  ) => {
+    const slotKey = makeSlotKey(levelKey);
+    const qToAsk = options?.overrideQuestion !== undefined ? options.overrideQuestion : focusQuestion;
+    if (options?.overrideQuestion !== undefined) {
+      setFocusQuestion(options.overrideQuestion);
+    }
+
+    const promptResult = buildPromptForLevel(levelKey, qToAsk);
+    setActiveReportLevel(levelKey);
+    setExtraProviderResult(null);
+
+    if (!options?.skipScroll) {
+      scrollToDeliveredReports();
+    }
+
+    setLoadingBySlot(prev => ({
+      ...prev,
+      [slotKey]: {
+        ...(prev[slotKey] || {}),
+        ...Object.fromEntries(providers.map(p => [p, true]))
+      }
+    }));
+
+    await Promise.all(
+      providers.map(async providerId => {
+        const res = await runNatalDashaAISynthesis({
+          providerId,
+          prompt: promptResult.prompt,
+          systemInstruction: promptResult.systemInstruction
+        });
+        setReportsBySlot(prev => ({
+          ...prev,
+          [slotKey]: {
+            ...(prev[slotKey] || {}),
+            [providerId]: res
+          }
+        }));
+        setLoadingBySlot(prev => ({
+          ...prev,
+          [slotKey]: {
+            ...(prev[slotKey] || {}),
+            [providerId]: false
+          }
+        }));
+      })
+    );
+  };
+
+  const handleRunAllLevelsBatch = async () => {
+    const levels: Array<{ key: ReportLevelKey; label: string }> = [
+      { key: 'md', label: `${evaluation.selectedMd.cleanMdLord} MD` },
+      { key: 'ad', label: `${evaluation.selectedMd.cleanMdLord}–${evaluation.selectedAd.cleanAdLord} AD` },
+      ...evaluation.pdWalkthrough.map(item => ({
+        key: `pd-${item.pdOption.index}` as ReportLevelKey,
+        label: `PD #${item.pdOption.index} (${item.pdSummary.planet})`
+      }))
+    ];
+
+    batchCancelRef.current = false;
+    const totalCalls = levels.length * 2;
+    let completed = 0;
+    setBatchProgress({
+      active: true,
+      currentLabel: `Starting ${levels[0].label} (Gemini + Fable)...`,
+      completed: 0,
+      total: totalCalls
+    });
+    scrollToDeliveredReports();
+
+    for (const lvl of levels) {
+      if (batchCancelRef.current) break;
+      setActiveReportLevel(lvl.key);
+      setBatchProgress({
+        active: true,
+        currentLabel: `${lvl.label} — Gemini Pro & Claude Fable 5.1`,
+        completed,
+        total: totalCalls
+      });
+      await handleAskDashaLevel(lvl.key, ['gemini_pro', 'claude_fable'], { skipScroll: true });
+      completed += 2;
+    }
+
+    setBatchProgress(null);
+  };
+
+  const handleStopBatch = () => {
+    batchCancelRef.current = true;
+    setBatchProgress(prev => (prev ? { ...prev, currentLabel: 'Stopping after current level...' } : null));
+  };
+
+  const handleRunExtraProvider = async () => {
+    setIsRunningExtraProvider(true);
+    setExtraProviderResult(null);
+    scrollToDeliveredReports();
+    const res = await runNatalDashaAISynthesis({
+      providerId: extraProvider,
+      prompt: activeLevelPrompt.prompt,
+      systemInstruction: activeLevelPrompt.systemInstruction
+    });
+    setExtraProviderResult(res);
+    setIsRunningExtraProvider(false);
+  };
+
+  const handleCopyText = (key: string, text: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
+
+  const handleDownloadAllReportsMarkdown = () => {
+    const levels: Array<{ key: ReportLevelKey; title: string }> = [
+      {
+        key: 'md',
+        title: `Mahadasha: ${evaluation.selectedMd.cleanMdLord} (${evaluation.selectedMd.startDate} to ${evaluation.selectedMd.endDate})`
+      },
+      {
+        key: 'ad',
+        title: `Antardasha: ${evaluation.selectedMd.cleanMdLord}–${evaluation.selectedAd.cleanAdLord} (${evaluation.selectedAd.startDate} to ${evaluation.selectedAd.endDate})`
+      },
+      ...evaluation.pdWalkthrough.map(item => ({
+        key: `pd-${item.pdOption.index}` as ReportLevelKey,
+        title: `PD #${item.pdOption.index}: ${item.pdSummary.planet} (${item.pdOption.startDate} to ${item.pdOption.endDate}, ${item.pdOption.totalDays}d)`
+      }))
+    ];
+
+    const blocks: string[] = [
+      `# Natal Dasha–Bhukti AI Prediction Dossier — ${evaluation.personId}`,
+      `- Lagna: ${evaluation.lagnaSign} | Rashi: ${evaluation.moonSign} | Star: ${evaluation.janmaStar}`,
+      `- Scope: ${evaluation.selectedMd.cleanMdLord} MD > ${evaluation.selectedAd.cleanAdLord} AD`,
+      `- Purely Natal (Zero Gochara Transits)`,
+      ''
+    ];
+
+    let count = 0;
+    for (const lvl of levels) {
+      const slot = reportsBySlot[makeSlotKey(lvl.key)];
+      if (!slot) continue;
+      if (slot.gemini_pro?.success || slot.claude_fable?.success) {
+        blocks.push(`---\n## ${lvl.title}\n`);
+      }
+      if (slot.gemini_pro?.success) {
+        count++;
+        blocks.push(`### Google Gemini Pro (${slot.gemini_pro.modelUsed})\n\n${slot.gemini_pro.answerMarkdown}\n`);
+      }
+      if (slot.claude_fable?.success) {
+        count++;
+        blocks.push(`### Claude Fable 5.1 (${slot.claude_fable.modelUsed})\n\n${slot.claude_fable.answerMarkdown}\n`);
+      }
+    }
+
+    if (count === 0) return;
+
+    const blob = new Blob([blocks.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${evaluation.personId}_${evaluation.selectedMd.cleanMdLord}_${evaluation.selectedAd.cleanAdLord}_Natal_AI_Reports.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderAskCardFooter = (levelKey: ReportLevelKey, shortTitle: string) => {
+    const slotKey = makeSlotKey(levelKey);
+    const slotReports = reportsBySlot[slotKey] || {};
+    const slotLoading = loadingBySlot[slotKey] || {};
+    const hasGemini = Boolean(slotReports.gemini_pro?.success);
+    const hasFable = Boolean(slotReports.claude_fable?.success);
+    const isLoadingGemini = Boolean(slotLoading.gemini_pro);
+    const isLoadingFable = Boolean(slotLoading.claude_fable);
+
+    return (
+      <div className="pt-2.5 mt-1 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="font-bold text-slate-400">Ask This {shortTitle}:</span>
+          {hasGemini && (
+            <button
+              onClick={() => {
+                setActiveReportLevel(levelKey);
+                scrollToDeliveredReports();
+              }}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 font-semibold hover:bg-emerald-500/25 cursor-pointer"
+              title="Jump to Gemini report below"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Gemini Ready</span>
+            </button>
+          )}
+          {hasFable && (
+            <button
+              onClick={() => {
+                setActiveReportLevel(levelKey);
+                scrollToDeliveredReports();
+              }}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/35 font-semibold hover:bg-purple-500/25 cursor-pointer"
+              title="Jump to Claude Fable 5.1 report below"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Fable Ready</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => handleAskDashaLevel(levelKey, ['gemini_pro'])}
+            disabled={isLoadingGemini || Boolean(batchProgress?.active)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+          >
+            {isLoadingGemini ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            <span>{isLoadingGemini ? 'Gemini...' : 'Ask Gemini'}</span>
+          </button>
+
+          <button
+            onClick={() => handleAskDashaLevel(levelKey, ['claude_fable'])}
+            disabled={isLoadingFable || Boolean(batchProgress?.active)}
+            className="px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+          >
+            {isLoadingFable ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            <span>{isLoadingFable ? 'Fable...' : 'Ask Fable'}</span>
+          </button>
+
+          <button
+            onClick={() => handleAskDashaLevel(levelKey, ['gemini_pro', 'claude_fable'])}
+            disabled={isLoadingGemini || isLoadingFable || Boolean(batchProgress?.active)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-extrabold flex items-center gap-1 transition cursor-pointer disabled:opacity-50 shadow-sm"
+          >
+            <ArrowDown className="w-3 h-3" />
+            <span>Both</span>
+          </button>
+
+          <button
+            onClick={() => handleInspectLevelPrompt(levelKey)}
+            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+            title="Inspect full Natal + Dasha prompt built for this level"
+          >
+            <Eye className="w-3 h-3 text-slate-400" />
+            <span>Prompt</span>
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -559,40 +855,72 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
           </div>
         </div>
 
-        {/* 6-Aspect Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">Life Aspects:</span>
-          <button
-            onClick={() => setAspectFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              aspectFilter === 'all'
-                ? 'bg-amber-500 text-slate-950 shadow'
-                : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-600'
-            }`}
-          >
-            All 6 Aspects
-          </button>
-          {NATAL_ASPECT_ORDER.map(id => (
+        {/* 6-Aspect Filter Pills + Dual View Selector */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">Life Aspects:</span>
             <button
-              key={id}
-              onClick={() => setAspectFilter(id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                aspectFilter === id
+              onClick={() => setAspectFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                aspectFilter === 'all'
                   ? 'bg-amber-500 text-slate-950 shadow'
                   : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-600'
               }`}
             >
-              {ASPECT_ICONS[id]}
-              <span>{NATAL_ASPECT_SPECS[id].shortLabel}</span>
+              All 6 Aspects
             </button>
-          ))}
+            {NATAL_ASPECT_ORDER.map(id => (
+              <button
+                key={id}
+                onClick={() => setAspectFilter(id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  aspectFilter === id
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : 'bg-slate-950 text-slate-300 border border-slate-800 hover:border-slate-600'
+                }`}
+              >
+                {ASPECT_ICONS[id]}
+                <span>{NATAL_ASPECT_SPECS[id].shortLabel}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-0.5 rounded-lg text-[11px]">
+            <button
+              onClick={() => setViewDisplayMode('both')}
+              className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                viewDisplayMode === 'both' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Both Views (Scores + AI Reports)
+            </button>
+            <button
+              onClick={() => setViewDisplayMode('scores_only')}
+              className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                viewDisplayMode === 'scores_only' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Deterministic Scores
+            </button>
+            <button
+              onClick={() => setViewDisplayMode('reports_only')}
+              className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                viewDisplayMode === 'reports_only' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              AI Reports View
+            </button>
+          </div>
         </div>
       </div>
 
       {/* =================================================================== */}
-      {/* SECTION 1: MD + AD SUMMARY & SAMBANDHA ACROSS ALL 6 ASPECTS         */}
+      {/* VIEW 1: DETERMINISTIC NATAL PROMISE SCORES (MD, AD & ALL 9 PDs)     */}
       {/* =================================================================== */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+      {viewDisplayMode !== 'reports_only' && (
+        <>
+          {/* SECTION 1: MD + AD SUMMARY & SAMBANDHA ACROSS ALL 6 ASPECTS */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -617,26 +945,29 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
         {/* MD Lord, MD-AD Sambandha, AD Lord Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* MD Dossier */}
-          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Mahadasha Lord (MD)</span>
-              <span className="text-[11px] font-mono text-slate-400">{evaluation.mdSummary.functionalNature}</span>
-            </div>
-            <div className="text-sm font-extrabold text-white">
-              {evaluation.mdSummary.planet} in {evaluation.mdSummary.signName} (L{evaluation.mdSummary.hLagna} / M{evaluation.mdSummary.hMoon})
-            </div>
-            <div className="text-xs text-slate-300 space-y-0.5">
-              <div>
-                Owns: <strong className="text-slate-100">{evaluation.mdSummary.ownedHousesL.length ? `L${evaluation.mdSummary.ownedHousesL.join(' & L')}` : 'Nodal Axis'}</strong>
-                {' '}&bull; Dignity: <strong className="text-amber-300">{evaluation.mdSummary.dignity || 'Neutral'}{evaluation.mdSummary.hasNeechaBhanga ? ' (Neecha Bhanga)' : ''}{evaluation.mdSummary.isCombust ? ' (Combust)' : ''}{evaluation.mdSummary.isRetro ? ' [R]' : ''}</strong>
+          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Mahadasha Lord (MD)</span>
+                <span className="text-[11px] font-mono text-slate-400">{evaluation.mdSummary.functionalNature}</span>
               </div>
-              <div>
-                D9 Navamsa: <strong className="text-sky-300">H{evaluation.mdSummary.d9House} {evaluation.mdSummary.d9Sign}</strong>
-                {evaluation.mdSummary.isVargottama && <span className="ml-1 text-emerald-300 font-bold">(Vargottama)</span>}
-                {' '}&bull; SAV Seat: <strong className="text-slate-100">{evaluation.mdSummary.savAtSeat}</strong>
-                {evaluation.mdSummary.shadbalaStatus && <span> &bull; Shadbala: <strong className="text-emerald-300">{evaluation.mdSummary.shadbalaStatus}</strong></span>}
+              <div className="text-sm font-extrabold text-white">
+                {evaluation.mdSummary.planet} in {evaluation.mdSummary.signName} (L{evaluation.mdSummary.hLagna} / M{evaluation.mdSummary.hMoon})
+              </div>
+              <div className="text-xs text-slate-300 space-y-0.5">
+                <div>
+                  Owns: <strong className="text-slate-100">{evaluation.mdSummary.ownedHousesL.length ? `L${evaluation.mdSummary.ownedHousesL.join(' & L')}` : 'Nodal Axis'}</strong>
+                  {' '}&bull; Dignity: <strong className="text-amber-300">{evaluation.mdSummary.dignity || 'Neutral'}{evaluation.mdSummary.hasNeechaBhanga ? ' (Neecha Bhanga)' : ''}{evaluation.mdSummary.isCombust ? ' (Combust)' : ''}{evaluation.mdSummary.isRetro ? ' [R]' : ''}</strong>
+                </div>
+                <div>
+                  D9 Navamsa: <strong className="text-sky-300">H{evaluation.mdSummary.d9House} {evaluation.mdSummary.d9Sign}</strong>
+                  {evaluation.mdSummary.isVargottama && <span className="ml-1 text-emerald-300 font-bold">(Vargottama)</span>}
+                  {' '}&bull; SAV Seat: <strong className="text-slate-100">{evaluation.mdSummary.savAtSeat}</strong>
+                  {evaluation.mdSummary.shadbalaStatus && <span> &bull; Shadbala: <strong className="text-emerald-300">{evaluation.mdSummary.shadbalaStatus}</strong></span>}
+                </div>
               </div>
             </div>
+            {renderAskCardFooter('md', `${evaluation.selectedMd.cleanMdLord} MD`)}
           </div>
 
           {/* MD-AD Sambandha Bridge */}
@@ -711,6 +1042,7 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
               );
             })}
           </div>
+          {renderAskCardFooter('ad', `${evaluation.selectedMd.cleanMdLord}–${evaluation.selectedAd.cleanAdLord} Antardasha`)}
         </div>
       </div>
 
@@ -791,11 +1123,15 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                   {visibleAspectIds.map(id => (
                     <th key={id} className="px-3 py-2.5 font-bold whitespace-nowrap">{NATAL_ASPECT_SPECS[id].shortLabel}</th>
                   ))}
+                  <th className="px-3 py-2.5 font-bold whitespace-nowrap">Ask AI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 bg-slate-950/50">
                 {evaluation.pdWalkthrough.map(item => {
                   const isNow = item.pdOption.startDate <= todayIso && item.pdOption.endDate >= todayIso;
+                  const pdKey: ReportLevelKey = `pd-${item.pdOption.index}`;
+                  const slot = reportsBySlot[makeSlotKey(pdKey)] || {};
+                  const loadingSlot = loadingBySlot[makeSlotKey(pdKey)] || {};
                   return (
                     <tr key={item.pdOption.index} className={isNow ? 'bg-emerald-500/5' : 'hover:bg-slate-900/50'}>
                       <td className="px-3 py-2.5 font-bold text-white whitespace-nowrap">
@@ -821,6 +1157,31 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                           </td>
                         );
                       })}
+                      <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => handleAskDashaLevel(pdKey, ['gemini_pro'])}
+                            disabled={Boolean(loadingSlot.gemini_pro) || Boolean(batchProgress?.active)}
+                            className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                          >
+                            {loadingSlot.gemini_pro ? 'Gemini...' : slot.gemini_pro?.success ? 'Gemini ✓' : 'Gemini'}
+                          </button>
+                          <button
+                            onClick={() => handleAskDashaLevel(pdKey, ['claude_fable'])}
+                            disabled={Boolean(loadingSlot.claude_fable) || Boolean(batchProgress?.active)}
+                            className="px-2 py-1 rounded bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                          >
+                            {loadingSlot.claude_fable ? 'Fable...' : slot.claude_fable?.success ? 'Fable ✓' : 'Fable'}
+                          </button>
+                          <button
+                            onClick={() => handleAskDashaLevel(pdKey, ['gemini_pro', 'claude_fable'])}
+                            disabled={Boolean(loadingSlot.gemini_pro) || Boolean(loadingSlot.claude_fable) || Boolean(batchProgress?.active)}
+                            className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-extrabold cursor-pointer disabled:opacity-50"
+                          >
+                            Both
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -910,6 +1271,12 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                         );
                       })}
                     </div>
+
+                    {/* End of PD Card: Ask This PD -> Gemini / Fable / Both / Inspect Prompt */}
+                    {renderAskCardFooter(
+                      `pd-${item.pdOption.index}` as ReportLevelKey,
+                      `PD #${item.pdOption.index} (${p.planet})`
+                    )}
                   </div>
                 );
               })}
@@ -1015,161 +1382,460 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* =================================================================== */}
-      {/* SECTION 4: ASK A QUESTION ON THIS DASHA + MASTER PROMPT & AI ANSWER */}
+      {/* VIEW 2: AI PREDICTION REPORTS DELIVERED (GEMINI PRO & CLAUDE FABLE) */}
+      {/* Same Page Right Below Deterministic Scores                          */}
       {/* =================================================================== */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/35 flex items-center justify-center text-purple-300">
-              <MessageSquare className="w-4 h-4" />
+      {viewDisplayMode !== 'scores_only' && (
+        <div
+          ref={reportsSectionRef}
+          className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4"
+        >
+          {/* Header + Batch Runner + Export */}
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
+            <div className="flex items-start gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/35 flex items-center justify-center text-purple-300 shrink-0">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base sm:text-lg font-extrabold text-white">
+                    AI Prediction Reports Delivered — Gemini Pro &amp; Claude Fable 5.1
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {activeLevelPrompt.zeroTransitsVerified ? 'ZERO TRANSITS VERIFIED' : 'NATAL ONLY'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Full natal charts ({activeLevelPrompt.sectionSummary.length} Heartbeat sections, ~{activeLevelPrompt.approxTokens.toLocaleString()} tokens) sent per Dasha level to <strong className="text-amber-300">Google Gemini Pro</strong> and <strong className="text-purple-300">Claude Fable 5.1 (Phabble)</strong>.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
-                Ask a Question on {evaluation.selectedMd.cleanMdLord} Dasha ({evaluation.selectedAd.cleanAdLord} AD)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Uses the transit-free Original Heartbeat Natal Master Prompt ({masterPrompt.sectionSummary.length} complete natal sections, {masterPrompt.approxTokens.toLocaleString()} est. tokens).
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowPromptInspector(!showPromptInspector)}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-950 border border-slate-700 hover:border-amber-500/50 text-slate-200 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span>{showPromptInspector ? 'Hide Master Prompt' : 'Inspect Heartbeat Prompt'}</span>
-            </button>
-          </div>
-        </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {batchProgress?.active ? (
+                <button
+                  onClick={handleStopBatch}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  <span>Stop Batch ({batchProgress.completed}/{batchProgress.total})</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleRunAllLevelsBatch}
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-purple-500 hover:from-amber-400 hover:to-purple-400 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Predict All Levels (MD + AD + 9 PDs)</span>
+                </button>
+              )}
 
-        {/* Question Input + AI Provider + Submit */}
-        <div className="space-y-2.5">
-          <div className="flex flex-col lg:flex-row gap-2.5">
-            <input
-              type="text"
-              value={focusQuestion}
-              onChange={(e) => setFocusQuestion(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isSynthesizingAi) handleRunAiQuestion();
-              }}
-              placeholder={`Ask about ${evaluation.selectedMd.cleanMdLord} MD / ${evaluation.selectedAd.cleanAdLord} AD (e.g., "Do I get married over Surya dasha?" or leave blank for full 6-aspect AD+PD walkthrough)...`}
-              className="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none"
-            />
-            <select
-              value={selectedProvider}
-              onChange={(e) => {
-                const next = e.target.value as LLMProviderId;
-                setSelectedProvider(next);
-                try {
-                  localStorage.setItem('astro_llm_provider', next);
-                } catch {}
-              }}
-              className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
-            >
-              <option value="gemini_pro">{LLM_PROVIDERS.gemini_pro.name}</option>
-              <option value="claude_sonnet">{LLM_PROVIDERS.claude_sonnet.name}</option>
-              <option value="claude_haiku">{LLM_PROVIDERS.claude_haiku.name}</option>
-              <option value="claude_fable">{LLM_PROVIDERS.claude_fable.name}</option>
-              <option value="local_qwen">{LLM_PROVIDERS.local_qwen.name}</option>
-            </select>
-            <button
-              onClick={() => handleRunAiQuestion()}
-              disabled={isSynthesizingAi}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shrink-0 shadow"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{isSynthesizingAi ? 'Synthesizing...' : 'Ask & Synthesize'}</span>
-            </button>
-          </div>
-
-          {/* Quick Suggested Question Pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {curatedQuestions.map((q, idx) => (
               <button
-                key={idx}
-                onClick={() => handleRunAiQuestion(q)}
-                disabled={isSynthesizingAi}
-                className="text-left px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-amber-300 transition cursor-pointer"
+                onClick={handleDownloadAllReportsMarkdown}
+                className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                title="Download all generated Gemini & Fable reports as Markdown"
               >
-                {q}
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>Download .MD</span>
               </button>
-            ))}
+            </div>
           </div>
-        </div>
 
-        {/* Master Prompt Inspector */}
-        {showPromptInspector && (
-          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-bold text-amber-300">Transit-Free Original Heartbeat Master Prompt</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[10px]">
-                  {masterPrompt.zeroTransitsVerified ? 'ZERO TRANSITS VERIFIED' : 'NATAL ONLY'}
+          {batchProgress?.active && (
+            <div className="bg-slate-950 border border-amber-500/35 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-amber-300 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{batchProgress.currentLabel}</span>
                 </span>
-                <span className="text-slate-400 font-mono text-[11px]">
-                  {masterPrompt.charCount.toLocaleString()} chars &bull; ~{masterPrompt.approxTokens.toLocaleString()} tokens
+                <span className="font-mono text-slate-300">
+                  {batchProgress.completed} / {batchProgress.total} reports
                 </span>
               </div>
-              <button
-                onClick={handleCopyPrompt}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
-              >
-                {copiedPrompt ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedPrompt ? 'Copied' : 'Copy Full Prompt'}</span>
-              </button>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-purple-400 transition-all duration-300"
+                  style={{ width: `${Math.round((batchProgress.completed / batchProgress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Optional Focus Question on Any Dasha Level */}
+          <div className="bg-slate-950/75 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex flex-col lg:flex-row gap-2.5">
+              <input
+                type="text"
+                value={focusQuestion}
+                onChange={(e) => setFocusQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !batchProgress?.active) {
+                    handleAskDashaLevel(activeReportLevel, ['gemini_pro', 'claude_fable']);
+                  }
+                }}
+                placeholder={`Optional question for ${activeLevelPrompt.scopeLabel} (e.g., "Do I get married over Surya dasha?" or leave blank for full 6-aspect report)...`}
+                className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none"
+              />
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  onClick={() => handleAskDashaLevel(activeReportLevel, ['gemini_pro'])}
+                  disabled={Boolean(loadingBySlot[makeSlotKey(activeReportLevel)]?.gemini_pro) || Boolean(batchProgress?.active)}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-amber-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Ask Gemini</span>
+                </button>
+                <button
+                  onClick={() => handleAskDashaLevel(activeReportLevel, ['claude_fable'])}
+                  disabled={Boolean(loadingBySlot[makeSlotKey(activeReportLevel)]?.claude_fable) || Boolean(batchProgress?.active)}
+                  className="px-3.5 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/45 text-purple-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Ask Fable (Phabble)</span>
+                </button>
+                <button
+                  onClick={() => handleAskDashaLevel(activeReportLevel, ['gemini_pro', 'claude_fable'])}
+                  disabled={
+                    Boolean(loadingBySlot[makeSlotKey(activeReportLevel)]?.gemini_pro) ||
+                    Boolean(loadingBySlot[makeSlotKey(activeReportLevel)]?.claude_fable) ||
+                    Boolean(batchProgress?.active)
+                  }
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Ask Both</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {curatedQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleAskDashaLevel(activeReportLevel, ['gemini_pro', 'claude_fable'], { overrideQuestion: q })}
+                  disabled={Boolean(batchProgress?.active)}
+                  className="text-left px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-amber-300 transition cursor-pointer"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dasha Level Selector Tabs: MD | AD | PD #1..#9 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span className="font-bold uppercase tracking-wider">Select Dasha Level Report to View / Generate</span>
+              <span className="font-mono text-amber-300">{activeLevelPrompt.scopeLabel}</span>
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {masterPrompt.sectionSummary.map((sec, idx) => (
-                <span key={idx} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300">
-                  {sec.tag} ({sec.lines}L)
-                </span>
-              ))}
-            </div>
+              {[
+                { key: 'md' as ReportLevelKey, label: `MD: ${evaluation.selectedMd.cleanMdLord}` },
+                { key: 'ad' as ReportLevelKey, label: `AD: ${evaluation.selectedMd.cleanMdLord}–${evaluation.selectedAd.cleanAdLord}` },
+                ...evaluation.pdWalkthrough.map(item => ({
+                  key: `pd-${item.pdOption.index}` as ReportLevelKey,
+                  label: `PD #${item.pdOption.index}: ${item.pdSummary.planet}`
+                }))
+              ].map(tab => {
+                const slot = reportsBySlot[makeSlotKey(tab.key)] || {};
+                const loading = loadingBySlot[makeSlotKey(tab.key)] || {};
+                const isActive = activeReportLevel === tab.key;
+                const gReady = Boolean(slot.gemini_pro?.success);
+                const fReady = Boolean(slot.claude_fable?.success);
+                const gErr = Boolean(slot.gemini_pro && !slot.gemini_pro.success);
+                const fErr = Boolean(slot.claude_fable && !slot.claude_fable.success);
 
-            <pre className="max-h-72 overflow-auto p-3 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
-              {`${masterPrompt.systemInstruction}\n\n${masterPrompt.prompt}`}
-            </pre>
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveReportLevel(tab.key)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-2 transition cursor-pointer ${
+                      isActive
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
+                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-600'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        title={gReady ? 'Gemini Ready' : gErr ? 'Gemini Error' : 'Gemini Not Run'}
+                        className={`w-2 h-2 rounded-full ${
+                          loading.gemini_pro
+                            ? 'bg-amber-300 animate-ping'
+                            : gReady
+                            ? isActive
+                              ? 'bg-emerald-900'
+                              : 'bg-emerald-400'
+                            : gErr
+                            ? 'bg-rose-500'
+                            : isActive
+                            ? 'bg-slate-900/35'
+                            : 'bg-slate-700'
+                        }`}
+                      />
+                      <span
+                        title={fReady ? 'Fable Ready' : fErr ? 'Fable Error' : 'Fable Not Run'}
+                        className={`w-2 h-2 rounded-full ${
+                          loading.claude_fable
+                            ? 'bg-purple-300 animate-ping'
+                            : fReady
+                            ? isActive
+                              ? 'bg-purple-950'
+                              : 'bg-purple-400'
+                            : fErr
+                            ? 'bg-rose-500'
+                            : isActive
+                            ? 'bg-slate-900/35'
+                            : 'bg-slate-700'
+                        }`}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
 
-        {/* AI Response Area */}
-        {aiResult && (
-          <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-bold text-amber-300">
-                  {aiResult.success ? 'AI Natal Dasha Synthesis' : 'AI Request Issue'}
-                </span>
-                <span className="text-slate-400 font-mono">
-                  Model: {aiResult.modelUsed} &bull; {(aiResult.executionTimeMs / 1000).toFixed(2)}s
-                </span>
+          {/* Prompt Inspector Drawer (when clicking any card's "Prompt" button or toggle below) */}
+          {inspectedPrompt && (
+            <div className="bg-slate-950 border border-amber-500/40 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-bold text-amber-300">
+                    Inspected Prompt — {inspectedPrompt.promptResult.scopeLabel}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[10px]">
+                    {inspectedPrompt.promptResult.zeroTransitsVerified ? 'ZERO TRANSITS VERIFIED' : 'NATAL ONLY'}
+                  </span>
+                  <span className="text-slate-400 font-mono text-[11px]">
+                    {inspectedPrompt.promptResult.charCount.toLocaleString()} chars &bull; ~{inspectedPrompt.promptResult.approxTokens.toLocaleString()} tokens
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      handleCopyText(
+                        'inspected-prompt',
+                        `${inspectedPrompt.promptResult.systemInstruction}\n\n${inspectedPrompt.promptResult.prompt}`
+                      )
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedKey === 'inspected-prompt' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey === 'inspected-prompt' ? 'Copied' : 'Copy Prompt'}</span>
+                  </button>
+                  <button
+                    onClick={() => setInspectedPrompt(null)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-              {aiResult.tokenTelemetry && (
-                <span className="text-[11px] font-mono text-slate-400">
-                  Tokens: {aiResult.tokenTelemetry.inputTokens.toLocaleString()} in / {aiResult.tokenTelemetry.outputTokens.toLocaleString()} out
-                </span>
-              )}
+              <div className="flex flex-wrap gap-1.5">
+                {inspectedPrompt.promptResult.sectionSummary.map((sec, idx) => (
+                  <span key={idx} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300">
+                    {sec.tag} ({sec.lines}L)
+                  </span>
+                ))}
+              </div>
+              <pre className="max-h-72 overflow-auto p-3 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
+                {`${inspectedPrompt.promptResult.systemInstruction}\n\n${inspectedPrompt.promptResult.prompt}`}
+              </pre>
+            </div>
+          )}
+
+          {/* Dual Side-by-Side Reports: Google Gemini Pro & Claude Fable 5.1 */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {(['gemini_pro', 'claude_fable'] as DualProviderId[]).map(providerId => {
+              const slotKey = makeSlotKey(activeReportLevel);
+              const report = reportsBySlot[slotKey]?.[providerId];
+              const isLoading = Boolean(loadingBySlot[slotKey]?.[providerId]);
+              const isGemini = providerId === 'gemini_pro';
+              const displayName = isGemini ? 'Google Gemini Pro' : 'Claude Fable 5.1 (Phabble)';
+              const modelLabel = report?.modelUsed || LLM_PROVIDERS[providerId].model;
+              const isPromptShown = Boolean(expandedPromptByProvider[providerId]);
+
+              return (
+                <div
+                  key={providerId}
+                  className={`bg-slate-950 border rounded-xl p-4 flex flex-col justify-between gap-3 ${
+                    isGemini ? 'border-amber-500/35' : 'border-purple-500/35'
+                  }`}
+                >
+                  {/* Provider Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-extrabold ${isGemini ? 'text-amber-300' : 'text-purple-300'}`}>
+                          {displayName}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300">
+                          {modelLabel}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                        {report
+                          ? `${(report.executionTimeMs / 1000).toFixed(2)}s${
+                              report.tokenTelemetry
+                                ? ` • ${report.tokenTelemetry.inputTokens.toLocaleString()} in / ${report.tokenTelemetry.outputTokens.toLocaleString()} out`
+                                : ''
+                            }`
+                          : activeLevelPrompt.scopeLabel}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {report?.success && (
+                        <>
+                          <button
+                            onClick={() =>
+                              handleCopyText(`${slotKey}-${providerId}`, report.answerMarkdown)
+                            }
+                            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-200 flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedKey === `${slotKey}-${providerId}` ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                            <span>{copiedKey === `${slotKey}-${providerId}` ? 'Copied' : 'Copy'}</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              setExpandedPromptByProvider(prev => ({
+                                ...prev,
+                                [providerId]: !prev[providerId]
+                              }))
+                            }
+                            className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-300 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3 text-amber-400" />
+                            <span>{isPromptShown ? 'Hide Prompt' : 'Prompt Sent'}</span>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleAskDashaLevel(activeReportLevel, [providerId], { skipScroll: true })}
+                        disabled={isLoading || Boolean(batchProgress?.active)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                          isGemini
+                            ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                            : 'bg-purple-500 hover:bg-purple-400 text-white'
+                        }`}
+                      >
+                        {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        <span>{report ? 'Regenerate' : 'Generate'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Provider Body */}
+                  {isLoading ? (
+                    <div className="py-10 flex flex-col items-center justify-center text-center gap-2 text-xs text-slate-300">
+                      <Loader2 className={`w-6 h-6 animate-spin ${isGemini ? 'text-amber-400' : 'text-purple-400'}`} />
+                      <div className="font-bold">Synthesizing {activeLevelPrompt.scopeLabel}</div>
+                      <div className="text-slate-400">
+                        Sending full natal charts (D1, D9, Vargas D2–D60, SAV, Shadbala, Jaimini) to {displayName}...
+                      </div>
+                    </div>
+                  ) : report ? (
+                    report.success ? (
+                      <div className="space-y-3">
+                        {isPromptShown && (
+                          <pre className="max-h-56 overflow-auto p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 whitespace-pre-wrap">
+                            {`${report.systemInstruction}\n\n${report.promptSent}`}
+                          </pre>
+                        )}
+                        <div className="max-h-[680px] overflow-y-auto pr-1">
+                          {renderSimpleMarkdown(report.answerMarkdown)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold">{displayName} Request Issue</div>
+                          <div>{report.error}</div>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div className="py-8 text-center space-y-2">
+                      <div className="text-xs text-slate-400">
+                        No {displayName} report generated yet for <strong className="text-slate-200">{activeLevelPrompt.scopeLabel}</strong>.
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Click <strong className={isGemini ? 'text-amber-300' : 'text-purple-300'}>Generate</strong> above or click <strong className="text-slate-300">Ask {isGemini ? 'Gemini' : 'Fable'}</strong> on any MD, AD, or PD card.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Optional Other Model Bar (Sonnet / Haiku / Local Ollama Qwen) */}
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Alternate Engine Runner (Claude Sonnet 5.5 / Haiku 5.5 / Local Qwen 14B) for {activeLevelPrompt.scopeLabel}
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={extraProvider}
+                  onChange={(e) => {
+                    const next = e.target.value as LLMProviderId;
+                    setExtraProvider(next);
+                    try {
+                      localStorage.setItem('astro_llm_provider', next);
+                    } catch {}
+                  }}
+                  className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="claude_sonnet">{LLM_PROVIDERS.claude_sonnet.name}</option>
+                  <option value="claude_haiku">{LLM_PROVIDERS.claude_haiku.name}</option>
+                  <option value="local_qwen">{LLM_PROVIDERS.local_qwen.name}</option>
+                  <option value="gemini_pro">{LLM_PROVIDERS.gemini_pro.name}</option>
+                  <option value="claude_fable">{LLM_PROVIDERS.claude_fable.name}</option>
+                </select>
+                <button
+                  onClick={handleRunExtraProvider}
+                  disabled={isRunningExtraProvider || Boolean(batchProgress?.active)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isRunningExtraProvider ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
+                  <span>{isRunningExtraProvider ? 'Synthesizing...' : 'Run Selected Engine'}</span>
+                </button>
+              </div>
             </div>
 
-            {aiResult.success ? (
-              renderSimpleMarkdown(aiResult.answerMarkdown)
-            ) : (
-              <div className="flex items-start gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-bold">Synthesis Error</div>
-                  <div className="mt-0.5">{aiResult.error}</div>
+            {extraProviderResult && (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                  <span className="font-bold text-amber-300">
+                    {extraProviderResult.success ? `Alternate Report — ${extraProviderResult.modelUsed}` : 'Engine Issue'}
+                  </span>
+                  <span className="text-slate-400 font-mono">
+                    {(extraProviderResult.executionTimeMs / 1000).toFixed(2)}s
+                  </span>
                 </div>
+                {extraProviderResult.success ? (
+                  renderSimpleMarkdown(extraProviderResult.answerMarkdown)
+                ) : (
+                  <div className="text-xs text-rose-300">{extraProviderResult.error}</div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

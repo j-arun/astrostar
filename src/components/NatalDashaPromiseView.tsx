@@ -14,6 +14,7 @@ import {
   Copy,
   Download,
   Eye,
+  FileDown,
   Heart,
   Home,
   Layers,
@@ -52,6 +53,10 @@ import {
   buildNatalDashaMasterPrompt,
   runNatalDashaAISynthesis
 } from '../services/natalDashaPromptBuilder';
+import {
+  exportNatalDashaCompletePdf,
+  exportSingleNatalDashaReportPdf
+} from '../services/natalDashaPdfExport';
 
 type ReportLevelKey = 'md' | 'ad' | `pd-${number}`;
 type DualProviderId = 'gemini_pro' | 'claude_fable';
@@ -811,6 +816,41 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadCompletePdf = () => {
+    exportNatalDashaCompletePdf({
+      evaluation,
+      profile: bundle?.profile,
+      dashaTree,
+      aspectFilter,
+      focusQuestion,
+      reportsBySlot,
+      followUpsBySlot,
+      extraProviderResult,
+      activeReportLevel
+    });
+    setCopiedKey('pdf-complete');
+    setTimeout(() => setCopiedKey(null), 2200);
+  };
+
+  const handleDownloadSingleReportPdf = (
+    levelKey: ReportLevelKey,
+    providerId: DualProviderId,
+    report: NatalDashaAiSynthesisResult,
+    followUps: FollowUpTurn[]
+  ) => {
+    exportSingleNatalDashaReportPdf({
+      evaluation,
+      profile: bundle?.profile,
+      levelKey,
+      providerId,
+      report,
+      followUps,
+      aspectFilter
+    });
+    setCopiedKey(`pdf-tab-${levelKey}-${providerId}`);
+    setTimeout(() => setCopiedKey(null), 2200);
+  };
+
   const renderAskCardFooter = (levelKey: ReportLevelKey, shortTitle: string) => {
     const slotKey = makeSlotKey(levelKey);
     const slotReports = reportsBySlot[slotKey] || {};
@@ -926,9 +966,23 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
             </div>
           </div>
 
-          <div className="text-right text-xs text-slate-400 font-mono">
-            <div>Lagna: <span className="text-amber-300 font-bold">{evaluation.lagnaSign}</span> (L1)</div>
-            <div>Rashi: <span className="text-sky-300 font-bold">{evaluation.moonSign}</span> &bull; {evaluation.janmaStar}</div>
+          <div className="flex flex-col items-end gap-2 text-right text-xs text-slate-400 font-mono">
+            <div>
+              <div>Lagna: <span className="text-amber-300 font-bold">{evaluation.lagnaSign}</span> (L1)</div>
+              <div>Rashi: <span className="text-sky-300 font-bold">{evaluation.moonSign}</span> &bull; {evaluation.janmaStar}</div>
+            </div>
+            <button
+              onClick={handleDownloadCompletePdf}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/45 text-emerald-300 text-xs font-sans font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+              title="Download complete Natal Dasha PDF including deterministic scores, all AI predictions, and all follow-up Q&As"
+            >
+              {copiedKey === 'pdf-complete' ? (
+                <Check className="w-3.5 h-3.5 text-emerald-300" />
+              ) : (
+                <FileDown className="w-3.5 h-3.5 text-emerald-300" />
+              )}
+              <span>{copiedKey === 'pdf-complete' ? 'PDF Saved' : 'Download Full PDF'}</span>
+            </button>
           </div>
         </div>
 
@@ -1601,6 +1655,19 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
               )}
 
               <button
+                onClick={handleDownloadCompletePdf}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow"
+                title="Download complete formatted PDF covering MD/AD/PD1-9 scores, all Gemini & Fable predictions, and all follow-up Q&As"
+              >
+                {copiedKey === 'pdf-complete' ? (
+                  <Check className="w-3.5 h-3.5" />
+                ) : (
+                  <FileDown className="w-3.5 h-3.5" />
+                )}
+                <span>{copiedKey === 'pdf-complete' ? 'Complete PDF Saved' : 'Download Full PDF'}</span>
+              </button>
+
+              <button
                 onClick={handleDownloadAllReportsMarkdown}
                 className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 title="Download all generated Gemini & Fable reports as Markdown"
@@ -1951,6 +2018,24 @@ export const NatalDashaPromiseView: React.FC<NatalDashaPromiseViewProps> = ({
                     <div className="flex flex-wrap items-center gap-2">
                       {report?.success && (
                         <>
+                          <button
+                            onClick={() =>
+                              handleDownloadSingleReportPdf(activeReportLevel, providerId, report, followUpTurns)
+                            }
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center gap-1.5 cursor-pointer"
+                            title="Download this level's prediction & all its follow-up Q&As as a formatted PDF"
+                          >
+                            {copiedKey === `pdf-tab-${activeReportLevel}-${providerId}` ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-300" />
+                            ) : (
+                              <FileDown className="w-3.5 h-3.5 text-emerald-300" />
+                            )}
+                            <span>
+                              {copiedKey === `pdf-tab-${activeReportLevel}-${providerId}`
+                                ? 'Tab PDF Saved'
+                                : 'Download Tab PDF'}
+                            </span>
+                          </button>
                           <button
                             onClick={() =>
                               handleCopyText(`${slotKey}-${providerId}`, report.answerMarkdown)

@@ -18,7 +18,8 @@ import {
   X,
   GripVertical,
   RotateCcw,
-  Settings
+  Settings,
+  BookOpen
 } from 'lucide-react';
 import {
   samplePersonMaster,
@@ -39,6 +40,7 @@ import { MonthlyTransitView } from './components/MonthlyTransitView';
 import { PredictionStudio } from './components/PredictionStudio';
 import SettingsStudio from './components/SettingsStudio';
 import { EventManifestationStudio } from './components/EventManifestationStudio';
+import { NatalDashaPromiseView } from './components/NatalDashaPromiseView';
 import { VedicHouseContext, LLMProviderId } from './services/llm/types';
 
 // Standard 12 South Indian chart cell coordinate mappings (row, col)
@@ -74,10 +76,10 @@ const SOUTH_INDIAN_CELLS: ChartCellDef[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'report' | 'manifestation' | 'api' | 'settings'>(() => {
+  const [activeTab, setActiveTab] = useState<'charts' | 'monthly' | 'natal_dasha' | 'report' | 'manifestation' | 'api' | 'settings'>(() => {
     try {
       const saved = typeof window !== 'undefined' ? sessionStorage.getItem('astro_active_tab_v1') : null;
-      if (saved === 'charts' || saved === 'monthly' || saved === 'report' || saved === 'manifestation' || saved === 'api' || saved === 'settings') {
+      if (saved === 'charts' || saved === 'monthly' || saved === 'natal_dasha' || saved === 'report' || saved === 'manifestation' || saved === 'api' || saved === 'settings') {
         return saved;
       }
     } catch {}
@@ -173,7 +175,7 @@ export default function App() {
 
   // Active Native Profile (Directly loaded from authoritative store, no stale caching)
   const [activePersonId, setActivePersonId] = useState<string>('001ME');
-  const [monthlySubViewMode, setMonthlySubViewMode] = useState<'grid' | 'natal_dasha' | 'report'>('grid');
+  const [monthlySubViewMode, setMonthlySubViewMode] = useState<'grid' | 'report'>('grid');
 
   const [availablePersonIds, setAvailablePersonIds] = useState<string[]>(() => {
     return Object.keys(storedPersonsData);
@@ -364,6 +366,7 @@ export default function App() {
             {[
               { id: 'charts', label: 'Chart', icon: Compass },
               { id: 'monthly', label: 'Monthly View & Timeline Controls', icon: CalendarDays },
+              { id: 'natal_dasha', label: 'Natal Dasha Promise', icon: BookOpen },
               { id: 'report', label: 'Prediction Studio', icon: FileText },
               { id: 'manifestation', label: 'Event Manifestation Studio', icon: Sparkles },
               { id: 'api', label: 'Query Studio', icon: Server },
@@ -949,6 +952,16 @@ export default function App() {
               } catch {}
               setActiveTab('report');
             }}
+          />
+        )}
+
+        {/* TAB 2B: DEDICATED NATAL DASHA–BHUKTI PROMISE STUDIO (PURE NATAL, ZERO TRANSITS) */}
+        {activeTab === 'natal_dasha' && (
+          <NatalDashaPromiseView
+            key={`${activePersonId}-natal-dasha`}
+            personId={activePersonId}
+            onSelectPerson={handleSelectPerson}
+            defaultProvider={incomingPredictionProvider}
           />
         )}
 

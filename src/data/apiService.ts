@@ -792,8 +792,8 @@ function getCandidateBaseUrls(userBaseUrl: string): string[] {
 }
 
 /**
- * Executes a REAL HTTP POST call to the Python REST API server.
- * Tries localhost:5000, 127.0.0.1:5000, and /api (Vite proxy) in sequence.
+ * Executes a REAL HTTP POST call to the unified REST API server (same-origin /api on port 3000 by default).
+ * Tries relative /api first, then any custom base URL provided.
  */
 export async function fetchHoroscopeFromApi(
   baseUrl: string,
@@ -871,14 +871,14 @@ export async function fetchHoroscopeFromApi(
     source: 'fallback_simulator',
     statusCode: 0,
     durationMs,
-    error: `Could not connect to Python REST API (tried: ${candidates.map(c => c || 'relative /api').join(', ')}). Error: ${lastError}`,
-    endpointUsed: candidates[0] || 'http://127.0.0.1:5000'
+    error: `Could not connect to REST API (tried: ${candidates.map(c => c || 'relative /api').join(', ')}). Error: ${lastError}`,
+    endpointUsed: candidates[0] || 'relative /api'
   };
 }
 
 /**
- * Pings the Python REST server health endpoint (/api/health)
- * Tries the given base URL first, then 127.0.0.1:5000 or relative /api
+ * Pings the REST server health endpoint (/api/health)
+ * Tries relative /api on port 3000 first, then any given custom base URL.
  */
 export async function pingApiHealth(baseUrl: string): Promise<{ ok: boolean; statusText: string; latencyMs: number; details?: any; endpointUsed: string }> {
   const candidates = getCandidateBaseUrls(baseUrl);
@@ -902,14 +902,14 @@ export async function pingApiHealth(baseUrl: string): Promise<{ ok: boolean; sta
     }
   }
 
-  return { ok: false, statusText: `Offline: ${lastStatus}`, latencyMs: Math.round(performance.now() - t0), endpointUsed: candidates[0] || 'http://127.0.0.1:5000' };
+  return { ok: false, statusText: `Offline: ${lastStatus}`, latencyMs: Math.round(performance.now() - t0), endpointUsed: candidates[0] || 'relative /api' };
 }
 
 export async function fetchDashaEvaluations(baseUrl: string, personId: string): Promise<DashaEvaluationRecord[]> {
   const localMap = loadLocalPdEvaluations();
   const localList = Object.values(localMap);
 
-  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+  const urls = getCandidateBaseUrls(baseUrl).map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     const query = `?person_id=${encodeURIComponent(personId)}`;
     return base ? `${base}/api/dasha/notes${query}` : `/api/dasha/notes${query}`;
@@ -958,7 +958,7 @@ export async function fetchDashaPds(
   ad: string
 ): Promise<DashaEvaluationRecord[]> {
   const query = `?person_id=${encodeURIComponent(personId)}&md=${encodeURIComponent(md)}&ad=${encodeURIComponent(ad)}`;
-  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+  const urls = getCandidateBaseUrls(baseUrl).map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     return base ? `${base}/api/dasha/pd${query}` : `/api/dasha/pd${query}`;
   });
@@ -993,7 +993,7 @@ export async function saveDashaEvaluation(
   const evalKey = getDashaEvaluationKey(personId, period);
   storeLocalPdEvaluation(evalKey, period);
 
-  const urls = getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+  const urls = getCandidateBaseUrls(baseUrl).map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     return base ? `${base}/api/dasha/notes` : '/api/dasha/notes';
   });
@@ -1030,7 +1030,7 @@ export async function saveDashaEvaluation(
 }
 
 function getNarrativeApiUrls(baseUrl: string, pathname: string): string[] {
-  return getCandidateBaseUrls(baseUrl).reverse().map(candidate => {
+  return getCandidateBaseUrls(baseUrl).map(candidate => {
     const base = candidate.replace(/\/+$/, '');
     return base ? `${base}${pathname}` : pathname;
   });

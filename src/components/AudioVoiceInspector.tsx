@@ -1820,7 +1820,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_prompt_logs_running ON llm_prompt_logs(runnin
                         • In this sandbox environment, the web frontend runs in the cloud container, while your local PostgreSQL database is on your computer (<code className="text-slate-200">localhost:5432</code>).
                       </p>
                       <p className="text-slate-400 leading-relaxed">
-                        • <strong>Option A (Automatic Bridge):</strong> Run <code className="text-amber-300 bg-slate-900 px-1 py-0.2 rounded font-mono">python run_api_server.py</code> on your computer. The UI will automatically forward every inference prompt to port 5000 and insert it into your PostgreSQL database.
+                        • <strong>Option A (Native Unified Port 3000):</strong> Running the app locally (<code className="text-amber-300 bg-slate-900 px-1 py-0.2 rounded font-mono">npm run dev</code>) automatically connects <code className="text-slate-200">/api/llm/log</code> on port 3000 to PostgreSQL whenever <code className="text-slate-200">DATABASE_URL</code> or <code className="text-slate-200">config.ini</code> credentials are reachable.
                       </p>
                       <p className="text-slate-400 leading-relaxed">
                         • <strong>Option B (Manual 1-Click):</strong> Click <strong className="text-emerald-400">"Copy Exact Insert SQL"</strong> above to paste and execute the insert directly in pgAdmin, DBeaver, or psql!

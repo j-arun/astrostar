@@ -1,10 +1,10 @@
 # Tamil Horoscope (Jadhagam) Ingestion, REST API & Transit Ephemeris Engine 🕉️
 
-A dual-model Vedic astrology data engineering pipeline and REST API server designed to:
-1. **Model 1 (`run_ingestion.py`)**: Extract structured data from **Tamil Horoscope PDFs (ஜாதகம் / Jadhagam)** and load them directly into a normalized **PostgreSQL** schema (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`).
-2. **Model 2 (`run_api_server.py`)**: Serve a high-performance REST API that takes a `person_id` and date timeline (e.g., `January 1998` to `January 2020`), returns a **unified "One Punch" REST response** containing:
+A dual-model Vedic astrology data engineering pipeline and **unified single-port (3000) Web + REST API** server designed to:
+1. **Model 1 (`run_ingestion.py`)**: Extract structured data from **Tamil Horoscope PDFs (ஜாதகம் / Jadhagam)** and load them directly into a normalized **PostgreSQL** schema (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`) plus `src/data/stored_persons.json`.
+2. **Unified Server (`server.ts` + `serverApi.ts` on Port `3000`)**: Serves both the **React UI Workbench** and **ALL REST APIs** natively on a single port (`http://localhost:3000`) in both development (`npm run dev`) and production (`npm run build && npm start`), returning a **unified "One Punch" REST response** containing:
    - **Natal Chart Placements**: D1 (Rashi) and D9 (Navamsha) charts with degrees, houses relative to Lagna, nakshatras, padas, and retrograde flags.
-  - **Vimshottari Dasha Intervals**: Every stored sub-period from the native's date of birth through the latest available database date, down to **Pratyantardasha (PD / Anthara)** level.
+   - **Vimshottari Dasha Intervals**: Every stored sub-period from the native's date of birth through the latest available database date, down to **Pratyantardasha (PD / Anthara)** level.
    - **Transit Ephemeris (Gochara)**: Complete planetary transit data for the **standard 9 Grahas** (Jupiter, Saturn, Mars, Rahu, Ketu, Venus, Mercury, Sun, Moon) across the requested window, including sign name, exact minute sputa degrees, nakshatra, and pada (Graha Pada Chara), plus **dual relative house positions**:
      - **Relative to Native's Lagna** (e.g. Jupiter in Katakam/Cancer = 8th house from Dhanus Lagna)
      - **Relative to Native's Janma Rashi / Moon Sign** (e.g. Jupiter in Katakam/Cancer = 9th house from Vrischigam Moon)
@@ -13,13 +13,13 @@ A dual-model Vedic astrology data engineering pipeline and REST API server desig
 
 ---
 
-## 🏗️ Architecture: Two Operational Models
+## 🏗️ Architecture: Single Unified Port (`3000`)
 
-| Model | Component Script | Execution | Primary Function |
+| Component | Entry / Script | Execution | Primary Function |
 | :--- | :--- | :--- | :--- |
-| **Model 1** | `run_ingestion.py` | `python run_ingestion.py` | Parses `horoscope.pdf`, extracts birth metadata, D1/D9 grids, and 40 pages of Vimshottari dasha, then loads into PostgreSQL (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`). |
-| **Model 2** | `run_api_server.py` | `python run_api_server.py` | Starts REST API server on port 5000. Provides unified `POST /api/horoscope/query` (Natal + Transit in one punch) and dedicated `POST /api/transit/query`; query responses are not persisted. |
-| **Ephemeris Engine** | `scripts/vedic_ephemeris.py` | Import or CLI | High-precision astronomical ephemeris (Lahiri / Chitra Paksha Ayanamsha) calculating 9 Grahas sidereal positions, minute sputa degrees, 27 nakshatras, 4 padas, retrograde motions, and relative houses from Lagna and Janma Rashi. |
+| **Model 1 (Ingestion)** | `run_ingestion.py` | `python run_ingestion.py --pdf file.pdf` | Parses a Tamil Jadhagam PDF, extracts birth metadata, D1/D9 grids, and 120 years of Vimshottari dasha, then loads PostgreSQL (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`) & `src/data/stored_persons.json`. |
+| **Unified UI + REST Server** | `server.ts` + `serverApi.ts` | `npm run dev` (or `npm start`) | Serves the React Web App and all REST endpoints (`POST /api/horoscope/query`, `POST /api/transit/query`, `GET /api/content`, `/api/persons*`, `/api/dasha/*`, `/api/llm/*`) natively on **Port 3000**. *(Optional legacy script `run_api_server.py` stays available on disk if standalone Python CLI serving is ever needed.)* |
+| **Ephemeris Engine** | `src/data/transitEphemeris.ts` / `scripts/vedic_ephemeris.py` | Built-in / CLI | High-precision analytical sidereal ephemeris (Lahiri / Chitra Paksha Ayanamsha) computing 9 Grahas positions, minute sputa degrees, 27 nakshatras, 4 padas, retrograde motions, and relative houses from Lagna and Janma Rashi. |
 
 ---
 
@@ -66,14 +66,23 @@ For an existing database, run `psql -d <dbname> -f scripts/add_dasha_landmark_no
 
 ---
 
-## 🚀 How to Run
+## 🚀 How to Run (Single Unified Port `3000`)
 
 ### Step 1: Install Dependencies
 ```bash
+npm install
+# Optional (only needed for Python PDF ingestion / standalone Python CLI scripts):
 pip install psycopg2-binary pdfplumber requests
 ```
 
-### Step 2: Configure `config.ini`
+### Step 2: Configure `.env` and/or `config.ini` (Optional PostgreSQL & API Keys)
+- Create `.env` in the project root with your Gemini / Claude keys (and optional `DATABASE_URL`):
+```ini
+GEMINI_API_KEY="your-gemini-key"
+ANTHROPIC_API_KEY="your-claude-key"
+# Optional: DATABASE_URL="postgresql://postgres:postgres@localhost:5432/astro"
+```
+- Or configure local PostgreSQL in `config.ini`:
 ```ini
 [database]
 host = localhost
@@ -89,30 +98,123 @@ pdf_path = horoscope.pdf
 dry_run = false
 export_sql = scripts/insert_001ME.sql
 export_json = scripts/extracted_001ME.json
-
-[api]
-api_host = 0.0.0.0
-api_port = 5000
 ```
 
 ---
 
-### Step 3: Run Model 1 — PDF Ingestion Engine
+### Step 3: Start the Unified Application & REST Server (Port `3000`)
 ```bash
-python run_ingestion.py
+# Development mode (Express API + Vite React UI on Port 3000)
+npm run dev
+
+# Or on Windows double-click / run:
+start.cmd
+
+# Or Production mode (compile static bundle, then serve UI + API on Port 3000)
+npm run build
+npm start
 ```
-This parses the PDF and ingests:
-- 1 row in `person_master`
-- 22 rows in `natal_placement_detail` (11 in D1 + 11 in D9)
-- 720 rows in `vimshottari_dasha_detail`
+Everything is now live on **`http://localhost:3000`**:
+- **Web UI Workbench:** `http://localhost:3000`
+- **Horoscope Query API:** `POST http://localhost:3000/api/horoscope/query`
+- **Transit Ephemeris API:** `POST http://localhost:3000/api/transit/query`
+- **Original Source Prompt API:** `GET http://localhost:3000/api/content`
+- **Person Registry & Save API:** `GET /api/persons`, `POST /api/horoscope/save-person`
+- **Health Check:** `GET http://localhost:3000/api/health`
 
 ---
 
-### Step 4: Run Model 2 — Horoscope REST API Server
+## 👤 How to Onboard a New Person Into the System
+
+Every person in the system has a unique `person_id` (e.g., `001ME`, `401BAB`, `002KUMAR`, `003ANITA`) stored across **PostgreSQL** (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`) and the synced local store **`src/data/stored_persons.json`**.
+
+There are **three ways** to onboard a new person:
+
+### Method A: Quickest — Onboard via REST API (`POST /api/horoscope/save-person`)
+Use this if you already have the person's birth details and D1/D9 planetary placements and want them live in **both** the web UI and PostgreSQL in one request:
+
+1. Ensure the unified server is running (`npm run dev`).
+2. Prepare a JSON payload with:
+   - `person`: birth metadata (`person_id`, `person_name`, `age`, `date_of_birth`, `place_of_birth`, `birth_lagna`, `birth_rashi`, `birth_star`, `birth_star_pada`, `starting_dasha_lord`, `dasha_balance_years`, `dasha_balance_months`, `dasha_balance_days`, `dasha_balance_text`).
+   - `placements`: array of planetary rows for `chart_type: "D1"` and `chart_type: "D9"`, each with `body_name`, `rashi_name`, `house_number` (`1..12` clockwise from that chart's Lagna), `nakshatra_name`, `pada`, `degree_sputa`, and `is_retrograde`.
+   - *(Optional)* `dashaTimeline`: precomputed `[mahadasha, antardasha, pratyantardasha, start_date, end_date]` rows. If omitted, the server automatically computes the full 120-year Vimshottari Dasha tree down to PD level from `date_of_birth`, `starting_dasha_lord`, and `dasha_balance_*`!
+3. Send the `POST` request to port `3000`:
 ```bash
-python run_api_server.py
+curl -X POST http://localhost:3000/api/horoscope/save-person \
+  -H "Content-Type: application/json" \
+  -d '{
+    "person": {
+      "person_id": "003ANITA",
+      "person_name": "Anita (Reg. 003ANITA)",
+      "age": 34,
+      "date_of_birth": "1992-05-14",
+      "place_of_birth": "Chennai, India",
+      "birth_lagna": "Simham (Leo)",
+      "birth_rashi": "Kanni (Virgo)",
+      "birth_star": "Hasta",
+      "birth_star_pada": 2,
+      "starting_dasha_lord": "Moon (Chandra)",
+      "dasha_balance_years": 6,
+      "dasha_balance_months": 4,
+      "dasha_balance_days": 10,
+      "dasha_balance_text": "Moon balance 6y 4m 10d"
+    },
+    "placements": [
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Lagna",           "rashi_name": "Simham (Leo)",        "house_number": 1,  "nakshatra_name": "Purva Phalguni", "pada": 1, "degree_sputa": "14° 10'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Sun (Surya)",     "rashi_name": "Rishabam (Taurus)",   "house_number": 10, "nakshatra_name": "Krittika",       "pada": 2, "degree_sputa": "00° 45'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Moon (Chandra)",  "rashi_name": "Kanni (Virgo)",       "house_number": 2,  "nakshatra_name": "Hasta",          "pada": 2, "degree_sputa": "15° 12'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Mars (Sevvai)",   "rashi_name": "Meenam (Pisces)",     "house_number": 8,  "nakshatra_name": "Revati",         "pada": 1, "degree_sputa": "18° 05'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Mercury (Budha)", "rashi_name": "Mesham (Aries)",      "house_number": 9,  "nakshatra_name": "Bharani",        "pada": 3, "degree_sputa": "21° 30'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Jupiter (Guru)",  "rashi_name": "Simham (Leo)",        "house_number": 1,  "nakshatra_name": "Magha",          "pada": 4, "degree_sputa": "11° 20'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Venus (Sukra)",   "rashi_name": "Mesham (Aries)",      "house_number": 9,  "nakshatra_name": "Ashwini",        "pada": 4, "degree_sputa": "12° 04'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Saturn (Sani)",   "rashi_name": "Makaram (Capricorn)", "house_number": 6,  "nakshatra_name": "Dhanishta",      "pada": 1, "degree_sputa": "24° 18'\''", "is_retrograde": false },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Rahu",            "rashi_name": "Dhanus (Sagittarius)","house_number": 5,  "nakshatra_name": "Purva Ashadha",  "pada": 2, "degree_sputa": "19° 11'\''", "is_retrograde": true },
+      { "person_id": "003ANITA", "chart_type": "D1", "body_name": "Ketu",            "rashi_name": "Mithunam (Gemini)",   "house_number": 11, "nakshatra_name": "Ardra",          "pada": 4, "degree_sputa": "19° 11'\''", "is_retrograde": true },
+      { "person_id": "003ANITA", "chart_type": "D9", "body_name": "Lagna",           "rashi_name": "Katakam (Cancer)",    "house_number": 1,  "nakshatra_name": "",               "pada": 1, "degree_sputa": "",           "is_retrograde": false }
+    ]
+  }'
 ```
-The REST API server will start on `http://localhost:5000`.
+*(Include all D9 planetary placements in `placements` with `"chart_type": "D9"` so Navamsa rendering and `D9` tables are complete.)*
+
+### Method B: Automated Onboarding From a Tamil Horoscope PDF (`run_ingestion.py`)
+Use this if you have a **54-page Tamil Jadhagam PDF** (Unicode UTF-8 or Bamini/Vanavil font):
+1. Ensure PostgreSQL is running (if storing in DB) and credentials match `config.ini` or environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
+2. Ensure Python dependencies are installed (`pip install psycopg2-binary pdfplumber requests`).
+3. Run the ingestion script pointing at your PDF file:
+   ```bash
+   python run_ingestion.py --pdf path/to/new_person_horoscope.pdf
+   # Optional: test parsing without writing to PostgreSQL:
+   python run_ingestion.py --pdf path/to/new_person_horoscope.pdf --dry-run
+   ```
+4. What this automatically populates:
+   - Extracts `person_master` profile (ID, DOB, Lagna, Janma Rashi, Star/Pada, Starting Dasha balance).
+   - Extracts **D1 (Rashi)** & **D9 (Navamsha)** 4×4 South Indian grids and computes clockwise `house_number` (`1..12` relative to Lagna).
+   - Builds the full 120-year Vimshottari Dasha/Bhukti/Anthara (`MD > AD > PD`) interval rows.
+   - Saves into `src/data/stored_persons.json` **and** upserts all 3 PostgreSQL tables (`person_master`, `natal_placement_detail`, `vimshottari_dasha_detail`).
+
+### Method C: Direct JSON Registry Edit (Quick Local Onboarding Without PostgreSQL)
+1. Open `src/data/stored_persons.json` and add a new top-level key matching the `person_id` (copy `"001ME"` as a template).
+2. Fill in `profile` and `placements` (`chart_type: "D1"` and `"D9"` with `house_number` `1..12` counted clockwise from that chart's `Lagna`).
+
+### Step 4: Verify & Switch to the New Person Across UI & REST API
+1. **Verify registration over HTTP:**
+   ```bash
+   curl http://localhost:3000/api/persons
+   curl http://localhost:3000/api/persons/003ANITA
+   ```
+2. **Test Horoscope Query & Prompt Generation:**
+   ```bash
+   curl -X POST "http://localhost:3000/api/horoscope/query?format=llm_markdown" \
+     -H "Content-Type: application/json" \
+     -d '{"person_id": "003ANITA", "start_date": "2026-11-01", "end_date": "2026-11-30", "format": "llm_markdown"}'
+   ```
+3. **Select in the Web UI:**
+   - Open `http://localhost:3000` (refresh the browser if it was already open).
+   - Use the **Native ID selector dropdown** in the top-right header bar to switch to your new `person_id`.
+   - All views (**Natal Chart**, **Monthly View**, **Natal Dasha Promise**, **Prediction Studio**, **Event Studio**, and **SAP Query Studio**) immediately bind to the new native.
+4. *(Optional — Fine-Grained D2..D144 Varga & Shadbala Prompts for Original Source):* Standard endpoints (`/api/horoscope/query`, `/api/transit/query`, Natal Charts, Monthly Grid, Dasha Reference) work immediately for any newly onboarded person using their `D1`, `D9`, `Lagna`, `Janma Rashi`, and `Vimshottari Dasha` data. If you also want custom `D2..D144` Varga placements, Shadbala, SAV/BAV, or Jaimini Karakas for `GET /api/content` for a new person beyond `001ME`, add/export those tables into `src/data/vargaAndStrengthData.ts` keyed by `person_id`.
+
+---
 
 ### Private LLM for Mahadasha Narratives
 
@@ -124,15 +226,15 @@ The app can run without a local LLM, but generating Mahadasha narratives require
   ollama pull qwen2.5:7b-instruct
   ```
 3. Keep the configured endpoint available at `http://localhost:11434/api/generate`. If you change the model or endpoint, update the `[provider_local_qwen]` section in `astro_engine.ini`; the endpoint must remain a loopback address (`localhost`, `127.0.0.1`, or `::1`).
-4. Start PostgreSQL and the app's API and UI services. Open the **Dasha Reference** section, save PD notes or ratings for the Mahadasha, then use **Generate Narrative**. The narrative is generated from those saved observations, and the prompt editor's saved custom prompt is stored in the current browser.
+4. Start PostgreSQL (optional) and the unified server (`npm run dev`). Open the **SAP Query Studio → Dasha Reference** section, save PD notes or ratings for the Mahadasha, then use **Generate Narrative**. The narrative is generated from those saved observations, and the prompt editor's saved custom prompt is stored in the current browser.
 
 The API's `[system] default_provider` must remain `local_qwen` for this feature. The other app features do not require Ollama.
 
-#### Testing with cURL:
+#### Testing with cURL (Port `3000`):
 
 **1. Option B: High-Density LLM Markdown (Strict Zero-PII, Ready for Gemini/Claude Prompt Injection)**
 ```bash
-curl -X POST "http://localhost:5000/api/horoscope/query?format=llm_markdown" \
+curl -X POST "http://localhost:3000/api/horoscope/query?format=llm_markdown" \
   -H "Content-Type: application/json" \
   -d '{
     "person_id": "001ME",
@@ -145,7 +247,7 @@ curl -X POST "http://localhost:5000/api/horoscope/query?format=llm_markdown" \
 
 **2. Default Full JSON Response (All Details & Raw Dumps)**
 ```bash
-curl -X POST http://localhost:5000/api/horoscope/query \
+curl -X POST http://localhost:3000/api/horoscope/query \
   -H "Content-Type: application/json" \
   -d '{
     "person_id": "001ME",
@@ -154,13 +256,13 @@ curl -X POST http://localhost:5000/api/horoscope/query \
   }'
 ```
 
-#### Testing with Python:
+#### Testing with Python (Port `3000`):
 
 **Option B: Direct Markdown Injection into LLM**
 ```python
 import requests
 
-res = requests.post("http://localhost:5000/api/horoscope/query", json={
+res = requests.post("http://localhost:3000/api/horoscope/query", json={
     "person_id": "001ME",
     "start_date": "January 1998",
     "end_date": "January 2020",
@@ -181,7 +283,7 @@ print(f"Sanitized Prompt Length: {len(markdown_prompt)} characters (~{len(markdo
 ```python
 import requests
 
-res = requests.post("http://localhost:5000/api/horoscope/query", json={
+res = requests.post("http://localhost:3000/api/horoscope/query", json={
     "person_id": "001ME",
     "start_date": "January 1998",
     "end_date": "January 2020"
@@ -382,11 +484,13 @@ When requesting `format=llm_markdown` (or `markdown=true`), the REST API automat
 ## 📁 Repository Structure
 
 ```text
-├── config.ini                    # Central configuration file (DB credentials & options)
-├── run_ingestion.py              # Single-command execution runner (Model 1)
-├── run_api_server.py             # REST API server (Model 2) on port 5000
+├── server.ts                     # Unified Express + Vite entrypoint (serves UI & ALL REST APIs on Port 3000)
+├── serverApi.ts                  # Complete REST API router (/api/persons*, /api/horoscope/*, /api/transit/query, /api/dasha/*, /api/content, /api/llm/*, /api/docs/*, /api/batch/*)
+├── config.ini                    # Central configuration file (PostgreSQL DB credentials & options)
+├── run_ingestion.py              # Single-command PDF ingestion runner (Model 1)
+├── run_api_server.py             # Optional legacy standalone Python REST API script
 ├── horoscope_fallback_data.py    # Fallback dataset when PostgreSQL is offline
-├── README.md                     # Documentation & setup guide
+├── README.md                     # Documentation, unified setup & new-person onboarding guide
 ├── scripts/
 │   ├── config.ini                # Secondary config backup
 │   ├── extract_tamil_horoscope.py# Core extraction & PostgreSQL ingestion engine
@@ -394,7 +498,7 @@ When requesting `format=llm_markdown` (or `markdown=true`), the REST API automat
 │   ├── extracted_001ME.sql       # Pre-generated complete SQL insert dump for 001ME
 │   ├── extracted_001ME.json      # Structured JSON export of all extracted data
 │   └── requirements.txt          # Python dependency list
-└── src/                          # Interactive visualizer & REST API workbench
+└── src/                          # React UI & deterministic Vedic calculation engines
 ```
 
 ---

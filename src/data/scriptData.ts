@@ -491,102 +491,51 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 
 echo ===============================================================================
-echo [2/3] Starting Python REST API Service (Port 5000)...
+echo [2/2] Starting Unified Web UI & REST API Server (Port 3000)...
 echo ===============================================================================
-start "Vedic REST API Server (:5000)" cmd /k "title Vedic REST API :5000 && echo Starting Python REST API on port 5000... && %PYTHON_BIN% run_api_server.py"
-
-echo   - Process launched in dedicated window: "Vedic REST API Server (:5000)"
-echo   - Endpoint:     http://localhost:5000/api/horoscope/query
-echo   - Health Check: http://localhost:5000/api/health
-echo   - Mode:         Standalone / Fallback Active
+echo   - Web URL:          http://localhost:3000
+echo   - Horoscope API:    http://localhost:3000/api/horoscope/query
+echo   - Content API:      http://localhost:3000/api/content
+echo   - Health Check:     http://localhost:3000/api/health
 echo.
-
-echo ===============================================================================
-echo [3/3] Starting React / Vite UI Frontend (Port 3000)...
-echo ===============================================================================
-echo   - Web URL:      http://localhost:3000
-echo   - Mode:         Interactive Monthly Transit & Backtesting Engine
-echo.
-echo Press Ctrl+C in this console to stop the UI.
+echo Press Ctrl+C in this console to stop the server.
 echo ===============================================================================
 echo.
 
 call npm run dev
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [NOTICE] If port 3000 is occupied, you can launch both services concurrently using:
-    echo   node scripts/start-all.js
+    echo [NOTICE] Verify dependencies via "npm install" and retry.
     pause
 )
 `;
 
 export const START_SH_TEXT = `#!/usr/bin/env bash
 # ===============================================================================
-# VEDIC HOROSCOPE & EPHEMERIS SYSTEM - DUAL LAUNCHER (start.sh)
+# VEDIC HOROSCOPE & EPHEMERIS SYSTEM - UNIFIED SINGLE-PORT LAUNCHER (:3000)
 # ===============================================================================
 
 echo "==============================================================================="
-echo "       VEDIC HOROSCOPE SYSTEM - DUAL LAUNCHER (start.sh)"
+echo "       VEDIC HOROSCOPE SYSTEM - UNIFIED LAUNCHER (start.sh)"
 echo "==============================================================================="
 
-# Find Python 3 binary
-if command -v python3 &> /dev/null; then
-    PYTHON_BIN="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_BIN="python"
-elif command -v py &> /dev/null; then
-    PYTHON_BIN="py"
-else
-    echo "[ERROR] python3 could not be found! Please install Python 3.8+."
-    exit 1
-fi
-
 echo ""
-echo "[1/3] Checking prerequisites..."
-echo "  - $($PYTHON_BIN --version) detected ($PYTHON_BIN)."
-
+echo "[1/2] Checking Node.js & npm prerequisites..."
 if ! command -v npm &> /dev/null; then
     echo "[ERROR] npm could not be found! Please install Node.js 18+."
     exit 1
 fi
 echo "  - Node $(node --version) / npm $(npm --version) detected."
 
-# Trap Ctrl+C to kill background processes cleanly
-trap cleanup SIGINT SIGTERM
-
-cleanup() {
-    echo ""
-    if [ -n "$API_PID" ]; then
-        echo "[SHUTDOWN] Stopping background REST API server (PID: $API_PID)..."
-        kill "$API_PID" 2>/dev/null
-    fi
-    exit 0
-}
-
 echo ""
 echo "==============================================================================="
-echo "[2/3] Starting Python REST API Service on port 5000..."
+echo "[2/2] Starting Unified Web UI & REST API Server on port 3000..."
 echo "==============================================================================="
-
-# Check if port 5000 is already listening
-if nc -z 127.0.0.1 5000 2>/dev/null || curl -s http://127.0.0.1:5000/api/health &>/dev/null; then
-    echo "  - Python REST API is already running on port 5000."
-else
-    $PYTHON_BIN run_api_server.py &
-    API_PID=$!
-    echo "  - Process ID:   $API_PID"
-    sleep 1
-fi
-
-echo "  - REST Endpoint: http://localhost:5000/api/horoscope/query"
-echo "  - Health Check:  http://localhost:5000/api/health"
-
-echo ""
-echo "==============================================================================="
-echo "[3/3] Starting React / Vite UI Frontend on port 3000..."
-echo "==============================================================================="
-echo "  - Web UI:       http://localhost:3000"
-echo "  - Press Ctrl+C in this console to stop both services cleanly."
+echo "  - Web UI:           http://localhost:3000"
+echo "  - Horoscope API:    http://localhost:3000/api/horoscope/query"
+echo "  - Content API:      http://localhost:3000/api/content"
+echo "  - Health Check:     http://localhost:3000/api/health"
+echo "  - Press Ctrl+C in this console to stop the server cleanly."
 echo "==============================================================================="
 echo ""
 

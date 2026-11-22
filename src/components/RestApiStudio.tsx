@@ -164,7 +164,7 @@ export default function RestApiStudio({
   const [transitSearch, setTransitSearch] = useState('');
   const [selectedGrahaFilter, setSelectedGrahaFilter] = useState<string>('all');
   const [markdownView, setMarkdownView] = useState<'preview' | 'raw'>('preview');
-  const [apiBaseUrl, setApiBaseUrl] = useState('http://localhost:5000');
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [outputFormat, setOutputFormat] = useState<'full' | 'llm_markdown'>('full');
   const [backendStatus, setBackendStatus] = useState<{ ok: boolean; statusText: string; latencyMs: number; details?: any; endpointUsed?: string } | null>(null);
   const [pinging, setPinging] = useState(false);
@@ -452,7 +452,9 @@ export default function RestApiStudio({
   const llmTokenEst = useMemo(() => Math.round(llmMarkdownString.length / 4), [llmMarkdownString]);
   const jsonTokenEst = useMemo(() => Math.round(jsonString.length / 4), [jsonString]);
 
-  const curlCommand = `curl -X POST http://localhost:5000/api/horoscope/query \\
+  const displayBaseUrl = apiBaseUrl.trim().replace(/\/+$/, '') || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
+  const curlCommand = `curl -X POST ${displayBaseUrl}/api/horoscope/query \\
   -H "Content-Type: application/json" \\
   -d '{
     "person_id": "${apiPersonId}",
@@ -460,7 +462,7 @@ export default function RestApiStudio({
     "end_date": "${apiEndDate}"
   }'`;
 
-  const curlMarkdownCommand = `curl -X POST "http://localhost:5000/api/horoscope/query?format=llm_markdown" \\
+  const curlMarkdownCommand = `curl -X POST "${displayBaseUrl}/api/horoscope/query?format=llm_markdown" \\
   -H "Content-Type: application/json" \\
   -d '{
     "person_id": "${apiPersonId}",
@@ -473,7 +475,7 @@ export default function RestApiStudio({
 import json
 
 # Request Model 2 REST API endpoint (Default Full JSON with All Details)
-url = "http://localhost:5000/api/horoscope/query"
+url = "${displayBaseUrl}/api/horoscope/query"
 payload = {
     "person_id": "${apiPersonId}",
     "start_date": "${apiStartDate}",  # e.g. "January 1998" or "1998-01-01"
@@ -490,7 +492,7 @@ print(f"Total PDs:     {data['vimshottari_dasha_intervals']['total_intervals_cou
   const pythonMarkdownClientCode = `import requests
 
 # Request Option B: High-Density LLM Markdown (Strictly Sanitized - Zero PII)
-url = "http://localhost:5000/api/horoscope/query"
+url = "${displayBaseUrl}/api/horoscope/query"
 payload = {
     "person_id": "${apiPersonId}",
     "start_date": "${apiStartDate}",
@@ -590,7 +592,7 @@ print(prompt_markdown[:400])
                 Live Server Online
               </span>
             ) : (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Run 'python run_api_server.py'">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Runs natively on port 3000 via npm run dev">
                 <WifiOff className="w-3 h-3" />
                 Simulation Ready
               </span>
@@ -618,7 +620,7 @@ print(prompt_markdown[:400])
               type="text"
               value={apiBaseUrl}
               onChange={e => setApiBaseUrl(e.target.value)}
-              placeholder="http://localhost:5000"
+              placeholder="Same-Origin :3000 (/api)"
               className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-slate-200 font-mono text-xs w-56 focus:outline-none focus:border-amber-400"
             />
             <button
@@ -636,12 +638,12 @@ print(prompt_markdown[:400])
             {backendStatus?.ok ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
                 <Wifi className="w-3.5 h-3.5" />
-                Live Python Server Online ({backendStatus.latencyMs}ms)
+                Unified Server Online ({backendStatus.latencyMs}ms)
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Run 'python run_api_server.py' in your terminal">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Run 'npm run dev' (runs UI + REST API on port 3000)">
                 <WifiOff className="w-3.5 h-3.5" />
-                Python Server Offline (Run `python run_api_server.py`)
+                REST Server Offline
               </span>
             )}
           </div>
@@ -810,7 +812,7 @@ print(prompt_markdown[:400])
               <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
                 <strong className="text-white block mb-1">
-                  Browser Cannot Reach Python Server directly ({apiBaseUrl})
+                  Browser Cannot Reach REST Server ({apiBaseUrl || 'Same-Origin :3000'})
                 </strong>
                 <p className="text-slate-300 leading-relaxed font-mono text-[11px]">
                   {lastFetchMeta.error}
@@ -823,41 +825,40 @@ print(prompt_markdown[:400])
               <button
                 type="button"
                 onClick={() => {
-                  setApiBaseUrl('http://127.0.0.1:5000');
-                  testBackendConnection('http://127.0.0.1:5000');
-                }}
-                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition font-mono"
-              >
-                Use 127.0.0.1:5000 (Fixes Windows IPv6)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setApiBaseUrl('/api');
-                  testBackendConnection('/api');
+                  setApiBaseUrl('');
+                  testBackendConnection('');
                 }}
                 className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition font-mono"
               >
-                Use /api (Vite Dev Proxy)
+                Use Same-Origin :3000 (/api)
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setApiBaseUrl('http://localhost:5000');
-                  testBackendConnection('http://localhost:5000');
+                  setApiBaseUrl('http://127.0.0.1:3000');
+                  testBackendConnection('http://127.0.0.1:3000');
+                }}
+                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition font-mono"
+              >
+                Use 127.0.0.1:3000 (IPv4)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setApiBaseUrl('http://localhost:3000');
+                  testBackendConnection('http://localhost:3000');
                 }}
                 className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition font-mono"
               >
-                Use localhost:5000
+                Use localhost:3000
               </button>
             </div>
 
             <div className="text-[11px] text-slate-400 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800">
-              💡 <strong>Why cURL works but browser doesn't:</strong>
+              💡 <strong>Native Single-Port Architecture:</strong>
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-300">
-                <li>If you are viewing this app via an <strong>HTTPS</strong> cloud URL, modern browsers strictly block HTTP requests to localhost (Mixed Content Security).</li>
-                <li>To allow direct browser-to-Python communication, open the app locally at <strong className="text-amber-300">http://localhost:3000</strong> using <code className="text-amber-400">npm run dev</code>.</li>
-                <li>On Windows, <code className="text-cyan-300">http://127.0.0.1:5000</code> connects instantly over IPv4 where <code className="text-cyan-300">localhost</code> might resolve to IPv6 <code className="text-slate-400">::1</code>.</li>
+                <li>Leave the REST API Server field empty to call same-origin <code className="text-emerald-300">/api/*</code> natively on port 3000 (works over HTTPS cloud URLs and localhost).</li>
+                <li>When running locally, start everything in one command with <code className="text-amber-400">npm run dev</code> on <strong className="text-amber-300">http://localhost:3000</strong>.</li>
               </ul>
             </div>
           </div>
@@ -2028,7 +2029,7 @@ print(prompt_markdown[:400])
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-sm font-bold text-white">
                     <Terminal className="w-4 h-4 text-emerald-400" />
-                    Unified One-Go Startup Script (starts both REST API &amp; UI together)
+                    Unified Single-Port Server Startup (UI + ALL REST APIs on Port 3000)
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -2049,7 +2050,7 @@ print(prompt_markdown[:400])
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Avoid starting UI and Python services separately! Use the newly updated <strong>start.cmd</strong> (Windows) or <strong>npm run start:all</strong> (Cross-Platform) to launch both the Python REST API server (port 5000) and the Vite frontend (port 3000) simultaneously with live console health &amp; readiness status:
+                  Both the React UI and every REST API endpoint run natively inside a single Express + Vite server on <strong>port 3000</strong> (<code className="text-emerald-300">server.ts</code> + <code className="text-emerald-300">serverApi.ts</code>). No second port is required in dev or production:
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
@@ -2065,33 +2066,35 @@ print(prompt_markdown[:400])
                     </div>
                     <code className="text-emerald-300 block">start.cmd</code>
                     <p className="text-[11px] text-slate-400 font-sans">
-                      Double-click in Windows Explorer or execute in cmd. Launches REST API in a monitored window and starts the Vite UI.
+                      Double-click in Windows Explorer or execute in cmd to launch the unified Port 3000 UI + REST server.
                     </p>
                   </div>
 
                   <div className="bg-slate-950 p-3.5 rounded-lg border border-cyan-500/30 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-cyan-400 font-bold text-[11px]">Option B: Cross-Platform (NPM / Node)</span>
+                      <span className="text-cyan-400 font-bold text-[11px]">Option B: Cross-Platform Dev / Prod</span>
                       <button
-                        onClick={() => copyToClipboard('npm run start:all', 'cmd_npm_all')}
+                        onClick={() => copyToClipboard('npm run dev', 'cmd_npm_all')}
                         className="text-slate-400 hover:text-white"
                       >
                         {copied === 'cmd_npm_all' ? 'Copied' : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <code className="text-cyan-300 block">npm run start:all</code>
+                    <code className="text-cyan-300 block">npm run dev</code>
                     <p className="text-[11px] text-slate-400 font-sans">
-                      Runs concurrently on Windows, Linux, and macOS. Streams both service outputs with colored tags.
+                      Serves React UI + all REST APIs natively on port 3000. For built production bundles use <code className="text-cyan-300">npm run build && npm start</code>.
                     </p>
                   </div>
                 </div>
 
                 <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 space-y-1">
-                  <div className="font-semibold text-slate-300">Individual Manual Commands:</div>
+                  <div className="font-semibold text-slate-300">Native Single-Port Endpoints (:3000):</div>
                   <div className="flex flex-wrap items-center gap-3 font-mono">
-                    <span className="text-amber-400">Terminal 1: <code>python run_api_server.py</code> (Port 5000)</span>
+                    <span className="text-emerald-400"><code>UI + API</code>: http://localhost:3000</span>
                     <span className="text-slate-600">|</span>
-                    <span className="text-cyan-400">Terminal 2: <code>npm run dev</code> (Port 3000)</span>
+                    <span className="text-cyan-400"><code>POST /api/horoscope/query</code></span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-amber-400"><code>GET /api/content</code></span>
                   </div>
                 </div>
               </div>

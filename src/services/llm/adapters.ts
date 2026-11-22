@@ -2713,7 +2713,7 @@ export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{
 }> {
   let result: any = null;
 
-  // 1. Post to local Vite dev server endpoint (/api/llm/log)
+  // 1. Post to unified same-origin REST endpoint (/api/llm/log on port 3000)
   try {
     const res = await fetch('/api/llm/log', {
       method: 'POST',
@@ -2727,23 +2727,23 @@ export async function persistLLMPromptLog(entry: LLMPromptLogPayload): Promise<{
     console.warn('Could not post to /api/llm/log:', e);
   }
 
-  // 2. Also try direct client-side post to Python REST API (port 5000) if active on user machine
+  // 2. Optional custom external REST endpoint only if explicitly overridden in localStorage
   try {
-    const pythonApiUrl = (typeof window !== 'undefined' && localStorage.getItem('astro_api_base_url'))
-      || 'http://localhost:5000';
-    const pyRes = await fetch(`${pythonApiUrl}/api/llm/log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-      signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(1500) : undefined
-    }).catch(() => null);
+    const customApiUrl = (typeof window !== 'undefined' && localStorage.getItem('astro_api_base_url')) || '';
+    if (customApiUrl && !customApiUrl.includes(window.location.host)) {
+      const extRes = await fetch(`${customApiUrl.replace(/\/+$/, '')}/api/llm/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+        signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(1500) : undefined
+      }).catch(() => null);
 
-    if (pyRes && pyRes.ok) {
-      const pyJson = await pyRes.json().catch(() => null);
-      if (pyJson) {
-        if (!result) result = pyJson;
-        result.pg_persisted = true;
-        result.persisted_in = 'postgresql.llm_prompt_logs (via Python :5000)';
+      if (extRes && extRes.ok) {
+        const extJson = await extRes.json().catch(() => null);
+        if (extJson) {
+          if (!result) result = extJson;
+          result.pg_persisted = true;
+        }
       }
     }
   } catch {}

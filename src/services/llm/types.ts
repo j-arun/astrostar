@@ -8,7 +8,7 @@ export type LLMProviderId = 'local_qwen' | 'gemini_pro' | 'claude_sonnet' | 'cla
 
 export type AstroPromptVersion = 'v1' | 'v2' | 'v3';
 
-export type OriginalSourceDomain = 'master' | 'career' | 'finance' | 'love' | 'family' | 'health';
+export type OriginalSourceDomain = 'master' | 'career' | 'finance' | 'love' | 'family' | 'health' | 'litigation';
 
 export interface PromptVersionDefinition {
   id: AstroPromptVersion;

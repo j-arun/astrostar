@@ -24,6 +24,7 @@ export function resolveOriginalSourceDomain(input?: string | null): OriginalSour
   if (raw === 'love' || raw === 'romance' || raw === 'relationship' || raw === 'marriage' || raw === 'relationships') return 'love';
   if (raw === 'family' || raw === 'home' || raw === 'parents' || raw === 'lineage') return 'family';
   if (raw === 'health' || raw === 'vitality' || raw === 'wellness' || raw === 'medical' || raw === 'body' || raw === 'illness') return 'health';
+  if (raw === 'litigation' || raw === 'litigations' || raw === 'legal' || raw === 'lawsuit' || raw === 'court' || raw === 'dispute' || raw === 'disputes') return 'litigation';
   return null;
 }
 

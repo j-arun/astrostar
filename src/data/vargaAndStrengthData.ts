@@ -127,6 +127,23 @@ export const DOMAIN_PROMPT_SPECS: Record<OriginalSourceDomain, DomainPromptSpec>
     vargaCharts: ['D6', 'D8', 'D27', 'D30'],
     focusHouses: [1, 6, 8, 12, 4, 2],
     primaryKarakas: ['Saturn', 'Sun', 'Mars', 'Moon', 'Jupiter']
+  },
+  litigation: {
+    id: 'litigation',
+    label: 'Litigation Prompt (Legal, Disputes & Mitigation)',
+    shortLabel: 'Litigation',
+    topicUpper: 'LITIGATION & LEGAL DISPUTES',
+    overviewTitle: 'Litigation & Legal Overview',
+    matrixTitle: 'Litigation Event Timeline & Rating Matrix',
+    vargaTagLabel: 'D6/D8/D30/D4/D11',
+    eventColumnLabel: 'Legal Event',
+    breakdownTitle: 'Detailed Litigation Event Breakdown',
+    cautionTitle: 'Specific Litigation Dates to Be Very Careful',
+    defaultQuestion: 'FULL LITIGATION READING',
+    description: 'Master Prompt + Litigation Sub-Prompt attaching D6 (Shashtamsa), D8 (Ashtamsa), D30 (Trimsamsa), D4 (Chaturthamsa), D11 (Ekadasamsa for mitigation/settlements), Output Structure + Readout, and optional Focus Question.',
+    vargaCharts: ['D6', 'D8', 'D30', 'D4', 'D11'],
+    focusHouses: [6, 8, 12, 7, 9, 3],
+    primaryKarakas: ['Mars', 'Saturn', 'Rahu', 'Jupiter', 'Sun']
   }
 };
 
@@ -440,20 +457,20 @@ export const D1_YOGAS_AND_DOSHAS_001ME: YogaDoshaData = {
       name: 'Vipareetha Raja Yoga',
       participants: ['Mars', 'Moon'],
       condition: 'L12 Mars in L6 Taurus; L8 Moon in L12 Scorpio (Debilitated with Natal Neecha Bhanga: success after struggle)',
-      domains: ['career', 'finance', 'health']
+      domains: ['career', 'finance', 'health', 'litigation']
     },
     {
       name: 'Neecha Bhanga Raja Yoga (Moon)',
       participants: ['Moon', 'Venus', 'Mars'],
       condition: 'Natal Moon debilitated in Scorpio (L12/M1); cancelled by exaltation lord Venus in Kendra (L1 Lagna), dispositor Mars in Kendra (M7 from Moon / L6 Taurus), and L1 Jupiter 9th aspect',
-      domains: ['career', 'finance', 'love', 'family', 'health']
+      domains: ['career', 'finance', 'love', 'family', 'health', 'litigation']
     }
   ],
   generalYogas: [
     { name: 'Vosi Yoga', condition: 'Venus in 12th from Sun (L1 Sagittarius)', domains: ['career', 'finance'] },
     { name: 'Nipuna Yoga', condition: 'Sun+Mercury conjoined in L2 Capricorn (attenuated by Mercury natal combustion)', domains: ['career'] },
     { name: 'Sunaphaa Yoga', condition: 'Venus in 2nd from NB-strengthened Moon (M2 / L1 Sagittarius; self-earned authority)', domains: ['finance', 'career'] },
-    { name: 'Hamsa Yoga', condition: 'Jupiter in Own Kendra L4 Pisces (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family', 'health'] },
+    { name: 'Hamsa Yoga', condition: 'Jupiter in Own Kendra L4 Pisces (spiritual strength, comforts, speech)', domains: ['career', 'love', 'family', 'health', 'litigation'] },
     { name: 'Daama Yoga', condition: '7 planets occupy 6 distinct signs (wealth, children, generosity)', domains: ['finance', 'family'] },
     { name: 'Subha Yoga', condition: 'Natural benefic Venus occupies L1 Sagittarius', domains: ['love', 'family', 'health'] },
     { name: 'Saraswathi Yoga', condition: 'Mercury (L2), Jupiter (L4 Own), Venus (L1) in Kendra/2nd (learning, prosperity)', domains: ['career', 'finance', 'love'] },

@@ -169,6 +169,7 @@ async function withPgClient<T>(
   timeoutMs: number = 1500
 ): Promise<{ ok: boolean; value?: T; error?: string }> {
   const client = new pg.Client({ ...getPgConfig(rootDir), connectionTimeoutMillis: timeoutMs });
+  client.on('error', () => {});
   try {
     await client.connect();
     const value = await fn(client);
@@ -3773,7 +3774,7 @@ export function registerApiMiddlewares(app: Express, options: ServerApiOptions):
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({
           success: false,
-          error: `Invalid domain "${rawDomainParam}". Expected "master", "career" (or "work"), "finance" (or "wealth"), "love" (or "romance"), "family" (or "home"), or "health" (or "vitality").`
+          error: `Invalid domain "${rawDomainParam}". Expected "master", "career" (or "work"), "finance" (or "wealth"), "love" (or "romance"), "family" (or "home"), "health" (or "vitality"), or "litigation" (or "legal").`
         }));
         return;
       }

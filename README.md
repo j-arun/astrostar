@@ -508,13 +508,13 @@ Vedic astrology calculation, database ingestion, and REST API engine developed f
 
 ---
 
-## 🧠 Original Source Architecture: Master Prompt + 5 Domain Sub-Prompts
+## 🧠 Original Source Architecture: Master Prompt + 6 Domain Sub-Prompts
 
 One **unified deterministic engine** (`src/services/llm/originalSourcePrompt.ts` + `src/services/originalSourceContextBuilder.ts` + `src/data/vargaAndStrengthData.ts`) powers **both the React UI and the `GET /api/content` REST API** in **readable LLM-compact format** (spaces enabled between pipes/commas for clean tokenization, zero underscores, zero double blank lines, strict ISO dates, zero `d#` shorthand, and strict `L#/M#` vs `H#` notation separation).
 
 Instead of sending a single generic prompt or dumping all 22 Varga charts at once, the system separates:
 1. **The Master Prompt (`domain=master`)** — contains complete foundational natal data (**only `D1` and `D9` charts**), **Shadbala**, **full 7-Planet + Lagna (`As`) Ashtakavarga + Sodhya Pindas**, **18 cross-verified Yogas & Pitru Dosha**, **Jaimini Karakamsa/Arudhas**, plus the **11-section Monthly Transit & Dasha Ephemeris** (continuous 1-minute UTC bisection + precomputed `[IST YYYY-MM-DD]` tags + Sookshma Dasha `SD` + precomputed Moon Sitting/7th-Aspect `[TRIGGER WINDOWS]`).
-2. **5 Domain Sub-Prompts (`Career`, `Finance`, `Love`, `Family`, `Health`)** — dynamically attach a targeted `[SUB-PROMPT: <DOMAIN>]`, non-redundant `[DOMAIN STRENGTHS]` Master cross-references, **only the Divisional Varga charts relevant to that domain**, and the cross-model locked **`[OUTPUT STRUCTURE]`** (with `Output Contract`, `Format Rules`, Rating Bands + Two-Support Rule, and `## 5. Readout`) on top of the Master Prompt.
+2. **6 Domain Sub-Prompts (`Career`, `Finance`, `Love`, `Family`, `Health`, `Litigation`)** — dynamically attach a targeted `[SUB-PROMPT: <DOMAIN>]`, non-redundant `[DOMAIN STRENGTHS]` Master cross-references, **only the Divisional Varga charts relevant to that domain**, and the cross-model locked **`[OUTPUT STRUCTURE]`** (with `Output Contract`, `Format Rules`, Rating Bands + Two-Support Rule, and `## 5. Readout`) on top of the Master Prompt.
 
 > Note: Existing `v1`, `v2`, and `v3` app prompts are untouched.
 
@@ -559,9 +559,9 @@ The Master Prompt has two blocks (**Static Chart Block** + **Monthly Ephemeris S
 
 ---
 
-### 2. What is Added in Each of the **5 Domain Sub-Prompts**
+### 2. What is Added in Each of the **6 Domain Sub-Prompts**
 
-When you select **Career**, **Finance**, **Love**, **Family**, or **Health** in the UI or pass `&domain=...` in `GET /api/content`, the engine appends `[SUB-PROMPT: <DOMAIN>]`, cross-model `Output Contract`, non-redundant `[DOMAIN STRENGTHS]` (Master cross-reference pointer — zero reprinted Shadbala/SAV/Dosha dumps), **only that domain's Divisional Varga charts** (using Sign, `H#`, Dignity, and Domain-Lord lookup without un-reconciled D-chart degrees), the locked **`[OUTPUT STRUCTURE]` (including `## 4` & `## 5. Readout`)**, and finally **`[FOCUS QUESTION]`** at the very end for KV cache reuse:
+When you select **Career**, **Finance**, **Love**, **Family**, **Health**, or **Litigation** in the UI or pass `&domain=...` in `GET /api/content`, the engine appends `[SUB-PROMPT: <DOMAIN>]`, cross-model `Output Contract`, non-redundant `[DOMAIN STRENGTHS]` (Master cross-reference pointer — zero reprinted Shadbala/SAV/Dosha dumps), **only that domain's Divisional Varga charts** (using Sign, `H#`, Dignity, and Domain-Lord lookup without un-reconciled D-chart degrees), the locked **`[OUTPUT STRUCTURE]` (including `## 4` & `## 5. Readout`)**, and finally **`[FOCUS QUESTION]`** at the very end for KV cache reuse:
 
 | Prompt Type | Master Charts | Divisional Charts Attached | Focus Houses & Karakas | What Gets Highlighted in `[DOMAIN STRENGTHS]` |
 | :--- | :--- | :--- | :--- | :--- |
@@ -571,9 +571,10 @@ When you select **Career**, **Finance**, **Love**, **Family**, or **Health** in 
 | **Love** (`love`) | `D1`, **`D9` (Navamsa)** | **`D7` (Saptamsa)**, **`D30` (Trimsamsa)** | **L5, L7, L12, L11, L1** · *Venus, Jupiter, Mercury, Moon* | Anchors on Master **`[D9]` Navamsa** (incl. fixed `Rahu Taurus H10` + `Venus`/`Mandi` opposite `Ketu Scorpio H4`) & Jaimini **`UL (A12)`, `A7`, `DK (Mercury)`**, points to L7/L5/L11/L12 SAV/BAV + **D7 Saptamsa** & **D30 Trimsamsa** (`H#`). |
 | **Family** (`family`) | `D1`, `D9` | **`D4` (Chaturthamsa)**, **`D12` (Dwadasamsa)**, **`D7` (Saptamsa)**, **`D16` (Shodasamsa)** | **L4, L2, L5, L9, L3** · *Moon, Jupiter, Sun, Venus, Mars* | Spotlights **`Pitru Dosha (Present)`**, Family Yogas (*Maathru Sneha*, *Matrumooladdhana*, *Bandhu Pujya*, *Hamsa*, *Vaahana*), points to L4/L2/L5/L9 SAV/BAV + **D4**, **D12 Dwadasamsa**, **D7**, & **D16 Shodasamsa** (`H#`). |
 | **Health** (`health`) | `D1`, `D9` | **`D6` (Shashtamsa)**, **`D8` (Ashtamsa)**, **`D27` (Bhamsa)**, **`D30` (Trimsamsa)** | **L1, L6, L8, L12, L4, L2** · *Saturn, Sun, Mars, Moon, Jupiter* | Spotlights Health & recovery Yogas (*Sareera Soukhya*, *Vipareetha Raja Yoga*, *Neecha Bhanga (Moon)*, *Hamsa*, *Subha*), points to L1/L6/L8/L12/L4/L2 SAV/BAV + **D6 Shashtamsa** (illness/immunity), **D8 Ashtamsa** (longevity/chronic), **D27 Bhamsa** (stamina), & **D30 Trimsamsa** (stressors) (`H#`). |
+| **Litigation** (`litigation`) | `D1`, `D9` | **`D6` (Shashtamsa)**, **`D8` (Ashtamsa)**, **`D30` (Trimsamsa)**, **`D4` (Chaturthamsa)**, **`D11` (Ekadasamsa)** | **L6, L8, L12, L7, L9, L3** · *Mars, Saturn, Rahu, Jupiter, Sun* | Spotlights Victory-over-Rivals & Mitigation Yogas (*Vipareetha Raja Yoga*, *Neecha Bhanga Raja Yoga (Moon)*, *Hamsa Yoga*), points to L6/L8/L12/L7/L9/L3 SAV/BAV + **D6** (conflicts/rivals), **D8** (sudden turns/obstacles), **D30** (penalties/stressors), **D4** (property/assets), & **D11 Ekadasamsa** (mitigation & settlement gains) (`H#`). |
 
 #### Cross-Model `Output Contract` & `## 5. Readout` (Option B)
-Each of the 5 domain prompts appends **`[OUTPUT STRUCTURE]`** + **`[FOCUS QUESTION]`** with deterministic formatting rules engineered for consistent parsing across **Gemini Pro, Claude Sonnet, Claude Fable, OpenAI, and Private Qwen**:
+Each of the 6 domain prompts appends **`[OUTPUT STRUCTURE]`** + **`[FOCUS QUESTION]`** with deterministic formatting rules engineered for consistent parsing across **Gemini Pro, Claude Sonnet, Claude Fable, OpenAI, and Private Qwen**:
 - **Strict Section & Heading Contract (`Output Contract` + `Format Rules`):** Requires emitting ALL 5 `## 1..## 5` headings and BOTH `### 1..### 2` Readout subsections verbatim in exact order, forbids `###` subheadings inside Sections 1–4, forbids code fences/dividers/preamble/epilogue, enforces chronological sorting and row-to-bullet 1:1 matching between Sections 2 and 3, and sets explicit length budgets so `## 4` and `## 5` are never truncated.
 - **Preserved 4 Astrological Sections (`## 1..## 4`) in UTC + `L#/M#` + `H#`:**
   1. `## 1. <Domain> Overview (Lagna L# + Moon Lagna M# + Dasha + <Vargas>)`
@@ -586,7 +587,7 @@ Each of the 5 domain prompts appends **`[OUTPUT STRUCTURE]`** + **`[FOCUS QUESTI
     - `### 1. Month Summary` — overall tone and practical flow of the month.
     - `### 2. Answer to Focus Question` — mandatory verbatim heading directly answering `[FOCUS QUESTION]` (or crisp month verdict + 3–5 practical takeaways when `[FOCUS QUESTION]` is `FULL ... READING`).
 - **KV-Cache Optimization (`[FOCUS QUESTION]` at Tail):**
-  - `[FOCUS QUESTION]` is placed **after** `[OUTPUT STRUCTURE]` as the final block of the prompt (`defaults` to `FULL CAREER READING`, `FULL FINANCE READING`, `FULL RELATIONSHIP READING`, `FULL FAMILY READING`, or `FULL HEALTH READING`).
+  - `[FOCUS QUESTION]` is placed **after** `[OUTPUT STRUCTURE]` as the final block of the prompt (`defaults` to `FULL CAREER READING`, `FULL FINANCE READING`, `FULL RELATIONSHIP READING`, `FULL FAMILY READING`, `FULL HEALTH READING`, or `FULL LITIGATION READING`).
   - Everything before `[FOCUS QUESTION]` remains **100% byte-identical** across runs for the same month & domain, maximizing Run-1 question efficiency and prefix KV cache hits across chat/API turns; follow-ups in the same chat thread without `[OUTPUT STRUCTURE]` reply concisely without repeating all 5 sections.
 
 > All 23 Varga charts (`D1` & `D9` in Master + 21 Divisional Varga charts `D2..D144` for `001ME` stored in PostgreSQL `natal_placement_detail`) are embedded in `src/data/vargaAndStrengthData.ts` so the frontend & REST endpoint run identically with zero extra database roundtrips.
@@ -595,11 +596,11 @@ Each of the 5 domain prompts appends **`[OUTPUT STRUCTURE]`** + **`[FOCUS QUESTI
 
 ### 3. Merged Prompt Section-by-Section Map & Complete 23-Chart Coverage
 
-When you request a domain prompt (`Career`, `Finance`, `Love`, `Family`, or `Health`), `buildOriginalSourcePrompt` merges **3 contiguous parts** into one prompt (`Static Block + Month Slice + Domain Sub-Prompt`). Here is **every section sent** and **which D-charts travel inside each section**:
+When you request a domain prompt (`Career`, `Finance`, `Love`, `Family`, `Health`, or `Litigation`), `buildOriginalSourcePrompt` merges **3 contiguous parts** into one prompt (`Static Block + Month Slice + Domain Sub-Prompt`). Here is **every section sent** and **which D-charts travel inside each section**:
 
 | Merge Order | Prompt Section Tag | Sent In | D-Charts Included / Referenced |
 | :-: | :--- | :--- | :--- |
-| **1** | `[RULES]` | All (`Master` + all 5 Domains) | Rules `R0–R8` explaining how to read `D1`, `D9`, and attached `[VARGA D#]` charts. |
+| **1** | `[RULES]` | All (`Master` + all 6 Domains) | Rules `R0–R8` explaining how to read `D1`, `D9`, and attached `[VARGA D#]` charts. |
 | **2** | `[CONVENTIONS]` | All | Month-invariant `L#/M#` vs `H#` notation, `UTC` vs `[IST YYYY-MM-DD]` timezone split, and Rating Bands / Two-Support Rule. |
 | **3** | `[LORDSHIPS]` | All | `D1` Lagna, Janma Rashi, Janma Star & sign lordships (`Sun..Saturn`) in `L#/M#`. |
 | **4** | `[HOUSE LORDS]` | All | `D1` `L1–L12` lord natal house, dignity, retrograde & combustion table. |
@@ -614,9 +615,9 @@ When you request a domain prompt (`Career`, `Finance`, `Love`, `Family`, or `Hea
 | **13** | `[JAIMINI]` | All | `D1` 7-Karaka scheme (`AK..DK`), `D9` `Karakamsa (KK)`, and `D1` Arudhas (`AL, A5, A7, A10, A11, UL/A12`) in `L#/M#`. |
 | **14** | `[KARAKAS]` | All | Domain house (`L#`) & karaka legend. |
 | **15–25** | `[PERIOD]`, `[PERSON]`, `[DASHA]`, `[SLOW PLANETS]`, `[DOUBLE TRANSIT]`, `[FAST PLANETS]`, `[EVENTS]`, `[HOUSE MAP]`, `[LUNAR]`, `[AD CHAMBER/GATES]`, `[TRIGGER WINDOWS]` | All | **No Varga grids** — native context, active `MD/AD/PD/SD`, 1-minute continuous UTC ephemeris (`L#/M#`), precomputed Moon `Sit`/`7thAsp`, and chronological `[TRIGGER WINDOWS]`. |
-| **26** | `[SUB-PROMPT: <DOMAIN>]` | Domains only (`Career`, `Finance`, `Love`, `Family`, `Health`) | Frontier scope, citation split, Rating Bands / Two-Support Rule, and cross-model `Output Contract`. *(Omitted in `Master`.)* |
+| **26** | `[SUB-PROMPT: <DOMAIN>]` | Domains only (`Career`, `Finance`, `Love`, `Family`, `Health`, `Litigation`) | Frontier scope, citation split, Rating Bands / Two-Support Rule, and cross-model `Output Contract`. *(Omitted in `Master`.)* |
 | **27** | `[DOMAIN STRENGTHS]` | Domains only | Non-redundant Master cross-reference pointer + filtered Yoga/Dosha names. *(Omitted in `Master`.)* |
-| **28+** | **`[VARGA D#: <Name>]`** | Domains only (exclusive per domain) | **Full 12-house Divisional Chart grids (`H#`, Sign, Dignity, Domain-Lord summary; no un-reconciled degrees):**<br>• **Career:** **`D10`** (Total charts in prompt: **`D1, D9, D10`**)<br>• **Finance:** **`D2, D11, D4`** (Total charts in prompt: **`D1, D9, D2, D4, D11`**)<br>• **Love:** **`D7, D30`** (Total charts in prompt: **`D1, D9, D7, D30`**)<br>• **Family:** **`D4, D12, D7, D16`** (Total charts in prompt: **`D1, D9, D4, D7, D12, D16`**)<br>• **Health:** **`D6, D8, D27, D30`** (Total charts in prompt: **`D1, D9, D6, D8, D27, D30`**) |
+| **28+** | **`[VARGA D#: <Name>]`** | Domains only (exclusive per domain) | **Full 12-house Divisional Chart grids (`H#`, Sign, Dignity, Domain-Lord summary; no un-reconciled degrees):**<br>• **Career:** **`D10`** (Total charts in prompt: **`D1, D9, D10`**)<br>• **Finance:** **`D2, D11, D4`** (Total charts in prompt: **`D1, D9, D2, D4, D11`**)<br>• **Love:** **`D7, D30`** (Total charts in prompt: **`D1, D9, D7, D30`**)<br>• **Family:** **`D4, D12, D7, D16`** (Total charts in prompt: **`D1, D9, D4, D7, D12, D16`**)<br>• **Health:** **`D6, D8, D27, D30`** (Total charts in prompt: **`D1, D9, D6, D8, D27, D30`**)<br>• **Litigation:** **`D6, D8, D30, D4, D11`** (Total charts in prompt: **`D1, D9, D4, D6, D8, D11, D30`**) |
 | **29** | **`[OUTPUT STRUCTURE]`** | Domains only | Cross-model locked `Format Rules` + 4 Astrological Sections (`## 1..## 4`) + `## 5. Readout` (`### 1. Month Summary` & `### 2. Answer to Focus Question`). *(Omitted in `Master`.)* |
 | **30** | **`[FOCUS QUESTION]`** | Domains (always) / Master (optional) | Placed **last** for KV-cache prefix alignment. Defaults to `FULL <DOMAIN> READING`, or injects user `&question=...`. |
 
@@ -625,21 +626,21 @@ When you request a domain prompt (`Career`, `Finance`, `Love`, `Family`, or `Hea
 | :--- | :--- | :--- | :--- |
 | **`D1`** | Rashi (Root Physical Chart) | Sagittarius `16°33'` | **Master** (All Prompts) — Root physical life, houses, transits & dashas. |
 | **`D2`** | Hora (Wealth Dualities) | Virgo `2°35'` | **Finance** — Liquid wealth, Sun/Moon solar-lunar earnings balance. |
-| `D3` | Drekkana (Siblings / Courage) | Aries `18°52'` | Stored in DB (`natal_placement_detail`) & `vargaAndStrengthData.ts`; *omitted from the 5 core prompts to keep token budget lean*. |
-| **`D4`** | Chaturthamsa (Property & Home) | Gemini `5°10'` | **Finance** (fixed assets/real estate) & **Family** (domestic residence & peace). |
+| `D3` | Drekkana (Siblings / Courage) | Aries `18°52'` | Stored in DB (`natal_placement_detail`) & `vargaAndStrengthData.ts`; *omitted from the 6 core prompts to keep token budget lean*. |
+| **`D4`** | Chaturthamsa (Property & Home) | Gemini `5°10'` | **Finance** (fixed assets/real estate), **Family** (domestic residence & peace), & **Litigation** (property/real-estate disputes & asset protection). |
 | `D5` | Panchamsa (Fame / Spiritual Merit) | Sagittarius `21°28'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
-| **`D6`** | Shashtamsa (Health & Disease) | Cancer `7°45'` | **Health** — Acute illness, inflammation, immunity, disease & recovery. |
+| **`D6`** | Shashtamsa (Conflict, Rivals & Disease) | Cancer `7°45'` | **Health** (acute illness/immunity) & **Litigation** (disputes, rivals, court filings & victory over enemies). |
 | **`D7`** | Saptamsa (Progeny & Partnership Fruit) | Pisces `24°03'` | **Love** (romantic fulfillment/creative bond) & **Family** (children & lineage continuation). |
-| **`D8`** | Ashtamsa (Longevity & Chronic Health) | Sagittarius `10°21'` | **Health** — Longevity, chronic/sudden health shifts & structural vulnerabilities. |
+| **`D8`** | Ashtamsa (Longevity, Obstacles & Sudden Turns) | Sagittarius `10°21'` | **Health** (longevity/chronic shifts) & **Litigation** (unexpected legal turns, investigations & structural exposure). |
 | **`D9`** | Navamsa (Marriage, Dharma & Fruit) | Leo | **Master** (All Prompts) — Primary partner/spouse chart in **Love**; overall planetary strength & fructification across every domain. |
 | **`D10`** | Dasamsa (Profession & Authority) | Taurus `12°56'` | **Career** — Primary work, promotion, authority, role shift & karma chart. |
-| **`D11`** | Ekadasamsa (Gains & Windfalls) | Capricorn `29°13'` | **Finance** — Income channels, bonuses, investments & financial gains. |
+| **`D11`** | Ekadasamsa (Gains, Mitigation & Relief) | Capricorn `29°13'` | **Finance** (income channels, bonuses, investments) & **Litigation** (case mitigation, relief, favorable settlement & recovered gains). |
 | **`D12`** | Dwadasamsa (Parents & Lineage) | Gemini `15°31'` | **Family** — Mother, father, ancestral lineage & elder karmic patterns (`Pitru Dosha`). |
 | **`D16`** | Shodasamsa (Comforts & Vehicles) | Leo `20°42'` | **Family** — Household happiness, vehicles, luxuries & emotional comfort. |
 | `D20` | Vimsamsa (Spiritual Practice) | Gemini `25°52'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
 | `D24` | Siddhamsa (Education / Learning) | Virgo `1°03'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
 | **`D27`** | Bhamsa (Innate Stamina & Vitality) | Gemini `19°56'` | **Health** — Physical stamina, nervous energy, constitutional resilience & endurance. |
-| **`D30`** | Trimsamsa (Stressors & Afflictions) | Sagittarius `8°49'` | **Love** (relationship friction/vulnerabilities) & **Health** (physical/mental stressors, systemic strain & recovery risks). |
+| **`D30`** | Trimsamsa (Stressors, Penalties & Afflictions) | Sagittarius `8°49'` | **Love** (relationship friction), **Health** (physical/mental stressors), & **Litigation** (penalties, adverse rulings, hidden pitfalls & reputational stress). |
 | `D40` | Khavedamsa (Maternal Auspiciousness) | Capricorn `21°45'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
 | `D45` | Akshavedamsa (Paternal Character) | Sagittarius `13°13'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
 | `D60` | Shashtiamsa (Past-Life / Fine Karma) | Leo `17°38'` | Stored in DB & `vargaAndStrengthData.ts`; *reserved*. |
@@ -651,7 +652,7 @@ When you request a domain prompt (`Career`, `Finance`, `Love`, `Family`, or `Hea
 
 ## 🌐 Original Source Monthly Prompt REST API (`GET /api/content`)
 
-Serves the deterministic **Master Prompt** or any of the **5 Domain Prompts** (`Career`, `Finance`, `Love`, `Family`, `Health`) over HTTP (CORS enabled) for external apps or scripts.
+Serves the deterministic **Master Prompt** or any of the **6 Domain Prompts** (`Career`, `Finance`, `Love`, `Family`, `Health`, `Litigation`) over HTTP (CORS enabled) for external apps or scripts.
 
 - **Endpoint:** `GET /api/content` (aliases: `/api/original-source`, `/api/original-source/content`)
 - **Default dev host:** `http://localhost:3000`
@@ -661,7 +662,7 @@ Serves the deterministic **Master Prompt** or any of the **5 Domain Prompts** (`
 | Parameter | Values | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `date` | `"May 2026"`, `"may-2026"`, `"4/2026"`, `"2026-04"`, `"202605"`, `"Nov 2026"` | Current month | Target month & year (or `?month=11&year=2026`). |
-| `domain` | `master` \| `career` (`work`) \| `finance` (`wealth`) \| `love` (`romance`) \| `family` (`home`) \| `health` (`vitality`) | `master` | Selects Master Base (`D1+D9`) or Master + Domain Sub-Prompt + Divisional Varga charts + Output Structure (`Readout`). |
+| `domain` | `master` \| `career` (`work`) \| `finance` (`wealth`) \| `love` (`romance`) \| `family` (`home`) \| `health` (`vitality`) \| `litigation` (`legal`, `lawsuit`, `court`, `dispute`) | `master` | Selects Master Base (`D1+D9`) or Master + Domain Sub-Prompt + Divisional Varga charts + Output Structure (`Readout`). |
 | `question` (or `q`) | Any URL-encoded string | `FULL <DOMAIN> READING` | Optional Run-1 Focus Question placed at the very end (`[FOCUS QUESTION]`) so the prefix before it stays byte-identical for KV caching. |
 | `variant` | `compact` \| `baseline` \| `both` | `compact` | `compact` (readable LLM-compact with spaces), `baseline` (full verbose 14B labels), or `both`. |
 | `part` | `full` \| `static` \| `month` \| `subprompt` | `full` | `full` (complete prompt), `static` (`[RULES]..[KARAKAS]`), `month` (`[PERIOD]..[TRIGGER WINDOWS]`), or `subprompt` (`[SUB-PROMPT: ...]` + Vargas + `[OUTPUT STRUCTURE]` + `[FOCUS QUESTION]`). |
@@ -675,7 +676,7 @@ Serves the deterministic **Master Prompt** or any of the **5 Domain Prompts** (`
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=master&variant=compact"
 ```
 
-#### Option 2: Domain Prompts (Career / Finance / Love / Family / Health) — Raw Text Ready to Paste
+#### Option 2: Domain Prompts (Career / Finance / Love / Family / Health / Litigation) — Raw Text Ready to Paste
 ```bash
 # Career Prompt (Master + D10 Dasamsa + Output Structure + Readout)
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=career&variant=compact&format=text"
@@ -691,6 +692,9 @@ curl "http://localhost:3000/api/content?date=Nov+2026&domain=family&variant=comp
 
 # Health Prompt (Master + D6 Shashtamsa, D8 Ashtamsa, D27 Bhamsa, D30 Trimsamsa + Readout)
 curl "http://localhost:3000/api/content?date=Nov+2026&domain=health&variant=compact&format=text"
+
+# Litigation Prompt (Master + D6, D8, D30, D4, D11 Ekadasamsa Mitigation + Readout)
+curl "http://localhost:3000/api/content?date=Nov+2026&domain=litigation&variant=compact&format=text"
 ```
 
 #### Option 3: Sub-Prompt Block Only (`part=subprompt`)
@@ -704,8 +708,8 @@ curl "http://localhost:3000/api/content?date=2026-11&domain=love&variant=both"
 ```
 
 ### UI Usage (Unified Implementation)
-In the Monthly Transit View top toolbar, the segmented **Master | Career | Finance | Love | Family | Health** button group opens the **Original Source Prompt Builder** modal directly on the chosen prompt type for the currently selected month/year. Inside the modal you can:
-- Switch seamlessly between **Master**, **Career**, **Finance**, **Love**, **Family**, and **Health** (all powered by `buildOriginalSourcePrompt`)
+In the Monthly Transit View top toolbar, the segmented **Master | Career | Finance | Love | Family | Health | Litigation** button group opens the **Original Source Prompt Builder** modal directly on the chosen prompt type for the currently selected month/year. Inside the modal you can:
+- Switch seamlessly between **Master**, **Career**, **Finance**, **Love**, **Family**, **Health**, and **Litigation** (all powered by `buildOriginalSourcePrompt`)
 - Enter an optional Run-1 **Focus Question** (automatically placed at the bottom in `[FOCUS QUESTION]` to answer inside `## 5. Readout` while keeping the entire KV cache prefix untouched)
 - Toggle **Compact (LLM Readable)** *(default)* vs **Baseline (14B Private)**
 - Inspect tabs (**Full Prompt**, **Master Static**, **Month Slice**, and **`<Domain>` Sub-Prompt**)
@@ -722,5 +726,28 @@ arun@Aruns-MacBook-Pro astrostar % cat .env
 GEMINI_API_KEY=""
 arun@Aruns-MacBook-Pro astrostar %
 
+---
 
+## ⚖️ Litigation Domain (`domain=litigation`)
+
+**`litigation`** is the **6th domain** in the Original Source Prompt Engine and follows the exact same API and prompt convention as `career`, `finance`, `love`, `family`, and `health`:
+
+- **Domain Parameter:** `domain=litigation`
+- **Master Charts:** `D1` (Rashi) + `D9` (Navamsa)
+- **Divisional Charts Attached (`5` Vargas):**
+  - **`D6` (Shashtamsa):** Disputes, opposition, lawsuits, and victory over rivals.
+  - **`D8` (Ashtamsa):** Sudden legal turns, investigations, and structural exposure.
+  - **`D30` (Trimsamsa):** Penalties, adverse stressors, and hidden vulnerabilities.
+  - **`D4` (Chaturthamsa):** Property, real-estate, and fixed-asset disputes.
+  - **`D11` (Ekadasamsa):** Mitigation, relief, favorable settlements, and recovered gains.
+- **Focus Houses (`D1`):** `L6, L8, L12, L7, L9, L3`
+- **Primary Karakas:** `Mars, Saturn, Rahu, Jupiter, Sun`
+- **Default Focus Question:** `FULL LITIGATION READING`
+
+### REST API Call (Same Convention as All Domains)
+Call `GET /api/content` with the exact same three query parameters (`date`, `variant`, `domain`) used by `career`, `finance`, `love`, `family`, and `health`:
+
+```bash
+curl "http://localhost:3000/api/content?date=11/20/2026&variant=compact&domain=litigation"
+```
 

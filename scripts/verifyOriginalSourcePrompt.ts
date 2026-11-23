@@ -484,9 +484,9 @@ async function main() {
       allFailures.push('[API payload] variant=both Nov 2026 failed validation or tokenSavings check');
     }
 
-    // 6. All 5 Domain Sub-Prompts + Varga exclusivity + Output Structure + Readout Option B + KV-Cache tail checks
+    // 6. All 6 Domain Sub-Prompts + Varga exclusivity + Output Structure + Readout Option B + KV-Cache tail checks
     const domainExpectations: Array<{
-      domain: 'career' | 'finance' | 'love' | 'family' | 'health';
+      domain: 'career' | 'finance' | 'love' | 'family' | 'health' | 'litigation';
       expectedVargas: string[];
       forbiddenVargas: string[];
       expectedMatrixTitle: string;
@@ -526,6 +526,13 @@ async function main() {
         forbiddenVargas: ['D2', 'D4', 'D7', 'D10', 'D11', 'D12', 'D16'],
         expectedMatrixTitle: '## 2. Health Event Timeline & Rating Matrix',
         expectedDefaultQuestion: 'FULL HEALTH READING'
+      },
+      {
+        domain: 'litigation',
+        expectedVargas: ['D6', 'D8', 'D30', 'D4', 'D11'],
+        forbiddenVargas: ['D2', 'D7', 'D10', 'D12', 'D16', 'D27'],
+        expectedMatrixTitle: '## 2. Litigation Event Timeline & Rating Matrix',
+        expectedDefaultQuestion: 'FULL LITIGATION READING'
       }
     ];
 
@@ -628,7 +635,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 5 DOMAIN SUB-PROMPTS + READOUT + KV PREFIX + API CHECKS PASSED (0 mismatches).`);
+    console.log(`\nALL ${TEST_MONTHS.length} MONTHS x 2 VARIANTS + MASTER & 6 DOMAIN SUB-PROMPTS + READOUT + KV PREFIX + API CHECKS PASSED (0 mismatches).`);
   } finally {
     await server.close();
   }

@@ -499,7 +499,7 @@ export interface OriginalSourcePromptResult {
  * Builds the "Original Source" (Original Heartbeat) holistic raw-data prompt.
  * Supports:
  * - Master Prompt (`domain = 'master'`): D1, D9, Shadbala, 7-Planet Ashtakavarga + As + Sodhya Pindas, Yogas/Doshas, Jaimini + Monthly Ephemeris
- * - 4 Domain Sub-Prompts (`career`, `finance`, `love`, `family`): Attaches domain-specific Divisional Charts (Vargas), minimal Frontier rules, 4-section Output Structure + Option B Readout, and trailing [FOCUS QUESTION] for KV cache reuse
+ * - 6 Domain Sub-Prompts (`career`, `finance`, `love`, `family`, `health`, `litigation`): Attaches domain-specific Divisional Charts (Vargas), minimal Frontier rules, 4-section Output Structure + Option B Readout, and trailing [FOCUS QUESTION] for KV cache reuse
  * - Two variants (`compact` readable LLM format with spaces, `baseline` full-label 14B format)
  * Completely independent of existing v1/v2/v3 prompts.
  */
@@ -533,7 +533,7 @@ export function buildOriginalSourcePrompt(
   // =========================================================================
   const conventionsText = isCompact
     ? [
-        `HouseNotation: D1 uses L#(Lagna)/M#(Moon) ONLY; H# is strictly for Divisional charts (D9/D10/D2/D4/D7/D11/D12/D16/D30)`,
+        `HouseNotation: D1 uses L#(Lagna)/M#(Moon) ONLY; H# is strictly for Divisional charts (D9/D10/D2/D4/D6/D7/D8/D11/D12/D16/D27/D30)`,
         `TimeZones: Data=UTC(+00:00) ISO YYYY-MM-DD or YYYY-MM-DDTHH:MMZ | Readout Sec5 uses precomputed [IST YYYY-MM-DD] (+05:30) ONLY`,
         `RatingBands: 3=Highly Likely(70-90%) | 2=Most Likely(50-69%) | 1=Possible(25-49%) | Two-Support Rule: Rating>=2 needs >=2 independent supports`
       ].join('\n')
@@ -912,7 +912,8 @@ export function buildOriginalSourcePrompt(
     'Wealth: L2, L11, L5, L9, L4, Jupiter, Venus, Mercury, Saturn, Mars',
     'Home/Family: L4, L2, L5, L9, L3, Moon, Jupiter, Sun, Venus, Mars',
     'Love/Progeny: L5, L7, L12, L11, Venus, Jupiter, Mercury, Moon',
-    'Health: L1, L6, L8, L12, L4, L2, Saturn, Sun, Mars, Moon, Jupiter'
+    'Health: L1, L6, L8, L12, L4, L2, Saturn, Sun, Mars, Moon, Jupiter',
+    'Litigation: L6, L8, L12, L7, L9, L3, Mars, Saturn, Rahu, Jupiter, Sun'
   ];
 
   const lordshipHeader = isCompact
@@ -1994,7 +1995,7 @@ export function buildOriginalSourcePrompt(
     ...(triggerRows.length > 0 ? triggerRows.map(r => r.line) : ['None'])
   ].join('\n');
 
-  // SUB-PROMPT BUILDER (Career | Finance | Love | Family | Health)
+  // SUB-PROMPT BUILDER (Career | Finance | Love | Family | Health | Litigation)
   const subPromptBlock = (() => {
     if (domain === 'master') return '';
     const spec = DOMAIN_PROMPT_SPECS[domain];
@@ -2124,7 +2125,7 @@ export function buildOriginalSourcePrompt(
 }
 
 /**
- * Automated Regression Validator for Original Source Prompts (Master + 4 Domain Sub-Prompts).
+ * Automated Regression Validator for Original Source Prompts (Master + 6 Domain Sub-Prompts).
  */
 export function validateOriginalSourcePrompt(
   result: OriginalSourcePromptResult,

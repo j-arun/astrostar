@@ -3854,4 +3854,352 @@ export function registerApiMiddlewares(app: Express, options: ServerApiOptions):
       }));
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // 7. DEDICATED LLM-COMPATIBLE PLAIN-TEXT DUMP ENDPOINTS
+  //    - GET/POST /api/natal/dump   (Static Complete Natal Record — Zero Transits, No as_of)
+  //    - GET/POST /api/transit/dump (Pure Gochara Transits + All Overlapping MD>AD>PD Timelines — No Domain, No D1..D144)
+  // ---------------------------------------------------------------------------
+  async function loadPersonRecordWithSavedNotes(personId: string): Promise<{
+    profile: any;
+    placements: any[];
+    dashaRecords?: any[];
+    savedNotes: any[];
+  } | null> {
+    const db = readStoredPersonsJson(rootDir);
+    let personRecord: any = db[personId] || null;
+
+    if (!personRecord) {
+      const pgPerson = await withPgClient(rootDir, async client => {
+        await ensurePgTables(client);
+        const pRes = await client.query(`SELECT * FROM person_master WHERE person_id = $1`, [personId]);
+        if (!pRes.rows[0]) return null;
+        const prof = pRes.rows[0];
+        if (prof.date_of_birth) prof.date_of_birth = String(prof.date_of_birth).slice(0, 10);
+        const plRes = await client.query(
+          `SELECT * FROM natal_placement_detail WHERE person_id = $1 ORDER BY chart_type, house_number`,
+          [personId]
+        );
+        return { profile: prof, placements: plRes.rows };
+      }, 900);
+      if (pgPerson.ok && pgPerson.value) {
+        personRecord = pgPerson.value;
+      }
+    }
+
+    if (!personRecord) return null;
+
+    let savedNotes: any[] = [];
+    const notesPath = path.resolve(rootDir, 'src/data/dasha_notes.json');
+    if (fs.existsSync(notesPath)) {
+      try {
+        const notesDb = JSON.parse(fs.readFileSync(notesPath, 'utf-8') || '{}');
+        if (Array.isArray(notesDb[personId])) savedNotes = notesDb[personId];
+      } catch {}
+    }
+    const pgNotes = await withPgClient(rootDir, async client => {
+      await ensurePgTables(client);
+      const q = await client.query(`
+        SELECT mahadasha_lord AS mahadasha_lord_md,
+               antardasha_lord AS antardasha_lord_ad,
+               pratyantardasha_lord AS pratyantardasha_lord_pd,
+               start_date, end_date, notes, evaluation_rating
+        FROM vimshottari_dasha_detail
+        WHERE person_id = $1
+        ORDER BY start_date ASC;
+      `, [personId]);
+      return q.rows.map((r: any) => ({
+        ...r,
+        start_date: String(r.start_date).slice(0, 10),
+        end_date: String(r.end_date).slice(0, 10)
+      }));
+    }, 600);
+    if (pgNotes.ok && Array.isArray(pgNotes.value) && pgNotes.value.length > 0) {
+      savedNotes = pgNotes.value;
+    }
+
+    return {
+      profile: personRecord.profile,
+      placements: personRecord.placements || [],
+      dashaRecords: personRecord.dashaRecords,
+      savedNotes
+    };
+  }
+
+  // 7a. GET or POST /api/natal/dump
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
+    const rawUrl = req.originalUrl || req.url || '';
+    const urlObj = new URL(rawUrl, 'http://localhost');
+    const pathname = urlObj.pathname.replace(/\/+$/, '');
+    if (pathname !== '/api/natal/dump') {
+      next();
+      return;
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      res.statusCode = 405;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ success: false, error: 'Method not allowed. Use GET or POST.' }));
+      return;
+    }
+
+    try {
+      let bodyPayload: any = {};
+      if (req.method === 'POST') {
+        const body = await readRequestBody(req);
+        if (body && body.trim()) bodyPayload = JSON.parse(body);
+      }
+
+      const personId = String(
+        bodyPayload.personId ||
+        bodyPayload.person_id ||
+        urlObj.searchParams.get('personId') ||
+        urlObj.searchParams.get('person_id') ||
+        '001ME'
+      ).trim();
+
+      const loaded = await loadPersonRecordWithSavedNotes(personId);
+      if (!loaded) {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: false, error: `Person "${personId}" not found in database.` }));
+        return;
+      }
+
+      const dumpMod = await loadModule('/src/services/natalAndTransitDumpBuilder.ts');
+      const textDump = dumpMod.buildNatalDumpText({
+        personId,
+        profile: loaded.profile,
+        placements: loaded.placements,
+        storedDashaRecords: loaded.dashaRecords,
+        savedNotes: loaded.savedNotes
+      });
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end(textDump);
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({
+        success: false,
+        error: err?.message || 'Failed to generate complete natal dump.'
+      }));
+    }
+  });
+
+  // 7b. GET or POST /api/transit/dump
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
+    const rawUrl = req.originalUrl || req.url || '';
+    const urlObj = new URL(rawUrl, 'http://localhost');
+    const pathname = urlObj.pathname.replace(/\/+$/, '');
+    if (pathname !== '/api/transit/dump') {
+      next();
+      return;
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      res.statusCode = 405;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ success: false, error: 'Method not allowed. Use GET or POST.' }));
+      return;
+    }
+
+    try {
+      let bodyPayload: any = {};
+      if (req.method === 'POST') {
+        const body = await readRequestBody(req);
+        if (body && body.trim()) bodyPayload = JSON.parse(body);
+      }
+
+      const personId = String(
+        bodyPayload.personId ||
+        bodyPayload.person_id ||
+        urlObj.searchParams.get('personId') ||
+        urlObj.searchParams.get('person_id') ||
+        '001ME'
+      ).trim();
+
+      const loaded = await loadPersonRecordWithSavedNotes(personId);
+      if (!loaded) {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ success: false, error: `Person "${personId}" not found in database.` }));
+        return;
+      }
+
+      const rawFrom = bodyPayload.from || urlObj.searchParams.get('from');
+      const rawTo = bodyPayload.to || urlObj.searchParams.get('to');
+      const rawStart = bodyPayload.start_date || bodyPayload.startDate || urlObj.searchParams.get('start_date') || urlObj.searchParams.get('startDate');
+      const rawEnd = bodyPayload.end_date || bodyPayload.endDate || urlObj.searchParams.get('end_date') || urlObj.searchParams.get('endDate');
+      const rawDate = bodyPayload.date || urlObj.searchParams.get('date') || urlObj.searchParams.get('d');
+      const rawMonth = bodyPayload.month || urlObj.searchParams.get('month');
+      const rawYear = bodyPayload.year || urlObj.searchParams.get('year');
+
+      let startDate = '';
+      let endDate = '';
+      let periodLabel: string | undefined = undefined;
+
+      const ctxMod = await loadModule('/src/services/originalSourceContextBuilder.ts');
+      const resolveEndpointBoundary = (val: string, boundary: 'from' | 'to'): { ok: true; iso: string } | { ok: false; error: string } => {
+        const clean = val.trim();
+        // Preserve exact full-day ISO dates (YYYY-MM-DD or YYYY/MM/DD)
+        const isoExact = clean.match(/^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?:T.*)?$/);
+        if (isoExact) {
+          const y = Number(isoExact[1]);
+          const m = Number(isoExact[2]);
+          const d = Number(isoExact[3]);
+          if (y >= 1900 && y <= 2150 && m >= 1 && m <= 12 && d >= 1 && d <= getDaysInMonth(y, m)) {
+            return { ok: true, iso: `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` };
+          }
+          return { ok: false, error: `Invalid ${boundary} date "${clean}".` };
+        }
+        // Preserve exact DD-MM-YYYY or MM/DD/YYYY dates
+        const dmyOrMdy = clean.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+        if (dmyOrMdy) {
+          const a = Number(dmyOrMdy[1]);
+          const b = Number(dmyOrMdy[2]);
+          const y = Number(dmyOrMdy[3]);
+          let m = 0;
+          let d = 0;
+          if (b > 12 && a >= 1 && a <= 12) { m = a; d = b; }
+          else if (a > 12 && b >= 1 && b <= 12) { d = a; m = b; }
+          else if (a >= 1 && a <= 12 && b >= 1 && b <= 12) {
+            if (clean.includes('/')) { m = a; d = b; } else { d = a; m = b; }
+          }
+          if (y >= 1900 && y <= 2150 && m >= 1 && m <= 12 && d >= 1 && d <= getDaysInMonth(y, m)) {
+            return { ok: true, iso: `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` };
+          }
+          return { ok: false, error: `Invalid ${boundary} date "${clean}".` };
+        }
+        // Preserve exact named-day dates ("15 Dec 2027" / "Dec 15, 2027")
+        if (/^\d{1,2}[\s,./-]+[A-Za-z]+[\s,./-]+\d{4}$/.test(clean) || /^[A-Za-z]+[\s,./-]+\d{1,2}[\s,./-]+\d{4}$/.test(clean)) {
+          const parsedDay = new Date(clean);
+          if (!isNaN(parsedDay.getTime())) {
+            const parsedMonth = ctxMod.parseMonthYearQuery(clean, null, null);
+            const dayMatch = clean.match(/\b(\d{1,2})\b/);
+            if (parsedMonth.ok && dayMatch) {
+              const dNum = Number(dayMatch[1]);
+              if (dNum >= 1 && dNum <= getDaysInMonth(parsedMonth.year, parsedMonth.monthNumber)) {
+                return {
+                  ok: true,
+                  iso: `${parsedMonth.year}-${String(parsedMonth.monthNumber).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`
+                };
+              }
+            }
+          }
+        }
+        // Parse flexible month/year formats ("December 2027", "Dec 2027", "12/2027", "2027-12")
+        const parsed = ctxMod.parseMonthYearQuery(clean, null, null);
+        if (!parsed.ok) {
+          return { ok: false, error: `Invalid "${boundary}" value "${clean}": ${parsed.error}` };
+        }
+        const mStr = String(parsed.monthNumber).padStart(2, '0');
+        const dayNum = boundary === 'to' ? getDaysInMonth(parsed.year, parsed.monthNumber) : 1;
+        return { ok: true, iso: `${parsed.year}-${mStr}-${String(dayNum).padStart(2, '0')}` };
+      };
+
+      if (rawFrom || rawTo) {
+        const fromStr = rawFrom != null ? String(rawFrom).trim() : '';
+        const toStr = rawTo != null ? String(rawTo).trim() : '';
+        const resFrom = resolveEndpointBoundary(fromStr || toStr, 'from');
+        if (!resFrom.ok) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, error: resFrom.error }));
+          return;
+        }
+        const resTo = resolveEndpointBoundary(toStr || fromStr, 'to');
+        if (!resTo.ok) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, error: resTo.error }));
+          return;
+        }
+        startDate = resFrom.iso;
+        endDate = resTo.iso;
+        if (startDate > endDate) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({
+            success: false,
+            error: `Invalid from/to range: from (${fromStr || startDate} -> ${startDate}) must be on or before to (${toStr || endDate} -> ${endDate}).`
+          }));
+          return;
+        }
+        periodLabel = fromStr && toStr ? `${fromStr} to ${toStr}` : `${startDate} to ${endDate}`;
+      } else if (rawStart || rawEnd) {
+        startDate = normalizeDateInput(rawStart || rawEnd, false);
+        endDate = normalizeDateInput(rawEnd || rawStart, true);
+        if (startDate > endDate) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({
+            success: false,
+            error: `Invalid date range: start_date (${startDate}) must be on or before end_date (${endDate}).`
+          }));
+          return;
+        }
+        periodLabel = `${startDate} to ${endDate}`;
+      } else {
+        const parsed = ctxMod.parseMonthYearQuery(
+          rawDate != null ? String(rawDate) : null,
+          rawMonth != null ? String(rawMonth) : null,
+          rawYear != null ? String(rawYear) : null
+        );
+        if (!parsed.ok) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, error: parsed.error }));
+          return;
+        }
+        const mStr = String(parsed.monthNumber).padStart(2, '0');
+        const lastDay = getDaysInMonth(parsed.year, parsed.monthNumber);
+        startDate = `${parsed.year}-${mStr}-01`;
+        endDate = `${parsed.year}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+        periodLabel = `${parsed.monthName} ${parsed.year}`;
+      }
+
+      const dumpMod = await loadModule('/src/services/natalAndTransitDumpBuilder.ts');
+      const textDump = dumpMod.buildTransitDumpText({
+        personId,
+        profile: loaded.profile,
+        placements: loaded.placements,
+        startDate,
+        endDate,
+        storedDashaRecords: loaded.dashaRecords,
+        savedNotes: loaded.savedNotes,
+        periodLabel
+      });
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end(textDump);
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({
+        success: false,
+        error: err?.message || 'Failed to generate transit dump.'
+      }));
+    }
+  });
 }

@@ -2095,6 +2095,10 @@ print(prompt_markdown[:400])
                     <span className="text-cyan-400"><code>POST /api/horoscope/query</code></span>
                     <span className="text-slate-600">|</span>
                     <span className="text-amber-400"><code>GET /api/content</code></span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-violet-400"><code>GET /api/natal/dump</code></span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-rose-400"><code>GET /api/transit/dump</code></span>
                   </div>
                 </div>
               </div>

@@ -89,6 +89,8 @@ async function startServer() {
     console.log(`  • Web UI & Workbench:  http://localhost:${PORT}`);
     console.log(`  • Horoscope REST API:  http://localhost:${PORT}/api/horoscope/query`);
     console.log(`  • Original Source API: http://localhost:${PORT}/api/content`);
+    console.log(`  • Natal Dump API:      http://localhost:${PORT}/api/natal/dump`);
+    console.log(`  • Transit Dump API:    http://localhost:${PORT}/api/transit/dump`);
     console.log(`  • Transit Query API:   http://localhost:${PORT}/api/transit/query`);
     console.log(`  • Health Check:        http://localhost:${PORT}/api/health`);
     console.log('===============================================================================\n');
